@@ -32,10 +32,10 @@ export default function Navbar({ currentRole, setCurrentRole, activeIncidentsCou
           </div>
         </div>
 
-        {/* Preset Hackathon Demo Buttons */}
+        {/* Quick Sample Scenario Buttons */}
         <div className="hidden lg:flex items-center gap-2 bg-slate-900/60 p-1.5 rounded-xl border border-white/10">
           <span className="text-xs font-semibold text-slate-400 px-2 flex items-center gap-1">
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Hackathon Demos:
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Quick Scenarios:
           </span>
           <button 
             onClick={() => onTriggerPreset('INVOICING')}

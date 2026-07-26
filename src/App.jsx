@@ -68,7 +68,7 @@ export default function App() {
     }
   };
 
-  // Trigger Hackathon Demo Preset
+  // Trigger a quick-fill sample incident
   const handleTriggerPreset = (moduleName) => {
     let text = "The billing button turned red when posting invoice for Customer #904 with ERR_TAX_VAL_402.";
     if (moduleName === 'PAYROLL') {
@@ -77,7 +77,7 @@ export default function App() {
       text = "Negative quantity violation ERR_STOCK_NEG when transferring SKU SK-902 in warehouse bin B4.";
     }
 
-    handleSubmitIncident({ text, reporter: "Hackathon Judge Demo" });
+    handleSubmitIncident({ text, reporter: "Sample Scenario" });
   };
 
   // Merge Duplicate Ticket

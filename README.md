@@ -6,7 +6,6 @@
 [![AI Engine](https://img.shields.io/badge/AI-Gemini%20Vision%20%2B%20RAG-06B6D4?style=flat-square)](https://github.com/KAVYAJOSHI1/INCIDENTAI)
 [![License](https://img.shields.io/badge/License-MIT-green.style=flat-square)](#license)
 
-> **Websys Gooru Hackathon Project**  
 > *Automated ERP Error Diagnostics, Smart Ticketing & Dynamic Developer Load Balancing*
 
 ---
@@ -43,7 +42,7 @@ IncidentAI features a state-of-the-art enterprise design system crafted for high
 
 ## 📊 Project Status
 
-**Working end-to-end as a hackathon-grade demo (~90% of that target).** A real Node.js backend (`server/`, zero external dependencies) implements all 7 core modules plus the 10-feature Enterprise Roadmap below with genuine logic, and the React frontend is fully wired to it — no client-side mocks remain. Submitting an incident runs the full pipeline server-side: OCR classification → severity scoring → duplicate detection → RAG knowledge search → developer routing → ticket creation, all persisted in the running backend and reflected live across every role view.
+**Working end-to-end as a functional MVP (~90% of that target).** A real Node.js backend (`server/`, zero external dependencies) implements all 7 core modules plus the 10-feature Enterprise Roadmap below with genuine logic, and the React frontend is fully wired to it — no client-side mocks remain. Submitting an incident runs the full pipeline server-side: OCR classification → severity scoring → duplicate detection → RAG knowledge search → developer routing → ticket creation, all persisted in the running backend and reflected live across every role view.
 
 **Against the full enterprise SaaS vision (`SAAS_ARCHITECTURE_SPEC.md`): roughly 35–40%.** The module *logic and plumbing* is real and complete; what's still simulated is the infrastructure underneath it.
 
@@ -56,7 +55,7 @@ IncidentAI features a state-of-the-art enterprise design system crafted for high
 | Real OCR Engine | Done — image uploads run through actual Tesseract.js pixel-level text extraction (Web Worker + WASM), with a real word-level bounding box drawn over the uploaded screenshot when an error code is found. Non-image files (PDF/.log) still use the text-based classifier. |
 | 10-feature Enterprise Roadmap (backend + UI) | Done — see section below |
 | Frontend ↔ backend integration | Done — every action (submit, assign, resolve, merge, rebalance, copilot chat, KB search/add) hits the real API |
-| Hackathon demo readiness | Ready |
+| MVP readiness | Ready |
 
 ### ⏳ Left for production readiness
 
@@ -242,13 +241,14 @@ Open your browser and navigate to **`http://localhost:3000/`**. The frontend pro
 
 ---
 
-## 🎬 Hackathon Presentation Walkthrough Steps
+## 🎬 Product Walkthrough
 
-1. **Preset Scenario Triggers**: Click any quick demo button in the top navbar (`SAP Tax Error (P1)`, `Payroll Deadlock (P0)`, or `Inventory Cache (P2)`).
-2. **End-User Reporter View**: Upload a screenshot or click **Voice Record** to watch the OCR Vision Engine extract text and display the red bounding box on the error pop-up.
-3. **Support Triage View**: Switch to role **2. Support Triage Feed** to view the Jira-style ticket, AI root cause analysis, and the **pgvector >85% Duplicate Match Banner**.
-4. **Developer Workbench View**: Switch to role **3. Developer Workbench** to view the stack trace, chat with the **IncidentAI Copilot**, and click **Execute AI Patch** to trigger celebratory resolution confetti!
-5. **Analytics & AI Pipeline Flow**: Switch to roles **4. Executive Analytics** and **5. AI Pipeline Flow** to present MTTR reduction analytics and the live React Flow execution pipeline diagram.
+1. **Quick Scenario Triggers**: Click any sample scenario button in the top navbar (`SAP Tax Error (P1)`, `Payroll Deadlock (P0)`, or `Inventory Cache (P2)`) to submit a fully worked incident in one click.
+2. **End-User Reporter View**: Upload a screenshot for real Tesseract.js OCR extraction, or click **Voice Record**, to watch the Vision Engine extract text and display the bounding box on the error pop-up.
+3. **Support Triage View**: Switch to role **2. Support Triage Feed** to view the Jira-style ticket, AI root cause analysis, the **pgvector >85% Duplicate Match Banner**, and the Enterprise AI Insights panel (root cause tree, explainability, business impact, timeline, executive summary, replay, patch preview).
+4. **Developer Workbench View**: Switch to role **3. Developer Workbench** to view the stack trace, chat with the **IncidentAI Copilot**, and click **Execute AI Patch** to trigger resolution confetti.
+5. **Analytics & AI Pipeline Flow**: Switch to roles **4. Executive Analytics** and **5. AI Pipeline Flow** for MTTR reduction analytics and the live React Flow execution pipeline diagram.
+6. **Enterprise Operations**: Switch to roles **6. War Room**, **7. Digital Twin**, and **8. Mission Control** for live, auto-refreshing operational dashboards.
 
 ---
 
@@ -260,5 +260,5 @@ For full database schema specifications, RBAC matrix, API documentation, and com
 
 ## 👤 Author & License
 
-Developed by **Kavya Joshi** ([@KAVYAJOSHI1](https://github.com/KAVYAJOSHI1)) for Websys Gooru Hackathon.  
+Developed by **Kavya Joshi** ([@KAVYAJOSHI1](https://github.com/KAVYAJOSHI1)).  
 Licensed under the [MIT License](LICENSE).

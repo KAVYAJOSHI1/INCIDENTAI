@@ -1,5 +1,5 @@
 # 🏛️ IncidentAI — Enterprise Single-Project Architecture & Specification
-## AI-Powered ERP Support Engineer (Websys Gooru Hackathon Blueprint)
+## AI-Powered ERP Support Engineer
 
 > **Product Name:** IncidentAI  
 > **Tagline:** AI-Powered ERP Support Engineer  
@@ -9,7 +9,7 @@
 
 ## 1. 📂 Single-Project Unified Directory Structure
 
-Everything runs within a single unified project repository for simple 1-command startup, instant demo reliability, and seamless hackathon presentation:
+Everything runs within a single unified project repository for simple startup and reliable operation:
 
 ```
 INCIDENTAI/
@@ -35,7 +35,7 @@ INCIDENTAI/
 │   ├── App.jsx                  # Main Application Shell & Role Routing
 │   └── main.jsx                 # Entry Point
 ├── public/                      # Sample ERP screenshots, invoices, & stack trace logs
-├── INCIDENT_AI_PROJECT_PLAN.md  # Hackathon Execution Roadmap
+├── INCIDENT_AI_PROJECT_PLAN.md  # Execution Roadmap
 ├── SAAS_ARCHITECTURE_SPEC.md    # Product Architecture Specification
 ├── package.json                 # Unified Dependencies
 └── vite.config.js               # Vite Development Configuration
