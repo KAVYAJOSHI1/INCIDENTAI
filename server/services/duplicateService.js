@@ -8,6 +8,10 @@
 
 import { tokenize, computeIdf, tfidfVector, cosineSimilarity, extractErrorCode } from "../utils/textSimilarity.js";
 import { completeJson } from "./llmService.js";
+import { createTtlCache } from "../utils/simpleCache.js";
+
+// Short TTL: the shortlist depends on the live ticket list, which changes as new tickets are created.
+const duplicateJudgeCache = createTtlCache(30_000);
 
 const DUPLICATE_JUDGE_SCHEMA = {
   type: "object",
@@ -31,6 +35,10 @@ export async function findDuplicateTicketsWithAI(candidateText, tfidfResult) {
   const shortlist = tfidfResult.all_candidates;
   if (!shortlist || shortlist.length === 0) return null;
 
+  const cacheKey = `${candidateText.trim().toLowerCase()}::${shortlist.map((c) => c.ticket.ticket_number).sort().join(",")}`;
+  const cached = duplicateJudgeCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+
   const shortlistText = shortlist
     .map((c) => `- ${c.ticket.ticket_number}: "${c.ticket.title}" — ${c.ticket.structured_description}`)
     .join("\n");
@@ -53,7 +61,7 @@ export async function findDuplicateTicketsWithAI(candidateText, tfidfResult) {
       }
     : null;
 
-  return {
+  const mapped = {
     is_duplicate: result.is_duplicate && !!topMatch,
     top_match: topMatch,
     related: shortlist.filter((c) => c !== matchedCandidate).slice(0, 3),
@@ -61,6 +69,9 @@ export async function findDuplicateTicketsWithAI(candidateText, tfidfResult) {
     reasoning: result.reasoning,
     ai_generated: true
   };
+
+  duplicateJudgeCache.set(cacheKey, mapped);
+  return mapped;
 }
 
 export function findDuplicateTickets(candidateText, existingTickets, { threshold = 0.85, relatedThreshold = 0.55 } = {}) {

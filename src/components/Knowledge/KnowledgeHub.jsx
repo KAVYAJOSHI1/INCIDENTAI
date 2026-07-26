@@ -174,14 +174,25 @@ export default function KnowledgeHub({ knowledgeBase, onAddArticle }) {
                   <span className="badge-module text-[10px] mb-1 inline-block">{art.erp_module}</span>
                   <h4 className="font-bold text-white text-sm">{art.title}</h4>
                 </div>
-                <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono text-[10px] font-bold shrink-0">
-                  {item.confidence_percentage}% Vector Score
-                </span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {item.ai_generated !== undefined && (
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${item.ai_generated ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-slate-700/50 text-slate-400 border-white/10'}`}>
+                      {item.ai_generated ? 'CLAUDE' : 'TF-IDF'}
+                    </span>
+                  )}
+                  <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono text-[10px] font-bold">
+                    {item.confidence_percentage}% Vector Score
+                  </span>
+                </div>
               </div>
 
               <p className="text-xs text-slate-300 font-sans leading-relaxed bg-slate-900/60 p-3 rounded-lg border border-white/5">
                 {art.solution}
               </p>
+
+              {item.why_relevant && (
+                <p className="text-[11px] text-cyan-200/70 italic">"{item.why_relevant}"</p>
+              )}
 
               <div className="flex items-center gap-1.5 flex-wrap pt-1">
                 {art.tags?.map((t, tIdx) => (

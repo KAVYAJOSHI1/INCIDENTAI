@@ -9,6 +9,11 @@
 
 import { tokenize, computeIdf, tfidfVector, cosineSimilarity } from "../utils/textSimilarity.js";
 import { completeJson } from "./llmService.js";
+import { createTtlCache } from "../utils/simpleCache.js";
+
+// Search-as-you-type can fire several requests per second for near-identical queries;
+// cache successful reranks briefly so we don't burn API calls on every keystroke.
+const rerankCache = createTtlCache(60_000);
 
 const KB_RERANK_SCHEMA = {
   type: "object",
@@ -41,6 +46,10 @@ const KB_RERANK_SYSTEM_PROMPT = `You are a RAG retrieval engine for an ERP suppo
 export async function searchKnowledgeBaseWithAI(queryText, erpModule, shortlist) {
   if (!shortlist || shortlist.length === 0) return null;
 
+  const cacheKey = `${erpModule || ""}::${queryText.trim().toLowerCase()}::${shortlist.map((s) => s.article.id).sort().join(",")}`;
+  const cached = rerankCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+
   const shortlistText = shortlist
     .map((s) => `- id=${s.article.id} [${s.article.erp_module}]: "${s.article.title}" — ${s.article.solution}`)
     .join("\n");
@@ -55,7 +64,7 @@ export async function searchKnowledgeBaseWithAI(queryText, erpModule, shortlist)
   if (!result) return null;
 
   const byId = new Map(shortlist.map((s) => [s.article.id, s.article]));
-  return result.results
+  const mapped = result.results
     .filter((r) => byId.has(r.article_id))
     .sort((a, b) => b.relevance_score - a.relevance_score)
     .map((r) => ({
@@ -65,6 +74,9 @@ export async function searchKnowledgeBaseWithAI(queryText, erpModule, shortlist)
       why_relevant: r.why_relevant,
       ai_generated: true
     }));
+
+  rerankCache.set(cacheKey, mapped);
+  return mapped;
 }
 
 export function searchKnowledgeBase(queryText, erpModule, kbArticles, { minScore = 0.25 } = {}) {
