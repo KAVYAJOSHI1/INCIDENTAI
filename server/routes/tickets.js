@@ -1,4 +1,5 @@
-import { listTickets, getTicketById, updateTicket } from "../db/store.js";
+import { listTickets, getTicketById } from "../db/store.js";
+import { applyTicketUpdate } from "../services/ticketService.js";
 import { sendJson, ApiError } from "../utils/http.js";
 
 export function registerTicketRoutes(router) {
@@ -11,7 +12,7 @@ export function registerTicketRoutes(router) {
   });
 
   router.patch("/api/tickets/:id", ({ res, params, body }) => {
-    const ticket = updateTicket(params.id, body || {});
+    const ticket = applyTicketUpdate(params.id, body || {});
     if (!ticket) throw new ApiError(404, `Ticket ${params.id} not found`);
     sendJson(res, 200, { ticket });
   });

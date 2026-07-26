@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Code2, Play, CheckCircle2, MessageSquare, Terminal, Sparkles, Send, Copy, ShieldAlert, Cpu } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { handleAICopilotChat } from '../../services/aiService';
+import { copilotChat } from '../../services/apiClient';
 
 export default function DeveloperWorkbench({ ticket, onResolveTicket }) {
   const [chatMessages, setChatMessages] = useState([
@@ -23,15 +23,21 @@ export default function DeveloperWorkbench({ ticket, onResolveTicket }) {
     );
   }
 
-  const handleSendMessage = (e) => {
+  const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!inputQuery.trim()) return;
 
     const userMsg = { sender: "USER", message: inputQuery };
-    const copilotReply = handleAICopilotChat(inputQuery, ticket);
-
-    setChatMessages((prev) => [...prev, userMsg, copilotReply]);
+    const query = inputQuery;
+    setChatMessages((prev) => [...prev, userMsg]);
     setInputQuery('');
+
+    try {
+      const copilotReply = await copilotChat(ticket.id, query);
+      setChatMessages((prev) => [...prev, copilotReply]);
+    } catch (err) {
+      setChatMessages((prev) => [...prev, { sender: "AI_COPILOT", message: `Error contacting IncidentAI Copilot: ${err.message}` }]);
+    }
   };
 
   const handleExecutePatch = () => {

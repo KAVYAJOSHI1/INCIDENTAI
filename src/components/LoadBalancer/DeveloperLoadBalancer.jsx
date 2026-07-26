@@ -1,9 +1,23 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { UserCheck, Sparkles, CheckCircle2, AlertTriangle, ShieldCheck, Zap, Activity, Award } from 'lucide-react';
-import { recommendDeveloperForTicket } from '../../services/loadBalancer';
+import { routeDeveloper } from '../../services/apiClient';
 
 export default function DeveloperLoadBalancer({ currentTicket, developers, onAssignDeveloper, onRebalanceLoad }) {
-  const routing = currentTicket ? recommendDeveloperForTicket(currentTicket, developers) : null;
+  const [liveRouting, setLiveRouting] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (currentTicket && !currentTicket.developer_routing) {
+      routeDeveloper(currentTicket.erp_module)
+        .then((routing) => { if (!cancelled) setLiveRouting(routing); })
+        .catch(() => { if (!cancelled) setLiveRouting(null); });
+    } else {
+      setLiveRouting(null);
+    }
+    return () => { cancelled = true; };
+  }, [currentTicket?.id, currentTicket?.erp_module]);
+
+  const routing = currentTicket?.developer_routing || liveRouting;
   const recommendedDev = routing ? routing.recommended : null;
 
   return (

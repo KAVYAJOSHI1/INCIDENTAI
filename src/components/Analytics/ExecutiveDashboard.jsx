@@ -1,33 +1,42 @@
-import React from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell } from 'recharts';
-import { BarChart3, TrendingDown, Zap, Clock, ShieldCheck, DollarSign, Activity } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { BarChart3, TrendingDown, Clock, ShieldCheck, DollarSign, Activity } from 'lucide-react';
+import { fetchAnalyticsSummary, fetchHeatmap, fetchSeverityDistribution } from '../../services/apiClient';
+
+const SEVERITY_COLORS = { P0_CRITICAL: '#F43F5E', P1_HIGH: '#F59E0B', P2_MEDIUM: '#06B6D4', P3_LOW: '#64748B' };
+const HOURLY_ENGINEERING_RATE = 145;
 
 export default function ExecutiveDashboard({ tickets, developers }) {
-  // Chart Data
-  const moduleData = [
-    { module: 'Invoicing', tickets: 14, mttr: 1.8 },
-    { module: 'Payroll', tickets: 22, mttr: 2.9 },
-    { module: 'Inventory', tickets: 9, mttr: 1.4 },
-    { module: 'General Ledger', tickets: 6, mttr: 2.1 },
-    { module: 'Procurement', tickets: 4, mttr: 1.1 },
-  ];
+  const [summary, setSummary] = useState(null);
+  const [heatmap, setHeatmap] = useState([]);
+  const [severityDistribution, setSeverityDistribution] = useState([]);
 
-  const trendData = [
-    { day: 'Mon', manualMTTR: 8.5, aiMTTR: 2.4 },
-    { day: 'Tue', manualMTTR: 9.2, aiMTTR: 2.1 },
-    { day: 'Wed', manualMTTR: 8.0, aiMTTR: 1.9 },
-    { day: 'Thu', manualMTTR: 10.1, aiMTTR: 2.2 },
-    { day: 'Fri', manualMTTR: 7.8, aiMTTR: 1.6 },
-    { day: 'Sat', manualMTTR: 6.4, aiMTTR: 1.4 },
-    { day: 'Sun', manualMTTR: 7.2, aiMTTR: 1.5 },
-  ];
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([fetchAnalyticsSummary(), fetchHeatmap(), fetchSeverityDistribution()])
+      .then(([summaryData, heatmapData, severityData]) => {
+        if (cancelled) return;
+        setSummary(summaryData);
+        setHeatmap(heatmapData);
+        setSeverityDistribution(severityData);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [tickets.length]);
 
-  const severityPieData = [
-    { name: 'P0 Critical', value: 15, color: '#F43F5E' },
-    { name: 'P1 High', value: 35, color: '#F59E0B' },
-    { name: 'P2 Medium', value: 38, color: '#06B6D4' },
-    { name: 'P3 Low', value: 12, color: '#64748B' },
-  ];
+  const severityPieData = severityDistribution
+    .filter((s) => s.count > 0)
+    .map((s) => ({ name: s.severity.replace('_', ' '), value: s.count, color: SEVERITY_COLORS[s.severity] || '#64748B' }));
+
+  const mttrComparisonData = summary
+    ? [
+        { label: 'Manual Process', hours: summary.manual_baseline_hours },
+        { label: 'IncidentAI', hours: summary.ai_mttr_hours }
+      ]
+    : [];
+
+  const hoursSaved = summary ? Math.max(0, summary.manual_baseline_hours - summary.ai_mttr_hours) * summary.resolved_count : 0;
+  const costSaved = Math.round(hoursSaved * HOURLY_ENGINEERING_RATE);
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -51,9 +60,9 @@ export default function ExecutiveDashboard({ tickets, developers }) {
             <span className="text-xs text-slate-400 font-semibold uppercase">Total Incidents Handled</span>
             <Activity className="w-4 h-4 text-indigo-400" />
           </div>
-          <div className="text-2xl font-extrabold text-white font-mono">{tickets.length + 52}</div>
+          <div className="text-2xl font-extrabold text-white font-mono">{tickets.length}</div>
           <p className="text-[11px] text-emerald-400 flex items-center gap-1">
-            <TrendingDown className="w-3.5 h-3.5" /> +24% auto-triaged by AI
+            <TrendingDown className="w-3.5 h-3.5" /> {summary?.resolved_count ?? 0} resolved, {summary?.open_count ?? tickets.length} open
           </p>
         </div>
 
@@ -62,21 +71,21 @@ export default function ExecutiveDashboard({ tickets, developers }) {
             <span className="text-xs text-slate-400 font-semibold uppercase">Average MTTR</span>
             <Clock className="w-4 h-4 text-emerald-400" />
           </div>
-          <div className="text-2xl font-extrabold text-emerald-400 font-mono">1.9 Hours</div>
+          <div className="text-2xl font-extrabold text-emerald-400 font-mono">{summary ? `${summary.ai_mttr_hours} Hours` : '—'}</div>
           <p className="text-[11px] text-emerald-400 font-semibold">
-            ⚡ -68.4% reduction (was 8.2 hrs)
+            {summary ? `⚡ -${summary.reduction_percentage}% reduction (was ${summary.manual_baseline_hours} hrs)` : 'Loading...'}
           </p>
         </div>
 
         <div className="glass-panel p-5 space-y-2 border-purple-500/30">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-400 font-semibold uppercase">AI Triage Accuracy</span>
+            <span className="text-xs text-slate-400 font-semibold uppercase">Engineering Team Capacity</span>
             <ShieldCheck className="w-4 h-4 text-purple-400" />
           </div>
-          <div className="text-2xl font-extrabold text-purple-300 font-mono">96.8%</div>
-          <p className="text-[11px] text-purple-300">
-            Validated by Lead Engineers
-          </p>
+          <div className="text-2xl font-extrabold text-purple-300 font-mono">
+            {developers.reduce((sum, d) => sum + d.active_tickets, 0)} / {developers.reduce((sum, d) => sum + d.max_capacity, 0)}
+          </div>
+          <p className="text-[11px] text-purple-300">Active tickets across {developers.length} developers</p>
         </div>
 
         <div className="glass-panel p-5 space-y-2 border-amber-500/30">
@@ -84,39 +93,32 @@ export default function ExecutiveDashboard({ tickets, developers }) {
             <span className="text-xs text-slate-400 font-semibold uppercase">Estimated Cost Saved</span>
             <DollarSign className="w-4 h-4 text-amber-400" />
           </div>
-          <div className="text-2xl font-extrabold text-amber-400 font-mono">$142,500</div>
+          <div className="text-2xl font-extrabold text-amber-400 font-mono">${costSaved.toLocaleString()}</div>
           <p className="text-[11px] text-slate-400">
-            Saved in engineering hours / month
+            Based on {summary?.resolved_count ?? 0} resolved incidents at ${HOURLY_ENGINEERING_RATE}/eng-hour
           </p>
         </div>
       </div>
 
       {/* Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* MTTR Reduction Area Chart (7 cols) */}
+        {/* MTTR Comparison Bar Chart (7 cols) */}
         <div className="lg:col-span-7 glass-panel p-5 space-y-4">
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">
             MTTR Comparison: Manual Triaging vs IncidentAI Engine
           </h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={trendData}>
-                <defs>
-                  <linearGradient id="manualColor" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#F43F5E" stopOpacity={0.4}/>
-                    <stop offset="95%" stopColor="#F43F5E" stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="aiColor" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.6}/>
-                    <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="day" stroke="#64748B" fontSize={11} />
+              <BarChart data={mttrComparisonData}>
+                <XAxis dataKey="label" stroke="#64748B" fontSize={11} />
                 <YAxis stroke="#64748B" fontSize={11} unit="h" />
                 <Tooltip contentStyle={{ backgroundColor: '#0F172A', borderColor: '#334155', color: '#FFF' }} />
-                <Area type="monotone" dataKey="manualMTTR" stroke="#F43F5E" fillOpacity={1} fill="url(#manualColor)" name="Manual MTTR (hrs)" />
-                <Area type="monotone" dataKey="aiMTTR" stroke="#10B981" fillOpacity={1} fill="url(#aiColor)" name="IncidentAI MTTR (hrs)" />
-              </AreaChart>
+                <Bar dataKey="hours" radius={[6, 6, 0, 0]} name="MTTR (hrs)">
+                  {mttrComparisonData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.label === 'IncidentAI' ? '#10B981' : '#F43F5E'} />
+                  ))}
+                </Bar>
+              </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
@@ -138,10 +140,10 @@ export default function ExecutiveDashboard({ tickets, developers }) {
               </PieChart>
             </ResponsiveContainer>
           </div>
-          <div className="flex items-center justify-around text-xs">
+          <div className="flex items-center justify-around text-xs flex-wrap gap-2">
             {severityPieData.map((s, idx) => (
               <span key={idx} className="flex items-center gap-1 text-slate-300 font-medium">
-                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: s.color }} /> {s.name}
+                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: s.color }} /> {s.name} ({s.value})
               </span>
             ))}
           </div>
@@ -150,16 +152,18 @@ export default function ExecutiveDashboard({ tickets, developers }) {
         {/* ERP Module Error Heatmap Bar Chart (12 cols) */}
         <div className="lg:col-span-12 glass-panel p-5 space-y-4">
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">
-            ERP Module Error Frequency & Mean Resolution Time (Hours)
+            ERP Module Error Frequency by Severity
           </h3>
           <div className="h-56">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={moduleData}>
-                <XAxis dataKey="module" stroke="#64748B" fontSize={11} />
+              <BarChart data={heatmap}>
+                <XAxis dataKey="erp_module" stroke="#64748B" fontSize={11} />
                 <YAxis stroke="#64748B" fontSize={11} />
                 <Tooltip contentStyle={{ backgroundColor: '#0F172A', borderColor: '#334155' }} />
-                <Bar dataKey="tickets" fill="#6366F1" radius={[6, 6, 0, 0]} name="Total Tickets" />
-                <Bar dataKey="mttr" fill="#06B6D4" radius={[6, 6, 0, 0]} name="Avg MTTR (hrs)" />
+                <Bar dataKey="P0_CRITICAL" stackId="severity" fill="#F43F5E" name="P0 Critical" />
+                <Bar dataKey="P1_HIGH" stackId="severity" fill="#F59E0B" name="P1 High" />
+                <Bar dataKey="P2_MEDIUM" stackId="severity" fill="#06B6D4" name="P2 Medium" />
+                <Bar dataKey="P3_LOW" stackId="severity" fill="#64748B" radius={[6, 6, 0, 0]} name="P3 Low" />
               </BarChart>
             </ResponsiveContainer>
           </div>

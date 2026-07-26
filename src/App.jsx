@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Navbar from './components/Common/Navbar';
 import SmartReporter from './components/Reporter/SmartReporter';
 import JiraTicketView from './components/Ticketing/JiraTicketView';
@@ -8,41 +8,60 @@ import KnowledgeHub from './components/Knowledge/KnowledgeHub';
 import ExecutiveDashboard from './components/Analytics/ExecutiveDashboard';
 import AIPipelineVisualizer from './components/Pipeline/AIPipelineVisualizer';
 
-import { initialTickets, initialDevelopers, initialKnowledgeBase } from './store/mockDatabase';
-import { processFullAIPipeline } from './services/aiService';
-import { ShieldAlert, Sparkles, Filter, CheckCircle2, ArrowRight, Layers } from 'lucide-react';
+import * as api from './services/apiClient';
+import { ShieldAlert, Loader2 } from 'lucide-react';
 
 export default function App() {
   const [currentRole, setCurrentRole] = useState('REPORTER');
-  const [tickets, setTickets] = useState(initialTickets);
-  const [developers, setDevelopers] = useState(initialDevelopers);
-  const [knowledgeBase, setKnowledgeBase] = useState(initialKnowledgeBase);
-  const [selectedTicketId, setSelectedTicketId] = useState(initialTickets[0]?.id);
+  const [tickets, setTickets] = useState([]);
+  const [developers, setDevelopers] = useState([]);
+  const [knowledgeBase, setKnowledgeBase] = useState([]);
+  const [selectedTicketId, setSelectedTicketId] = useState(null);
   const [filterModule, setFilterModule] = useState('ALL');
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
 
   const selectedTicket = tickets.find((t) => t.id === selectedTicketId) || tickets[0];
 
-  // Submit New Multimodal Incident
-  const handleSubmitIncident = async (inputPayload) => {
-    const newTicket = await processFullAIPipeline(inputPayload, { tickets, developers, knowledgeBase });
-    
-    // Add ticket to state
-    setTickets((prev) => [newTicket, ...prev]);
-    setSelectedTicketId(newTicket.id);
+  useEffect(() => {
+    let cancelled = false;
 
-    // Update Developer Active Load
-    if (newTicket.assigned_dev_id) {
-      setDevelopers((prevDevs) =>
-        prevDevs.map((dev) =>
-          dev.id === newTicket.assigned_dev_id
-            ? { ...dev, active_tickets: dev.active_tickets + 1 }
-            : dev
-        )
-      );
+    async function bootstrap() {
+      try {
+        const [ticketsData, developersData, kbData] = await Promise.all([
+          api.fetchTickets(),
+          api.fetchDevelopers(),
+          api.fetchKnowledgeBase()
+        ]);
+        if (cancelled) return;
+        setTickets(ticketsData);
+        setDevelopers(developersData);
+        setKnowledgeBase(kbData);
+        setSelectedTicketId(ticketsData[0]?.id ?? null);
+        setLoadError(null);
+      } catch (err) {
+        if (!cancelled) setLoadError(err.message);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
     }
 
-    // Switch to Support Triage Feed
-    setCurrentRole('TRIAGE');
+    bootstrap();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Submit New Multimodal Incident — runs the full AI pipeline on the backend
+  const handleSubmitIncident = async (inputPayload) => {
+    try {
+      const newTicket = await api.ingestIncident(inputPayload);
+      setTickets((prev) => [newTicket, ...prev]);
+      setSelectedTicketId(newTicket.id);
+      setCurrentRole('TRIAGE');
+      const refreshedDevelopers = await api.fetchDevelopers();
+      setDevelopers(refreshedDevelopers);
+    } catch (err) {
+      alert(`Failed to ingest incident: ${err.message}`);
+    }
   };
 
   // Trigger Hackathon Demo Preset
@@ -58,51 +77,63 @@ export default function App() {
   };
 
   // Merge Duplicate Ticket
-  const handleMergeDuplicate = (sourceTicketId, targetTicketId) => {
-    setTickets((prev) =>
-      prev.map((t) => (t.id === sourceTicketId ? { ...t, status: 'RESOLVED (DUPLICATE MERGED)' } : t))
-    );
-    alert(`Ticket ${sourceTicketId} merged into parent ticket ${targetTicketId || 'INC-8840'}!`);
+  const handleMergeDuplicate = async (sourceTicketId, targetTicketId) => {
+    try {
+      const updated = await api.patchTicket(sourceTicketId, { status: 'RESOLVED_DUPLICATE_MERGED' });
+      setTickets((prev) => prev.map((t) => (t.id === sourceTicketId ? updated : t)));
+      alert(`Ticket ${sourceTicketId} merged into parent ticket ${targetTicketId || 'INC-8840'}!`);
+    } catch (err) {
+      alert(`Failed to merge ticket: ${err.message}`);
+    }
   };
 
   // Re-assign Developer
-  const handleAssignDeveloper = (ticketId, devId) => {
-    const targetDev = developers.find((d) => d.id === devId);
-    setTickets((prev) =>
-      prev.map((t) =>
-        t.id === ticketId
-          ? { ...t, assigned_dev_id: devId, assigned_dev_name: targetDev ? targetDev.name : t.assigned_dev_name, status: 'ASSIGNED' }
-          : t
-      )
-    );
+  const handleAssignDeveloper = async (ticketId, devId) => {
+    try {
+      const updated = await api.patchTicket(ticketId, { assigned_dev_id: devId, status: 'ASSIGNED' });
+      setTickets((prev) => prev.map((t) => (t.id === ticketId ? updated : t)));
+      const refreshedDevelopers = await api.fetchDevelopers();
+      setDevelopers(refreshedDevelopers);
+    } catch (err) {
+      alert(`Failed to assign developer: ${err.message}`);
+    }
   };
 
-  // Auto Re-balance Team Load
-  const handleRebalanceLoad = () => {
-    setDevelopers((prev) =>
-      prev.map((dev) => ({
-        ...dev,
-        active_tickets: Math.max(1, Math.floor(Math.random() * 4))
-      }))
-    );
-    alert("Developer workload re-balanced across engineering team!");
+  // Auto Re-balance Team Load — reassigns lower-priority tickets away from devs overloaded by a P0
+  const handleRebalanceLoad = async () => {
+    try {
+      const { reassignments, count } = await api.rebalanceLoad();
+      const [refreshedTickets, refreshedDevelopers] = await Promise.all([api.fetchTickets(), api.fetchDevelopers()]);
+      setTickets(refreshedTickets);
+      setDevelopers(refreshedDevelopers);
+      alert(
+        count > 0
+          ? `Re-balanced ${count} ticket(s):\n${reassignments.map((r) => `${r.ticket_number}: ${r.from_dev_name} -> ${r.to_dev_name}`).join('\n')}`
+          : 'No re-balancing needed — no developer is currently overloaded by a P0 incident.'
+      );
+    } catch (err) {
+      alert(`Failed to re-balance load: ${err.message}`);
+    }
   };
 
   // Resolve Ticket
-  const handleResolveTicket = (ticketId) => {
-    const targetTicket = tickets.find((t) => t.id === ticketId);
-    setTickets((prev) =>
-      prev.map((t) => (t.id === ticketId ? { ...t, status: 'RESOLVED' } : t))
-    );
+  const handleResolveTicket = async (ticketId) => {
+    try {
+      const updated = await api.patchTicket(ticketId, { status: 'RESOLVED' });
+      setTickets((prev) => prev.map((t) => (t.id === ticketId ? updated : t)));
+      const refreshedDevelopers = await api.fetchDevelopers();
+      setDevelopers(refreshedDevelopers);
+    } catch (err) {
+      alert(`Failed to resolve ticket: ${err.message}`);
+    }
+  };
 
-    if (targetTicket && targetTicket.assigned_dev_id) {
-      setDevelopers((prevDevs) =>
-        prevDevs.map((dev) =>
-          dev.id === targetTicket.assigned_dev_id
-            ? { ...dev, active_tickets: Math.max(0, dev.active_tickets - 1) }
-            : dev
-        )
-      );
+  const handleAddKnowledgeArticle = async (article) => {
+    try {
+      const saved = await api.addKnowledgeArticle(article);
+      setKnowledgeBase((prev) => [saved, ...prev]);
+    } catch (err) {
+      alert(`Failed to save knowledge article: ${err.message}`);
     }
   };
 
@@ -110,6 +141,26 @@ export default function App() {
     if (filterModule === 'ALL') return true;
     return t.erp_module === filterModule;
   });
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-slate-400">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-400" />
+        <p className="text-sm">Connecting to IncidentAI backend...</p>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-center px-6">
+        <ShieldAlert className="w-10 h-10 text-rose-400" />
+        <h2 className="text-lg font-bold text-white">Cannot reach the IncidentAI backend</h2>
+        <p className="text-sm text-slate-400 max-w-md">{loadError}</p>
+        <p className="text-xs text-slate-500">Make sure it's running with <code className="text-indigo-300">npm run server</code>, then reload this page.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col pb-12">
@@ -137,7 +188,7 @@ export default function App() {
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
                   <ShieldAlert className="w-4 h-4 text-indigo-400" /> Triage Feed Queue ({filteredTicketsList.length})
                 </h3>
-                
+
                 <select
                   value={filterModule}
                   onChange={(e) => setFilterModule(e.target.value)}
@@ -216,14 +267,14 @@ export default function App() {
             />
             <KnowledgeHub
               knowledgeBase={knowledgeBase}
-              onAddArticle={(art) => setKnowledgeBase((prev) => [art, ...prev])}
+              onAddArticle={handleAddKnowledgeArticle}
             />
           </div>
         )}
 
         {/* Role 5: React Flow AI Execution Pipeline Visualizer */}
         {currentRole === 'PIPELINE' && (
-          <AIPipelineVisualizer />
+          <AIPipelineVisualizer ticket={selectedTicket} />
         )}
       </main>
     </div>

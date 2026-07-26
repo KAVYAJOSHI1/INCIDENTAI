@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Upload, Mic, FileText, Image as ImageIcon, Sparkles, CheckCircle2, AlertCircle, ArrowRight, Scan, ShieldCheck } from 'lucide-react';
-import { analyzeMultimodalInput } from '../../services/ocrService';
+import { analyzeOcrPreview } from '../../services/apiClient';
 
 export default function SmartReporter({ onSubmitIncident }) {
   const [inputText, setInputText] = useState('');
@@ -16,15 +16,18 @@ export default function SmartReporter({ onSubmitIncident }) {
     { label: "Warehouse Bin Transfer", text: "Negative quantity violation ERR_STOCK_NEG when transferring SKU SK-902 in Bin B4." }
   ];
 
-  const handleSimulatedScan = (textToScan) => {
+  const handleSimulatedScan = async (textToScan) => {
     setIsScanning(true);
     setOcrResult(null);
 
-    setTimeout(() => {
-      const result = analyzeMultimodalInput({ text: textToScan, fileName: selectedFile?.name });
+    try {
+      const result = await analyzeOcrPreview({ text: textToScan, fileName: selectedFile?.name });
       setOcrResult(result);
+    } catch (err) {
+      console.error('OCR preview failed:', err);
+    } finally {
       setIsScanning(false);
-    }, 900);
+    }
   };
 
   const handleVoiceInput = () => {

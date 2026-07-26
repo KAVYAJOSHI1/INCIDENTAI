@@ -9,10 +9,44 @@ import { predictRootCause } from "./rootCauseService.js";
 import { findDuplicateTickets } from "./duplicateService.js";
 import { searchKnowledgeBase } from "./knowledgeService.js";
 import { recommendDeveloperForTicket } from "./loadBalancerService.js";
-import { listTickets, listKnowledgeBase, listDevelopers, addTicket, updateDeveloper } from "../db/store.js";
+import { listTickets, listKnowledgeBase, listDevelopers, addTicket, updateDeveloper, getTicketById, getDeveloperById, updateTicket } from "../db/store.js";
 
 function generateTicketNumber() {
   return `INC-${crypto.randomInt(1000, 9999)}`;
+}
+
+const CLOSED_STATUSES = ["RESOLVED", "CLOSED"];
+
+/**
+ * Applies a ticket PATCH while keeping developer active_tickets counts consistent:
+ * reassigning a ticket moves capacity between developers, resolving/closing frees it up.
+ */
+export function applyTicketUpdate(id, patch) {
+  const ticket = getTicketById(id);
+  if (!ticket) return null;
+
+  const nextPatch = { ...patch };
+
+  if (patch.assigned_dev_id && patch.assigned_dev_id !== ticket.assigned_dev_id) {
+    const previousDev = getDeveloperById(ticket.assigned_dev_id);
+    const nextDev = getDeveloperById(patch.assigned_dev_id);
+    if (previousDev) updateDeveloper(previousDev.id, { active_tickets: Math.max(0, previousDev.active_tickets - 1) });
+    if (nextDev) {
+      updateDeveloper(nextDev.id, { active_tickets: nextDev.active_tickets + 1 });
+      nextPatch.assigned_dev_name = patch.assigned_dev_name || nextDev.name;
+    }
+  }
+
+  const wasOpen = !CLOSED_STATUSES.includes(ticket.status);
+  const willBeClosed = patch.status && CLOSED_STATUSES.includes(patch.status);
+  if (wasOpen && willBeClosed) {
+    nextPatch.resolved_at = patch.resolved_at || new Date().toISOString();
+    const assignedDevId = nextPatch.assigned_dev_id || ticket.assigned_dev_id;
+    const dev = getDeveloperById(assignedDevId);
+    if (dev) updateDeveloper(dev.id, { active_tickets: Math.max(0, dev.active_tickets - 1) });
+  }
+
+  return updateTicket(id, nextPatch);
 }
 
 export function runIncidentIngestPipeline(inputPayload) {
@@ -63,18 +97,17 @@ export function runIncidentIngestPipeline(inputPayload) {
     severity_analysis: severityResult,
     duplicate_check: {
       is_duplicate: duplicateResult.is_duplicate,
+      similarity_score: duplicateResult.top_match ? duplicateResult.top_match.similarity_score : 0,
       top_match: duplicateResult.top_match
         ? {
-            ticket_id: duplicateResult.top_match.ticket.id,
-            ticket_number: duplicateResult.top_match.ticket.ticket_number,
+            ticket: { id: duplicateResult.top_match.ticket.id, ticket_number: duplicateResult.top_match.ticket.ticket_number },
             similarity_score: duplicateResult.top_match.similarity_score
           }
         : null,
       related: duplicateResult.related.map((r) => ({ ticket_id: r.ticket.id, similarity_score: r.similarity_score }))
     },
     rag_kb_matches: kbMatches.map((m) => ({
-      article_id: m.article.id,
-      title: m.article.title,
+      article: m.article,
       score: m.score,
       confidence_percentage: m.confidence_percentage
     })),

@@ -1,31 +1,43 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { BookOpen, Search, Sparkles, Tag, Plus, CheckCircle2 } from 'lucide-react';
-import { searchKnowledgeBase } from '../../services/ragService';
+import { searchKnowledge } from '../../services/apiClient';
 
 export default function KnowledgeHub({ knowledgeBase, onAddArticle }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedModule, setSelectedModule] = useState('ALL');
   const [showAddForm, setShowAddForm] = useState(false);
+  const [remoteResults, setRemoteResults] = useState(null);
 
   const [newTitle, setNewTitle] = useState('');
   const [newModule, setNewModule] = useState('INVOICING');
   const [newErrorCode, setNewErrorCode] = useState('');
   const [newSolution, setNewSolution] = useState('');
 
-  const searchResults = searchQuery
-    ? searchKnowledgeBase(searchQuery, selectedModule === 'ALL' ? '' : selectedModule, knowledgeBase)
-    : knowledgeBase.map(article => ({ article, confidence_percentage: Math.round((article.confidence || 0.95) * 100) }));
+  useEffect(() => {
+    if (!searchQuery) {
+      setRemoteResults(null);
+      return undefined;
+    }
+    let cancelled = false;
+    const debounce = setTimeout(() => {
+      searchKnowledge(searchQuery, selectedModule === 'ALL' ? '' : selectedModule)
+        .then((results) => { if (!cancelled) setRemoteResults(results); })
+        .catch(() => { if (!cancelled) setRemoteResults([]); });
+    }, 300);
+    return () => { cancelled = true; clearTimeout(debounce); };
+  }, [searchQuery, selectedModule]);
+
+  const searchResults = remoteResults ?? knowledgeBase.map((article) => ({ article, confidence_percentage: Math.round((article.confidence || 0.95) * 100) }));
 
   const filteredArticles = searchResults.filter(item => {
     if (selectedModule === 'ALL') return true;
     return item.article.erp_module === selectedModule;
   });
 
-  const handleCreate = (e) => {
+  const handleCreate = async (e) => {
     e.preventDefault();
     if (!newTitle || !newSolution) return;
-    onAddArticle({
-      id: `kb_${Date.now()}`,
+    await onAddArticle({
       title: newTitle,
       erp_module: newModule,
       error_code: newErrorCode || 'ERR_CUSTOM',

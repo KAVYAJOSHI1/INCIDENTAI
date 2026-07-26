@@ -53,6 +53,11 @@ export function listKnowledgeBase() {
   return knowledgeBase;
 }
 
+export function addKnowledgeArticle(article) {
+  knowledgeBase.unshift(article);
+  return article;
+}
+
 export function recordPipelineTrace(trace) {
   pipelineTraces.unshift(trace);
   if (pipelineTraces.length > 50) pipelineTraces.pop();
