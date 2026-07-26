@@ -53,6 +53,7 @@ IncidentAI features a state-of-the-art enterprise design system crafted for high
 |---|---|
 | All 7 core module UIs | Done — Premium Dark Glassmorphism design system & dynamic dashboards |
 | Backend logic for all 7 core modules | Done — TF-IDF cosine duplicate/RAG search, weighted severity scoring, load-balancer formula + dynamic rebalancing, analytics |
+| Real OCR Engine | Done — image uploads run through actual Tesseract.js pixel-level text extraction (Web Worker + WASM), with a real word-level bounding box drawn over the uploaded screenshot when an error code is found. Non-image files (PDF/.log) still use the text-based classifier. |
 | 10-feature Enterprise Roadmap (backend + UI) | Done — see section below |
 | Frontend ↔ backend integration | Done — every action (submit, assign, resolve, merge, rebalance, copilot chat, KB search/add) hits the real API |
 | Hackathon demo readiness | Ready |
@@ -61,7 +62,6 @@ IncidentAI features a state-of-the-art enterprise design system crafted for high
 
 | Area | Gap |
 |---|---|
-| **Real OCR Engine** | Can integrate Tesseract.js / Canvas vision scanning for real pixel text extraction. |
 | **Persistence** | Backend is in-memory, resets on restart. Needs Postgres + `pgvector` in place of the TF-IDF cosine similarity used today. |
 | **Real AI** | Severity scoring, root cause, OCR, and copilot chat are rule-based simulators, not LLM calls. Needs Gemini (or equivalent) wired in. |
 | **Auth & RBAC** | The role switcher is a client-side toggle only — no real accounts, sessions, or server-side permission checks. |
