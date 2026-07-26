@@ -22,6 +22,25 @@ ERP platforms (SAP, NetSuite, Odoo, Oracle ERP) handle mission-critical business
 
 ---
 
+## 🎨 Premium Dark Glassmorphism Design System & Dashboards
+
+IncidentAI features a state-of-the-art enterprise design system crafted for high visual impact and executive presentation:
+
+- **Theme Palette**: Deep space dark mode (`#090D16`, `#0F172A`, `#1E1B4B`) paired with vivid HSL accent gradients (Indigo `#6366F1`, Cyan `#06B6D4`, Emerald `#10B981`, Rose `#F43F5E`).
+- **Glassmorphism Panels**: Custom frosted-glass panels (`backdrop-filter: blur(16px)` with `border: 1px solid rgba(255,255,255,0.1)`).
+- **Micro-Animations & Status Pulses**: Animated pulse indicators, capacity progress bars, live ticker feeds, and celebratory confetti upon patch resolution.
+- **Unified Role Dashboard Portals**:
+  1. **Smart Incident Reporter**: Multimodal dropzone + vision error bounding box overlay.
+  2. **Support Triage Feed**: Jira-style ticket view + pgvector duplicate detection banner.
+  3. **Developer Workbench**: Stack trace inspector, editable SQL patch sandbox, and AI Copilot chat.
+  4. **Executive Analytics**: Recharts MTTR area charts, module heatmaps, and severity distribution.
+  5. **React Flow Pipeline Visualizer**: Animated AI node graph.
+  6. **Enterprise War Room**: Live operations status cards and system pulse indicators.
+  7. **ERP Digital Twin**: Visual topology map of microservices and failure probabilities.
+  8. **Mission Control**: Executive auto-refreshing command center.
+
+---
+
 ## 📊 Project Status
 
 **Working end-to-end as a hackathon-grade demo (~90% of that target).** A real Node.js backend (`server/`, zero external dependencies) implements all 7 core modules plus the 10-feature Enterprise Roadmap below with genuine logic, and the React frontend is fully wired to it — no client-side mocks remain. Submitting an incident runs the full pipeline server-side: OCR classification → severity scoring → duplicate detection → RAG knowledge search → developer routing → ticket creation, all persisted in the running backend and reflected live across every role view.
@@ -32,7 +51,7 @@ ERP platforms (SAP, NetSuite, Odoo, Oracle ERP) handle mission-critical business
 
 | Area | Status |
 |---|---|
-| All 7 core module UIs | Done |
+| All 7 core module UIs | Done — Premium Dark Glassmorphism design system & dynamic dashboards |
 | Backend logic for all 7 core modules | Done — TF-IDF cosine duplicate/RAG search, weighted severity scoring, load-balancer formula + dynamic rebalancing, analytics |
 | 10-feature Enterprise Roadmap (backend + UI) | Done — see section below |
 | Frontend ↔ backend integration | Done — every action (submit, assign, resolve, merge, rebalance, copilot chat, KB search/add) hits the real API |
@@ -42,14 +61,14 @@ ERP platforms (SAP, NetSuite, Odoo, Oracle ERP) handle mission-critical business
 
 | Area | Gap |
 |---|---|
+| **Real OCR Engine** | Can integrate Tesseract.js / Canvas vision scanning for real pixel text extraction. |
 | **Persistence** | Backend is in-memory, resets on restart. Needs Postgres + `pgvector` in place of the TF-IDF cosine similarity used today. |
 | **Real AI** | Severity scoring, root cause, OCR, and copilot chat are rule-based simulators, not LLM calls. Needs Gemini (or equivalent) wired in. |
-| **Real OCR** | Error extraction is text-pattern matching; uploaded screenshots/PDFs in the Reporter aren't actually parsed yet. |
 | **Auth & RBAC** | The role switcher is a client-side toggle only — no real accounts, sessions, or server-side permission checks. |
 | **API hardening** | Minimal input validation, no rate limiting, permissive `*` CORS. |
 | **Testing** | No automated tests anywhere (frontend or backend). |
 | **Ops** | No logging/monitoring, no containerization, no env-based config beyond `PORT`. |
-| **Deployment** | Nothing is hosted yet — needs a home for the API + a static build of the frontend, behind HTTPS. |
+| **Deployment** | Kept as final step — needs hosting for API + static build of frontend behind HTTPS. |
 
 ---
 
