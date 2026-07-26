@@ -3,7 +3,7 @@
 [![Vite](https://img.shields.io/badge/Vite-5.4-646CFF?style=flat-square&logo=vite&logoColor=white)](https://vitejs.dev/)
 [![React](https://img.shields.io/badge/React-19.0-61DAFB?style=flat-square&logo=react&logoColor=black)](https://reactjs.org/)
 [![UI Style](https://img.shields.io/badge/Design-Glassmorphism-8B5CF6?style=flat-square)](https://github.com/KAVYAJOSHI1/INCIDENTAI)
-[![AI Engine](https://img.shields.io/badge/AI-Gemini%20Vision%20%2B%20RAG-06B6D4?style=flat-square)](https://github.com/KAVYAJOSHI1/INCIDENTAI)
+[![AI Engine](https://img.shields.io/badge/AI-Rule--Based%20%2B%20Real%20OCR-06B6D4?style=flat-square)](https://github.com/KAVYAJOSHI1/INCIDENTAI)
 [![License](https://img.shields.io/badge/License-MIT-green.style=flat-square)](#license)
 
 > *Automated ERP Error Diagnostics, Smart Ticketing & Dynamic Developer Load Balancing*
@@ -55,6 +55,8 @@ IncidentAI features a state-of-the-art enterprise design system crafted for high
 | Real OCR Engine | Done — image uploads run through actual Tesseract.js pixel-level text extraction (Web Worker + WASM), with a real word-level bounding box drawn over the uploaded screenshot when an error code is found. Non-image files (PDF/.log) still use the text-based classifier. |
 | 10-feature Enterprise Roadmap (backend + UI) | Done — see section below |
 | Frontend ↔ backend integration | Done — every action (submit, assign, resolve, merge, rebalance, copilot chat, KB search/add) hits the real API |
+| UI polish | Done — fixed Tailwind CSS never being wired up (it was inert since day one), added loading skeletons and proper empty states across every panel, made the navbar and AI Insights tabs scroll on mobile instead of overflowing |
+| Build/deploy plumbing | Done — fixed `vite preview` missing the `/api` proxy (only `server.proxy` existed, not `preview.proxy`), which broke every API call under a production build |
 | MVP readiness | Ready |
 
 ### ⏳ Left for production readiness
@@ -62,7 +64,7 @@ IncidentAI features a state-of-the-art enterprise design system crafted for high
 | Area | Gap |
 |---|---|
 | **Persistence** | Backend is in-memory, resets on restart. Needs Postgres + `pgvector` in place of the TF-IDF cosine similarity used today. |
-| **Real AI** | Severity scoring, root cause, OCR, and copilot chat are rule-based simulators, not LLM calls. Needs Gemini (or equivalent) wired in. |
+| **Real AI** | Severity scoring, root cause prediction, and copilot chat are rule/keyword-based simulators, not LLM calls. (Text extraction from images is real — see Tesseract.js above — but the *classification* of that text is still rule-based.) Needs Gemini or equivalent wired in for genuine reasoning. |
 | **Auth & RBAC** | The role switcher is a client-side toggle only — no real accounts, sessions, or server-side permission checks. |
 | **API hardening** | Minimal input validation, no rate limiting, permissive `*` CORS. |
 | **Testing** | No automated tests anywhere (frontend or backend). |
@@ -201,13 +203,19 @@ Unified auto-refreshing dashboard tracking live incidents, developer capacity, A
 
 ## 🛠️ Technology Stack
 
-- **Frontend Framework**: React 19 + Vite 5
-- **Styling**: Vanilla CSS Modern Dark Glassmorphism, CSS Grid, Custom Color Tokens
-- **Icons & Graphics**: Lucide Icons
-- **Data Visualizations**: Recharts
-- **Pipeline Visualizer**: `@xyflow/react` (React Flow)
-- **Effects**: `canvas-confetti`
-- **AI Triage Integration**: Gemini Vision & Language API Pipeline, PaddleOCR simulator, pgvector HNSW embedding search simulator
+**Frontend**
+- React 19 + Vite 5
+- Tailwind CSS 3 (utility classes) + hand-written CSS design tokens (Dark Glassmorphism theme, gradients, badges, animations)
+- Lucide Icons, Recharts (analytics), `@xyflow/react` (React Flow pipeline/topology diagrams), `canvas-confetti`
+- `tesseract.js` — real in-browser OCR (Web Worker + WASM) for uploaded screenshots
+
+**Backend** (`server/`)
+- Plain Node.js `http` server — zero external dependencies, no framework
+- In-memory data store (`server/db/`) seeded with sample developers, tickets, and knowledge base articles
+- Custom TF-IDF cosine similarity engine (`server/utils/textSimilarity.js`) powering duplicate detection and RAG knowledge search
+- Rule/keyword-based classifiers for OCR text interpretation, severity scoring, and root-cause prediction — **not** an LLM call (see Project Status below)
+
+**Not yet integrated**: no real LLM (Gemini or otherwise), no database, no auth — see the gaps table below.
 
 ---
 
