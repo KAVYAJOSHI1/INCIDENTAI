@@ -12,7 +12,7 @@ import DigitalTwin from './components/Operations/DigitalTwin';
 import MissionControl from './components/Operations/MissionControl';
 
 import * as api from './services/apiClient';
-import { ShieldAlert, Loader2, Inbox } from 'lucide-react';
+import { ShieldAlert, Loader2, Inbox, RefreshCw } from 'lucide-react';
 import EmptyState from './components/Common/EmptyState';
 
 export default function App() {
@@ -27,32 +27,32 @@ export default function App() {
 
   const selectedTicket = tickets.find((t) => t.id === selectedTicketId) || tickets[0];
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function bootstrap() {
-      try {
-        const [ticketsData, developersData, kbData] = await Promise.all([
-          api.fetchTickets(),
-          api.fetchDevelopers(),
-          api.fetchKnowledgeBase()
-        ]);
-        if (cancelled) return;
-        setTickets(ticketsData);
-        setDevelopers(developersData);
-        setKnowledgeBase(kbData);
-        setSelectedTicketId(ticketsData[0]?.id ?? null);
-        setLoadError(null);
-      } catch (err) {
-        if (!cancelled) setLoadError(err.message);
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
+  const loadInitialData = React.useCallback(async ({ signal } = {}) => {
+    setIsLoading(true);
+    try {
+      const [ticketsData, developersData, kbData] = await Promise.all([
+        api.fetchTickets(),
+        api.fetchDevelopers(),
+        api.fetchKnowledgeBase()
+      ]);
+      if (signal?.cancelled) return;
+      setTickets(ticketsData);
+      setDevelopers(developersData);
+      setKnowledgeBase(kbData);
+      setSelectedTicketId(ticketsData[0]?.id ?? null);
+      setLoadError(null);
+    } catch (err) {
+      if (!signal?.cancelled) setLoadError(err.message);
+    } finally {
+      if (!signal?.cancelled) setIsLoading(false);
     }
-
-    bootstrap();
-    return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    const signal = { cancelled: false };
+    loadInitialData({ signal });
+    return () => { signal.cancelled = true; };
+  }, [loadInitialData]);
 
   // Submit New Multimodal Incident — runs the full AI pipeline on the backend
   const handleSubmitIncident = async (inputPayload) => {
@@ -161,7 +161,10 @@ export default function App() {
         <ShieldAlert className="w-10 h-10 text-rose-400" />
         <h2 className="text-lg font-bold text-white">Cannot reach the IncidentAI backend</h2>
         <p className="text-sm text-slate-400 max-w-md">{loadError}</p>
-        <p className="text-xs text-slate-500">Make sure it's running with <code className="text-indigo-300">npm run server</code>, then reload this page.</p>
+        <p className="text-xs text-slate-500">Make sure it's running with <code className="text-indigo-300">npm run server</code>.</p>
+        <button onClick={() => loadInitialData()} className="btn-primary text-xs mt-1">
+          <RefreshCw className="w-3.5 h-3.5" /> Retry
+        </button>
       </div>
     );
   }
