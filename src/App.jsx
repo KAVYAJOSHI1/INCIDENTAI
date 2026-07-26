@@ -12,7 +12,8 @@ import DigitalTwin from './components/Operations/DigitalTwin';
 import MissionControl from './components/Operations/MissionControl';
 
 import * as api from './services/apiClient';
-import { ShieldAlert, Loader2 } from 'lucide-react';
+import { ShieldAlert, Loader2, Inbox } from 'lucide-react';
+import EmptyState from './components/Common/EmptyState';
 
 export default function App() {
   const [currentRole, setCurrentRole] = useState('REPORTER');
@@ -206,6 +207,14 @@ export default function App() {
               </div>
 
               <div className="space-y-3 overflow-y-auto max-h-[680px] pr-1">
+                {filteredTicketsList.length === 0 && (
+                  <EmptyState
+                    icon={Inbox}
+                    title={tickets.length === 0 ? 'No Incidents Yet' : 'No Matching Incidents'}
+                    description={tickets.length === 0 ? 'Submit one from the End-User Reporter to get started.' : `No tickets found for module "${filterModule}".`}
+                    compact
+                  />
+                )}
                 {filteredTicketsList.map((t) => {
                   const isSelected = selectedTicket?.id === t.id;
                   const isP0 = t.severity === 'P0_CRITICAL';

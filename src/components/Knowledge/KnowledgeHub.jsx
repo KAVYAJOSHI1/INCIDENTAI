@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { BookOpen, Search, Sparkles, Tag, Plus, CheckCircle2 } from 'lucide-react';
 import { searchKnowledge } from '../../services/apiClient';
 import { Spinner } from '../Common/Loading';
+import EmptyState from '../Common/EmptyState';
 
 export default function KnowledgeHub({ knowledgeBase, onAddArticle }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -155,6 +156,14 @@ export default function KnowledgeHub({ knowledgeBase, onAddArticle }) {
       </div>
 
       {/* Articles Grid */}
+      {filteredArticles.length === 0 && !isSearching && (
+        <EmptyState
+          icon={BookOpen}
+          title={searchQuery ? 'No Matching Articles' : 'No Knowledge Base Articles Yet'}
+          description={searchQuery ? `No RAG results for "${searchQuery}".` : 'Add one above to start building the resolution knowledge base.'}
+          compact
+        />
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {filteredArticles.map((item, idx) => {
           const art = item.article;

@@ -133,7 +133,9 @@ export default function ExecutiveDashboard({ tickets, developers }) {
             Incident Severity Breakdown (P0 to P3)
           </h3>
           <div className="h-64 flex items-center justify-center">
-            {isLoading ? <Skeleton className="h-full w-full rounded-full max-w-[170px] mx-auto" /> : (
+            {isLoading ? <Skeleton className="h-full w-full rounded-full max-w-[170px] mx-auto" /> : severityPieData.length === 0 ? (
+              <p className="text-xs text-slate-500">No incidents recorded yet.</p>
+            ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie data={severityPieData} cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={4} dataKey="value">
@@ -161,7 +163,9 @@ export default function ExecutiveDashboard({ tickets, developers }) {
             ERP Module Error Frequency by Severity
           </h3>
           <div className="h-56">
-            {isLoading ? <Skeleton className="h-full w-full" /> : (
+            {isLoading ? <Skeleton className="h-full w-full" /> : heatmap.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-xs text-slate-500">No module error data recorded yet.</div>
+            ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={heatmap}>
                   <XAxis dataKey="erp_module" stroke="#64748B" fontSize={11} />

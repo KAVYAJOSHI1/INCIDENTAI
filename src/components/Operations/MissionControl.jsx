@@ -50,6 +50,9 @@ export default function MissionControl() {
               {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-lg" />)}
             </>
           )}
+          {snapshot && snapshot.module_health.length === 0 && (
+            <p className="text-xs text-slate-500 col-span-full">No incidents recorded yet — module health will populate once tickets come in.</p>
+          )}
           {(snapshot?.module_health || []).map((m) => (
             <div key={m.erp_module} className="bg-slate-900/60 p-3 rounded-lg border border-white/5 text-xs">
               <span className="text-slate-400 font-semibold block">{m.erp_module}</span>

@@ -76,6 +76,7 @@ export default function WarRoom() {
           </h3>
           <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
             {!snapshot && <InlineLoading label="Loading live feed..." />}
+            {snapshot && snapshot.activity_feed.length === 0 && <p className="text-xs text-slate-500">No incidents recorded yet.</p>}
             {(snapshot?.activity_feed || []).map((t) => (
               <div key={t.ticket_number} className="flex items-center justify-between p-2.5 rounded-lg bg-slate-900/60 border border-white/5 text-xs">
                 <div className="flex items-center gap-2 min-w-0">

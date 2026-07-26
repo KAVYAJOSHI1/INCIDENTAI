@@ -1,9 +1,18 @@
 import React from 'react';
-import { ShieldAlert, GitMerge, FileText, CheckCircle2, User, Clock, AlertTriangle, Layers, BookOpen, ChevronRight } from 'lucide-react';
+import { ShieldAlert, GitMerge, FileText, CheckCircle2, User, Clock, AlertTriangle, Layers, BookOpen, ChevronRight, FileSearch } from 'lucide-react';
 import AIInsightsPanel from './AIInsightsPanel';
+import EmptyState from '../Common/EmptyState';
 
 export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDeveloper }) {
-  if (!ticket) return null;
+  if (!ticket) {
+    return (
+      <EmptyState
+        icon={FileSearch}
+        title="No Ticket Selected"
+        description="Select an incident from the Triage Feed Queue on the left, or submit a new one from the End-User Reporter."
+      />
+    );
+  }
 
   const severityBadgeClass = {
     P0_CRITICAL: 'badge-p0',
