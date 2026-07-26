@@ -58,6 +58,7 @@ IncidentAI features a state-of-the-art enterprise design system crafted for high
 | UI polish | Done — fixed Tailwind CSS never being wired up (it was inert since day one), added loading skeletons and proper empty states across every panel, made the navbar and AI Insights tabs scroll on mobile instead of overflowing |
 | Build/deploy plumbing | Done — fixed `vite preview` missing the `/api` proxy (only `server.proxy` existed, not `preview.proxy`), which broke every API call under a production build |
 | Real AI reasoning | Done — severity scoring, root cause prediction, and the developer copilot chat now call the real Claude API (`@anthropic-ai/sdk`, `claude-opus-4-8`) via `server/services/llmService.js`. **Requires `ANTHROPIC_API_KEY`** (copy `.env.example` to `.env`) — without a key, or on any API failure, each one transparently falls back to its original deterministic rule-based logic, so the app never breaks either way. Check `ai_generated: true/false` on the response to see which path served a given result. |
+| RAG duplicate detection & knowledge search | Done — retrieve-then-rerank: TF-IDF still does cheap first-pass candidate retrieval (`findDuplicateTickets` / `searchKnowledgeBase`), then Claude semantically judges/ranks that shortlist (`findDuplicateTicketsWithAI` / `searchKnowledgeBaseWithAI`), catching duplicates and relevant articles worded completely differently that lexical similarity alone would miss or under-score. Same graceful fallback to pure TF-IDF without a key. Not real vector embeddings (no embeddings provider configured) — this is LLM-as-reranker over a lexical shortlist, not a semantic vector index. |
 | MVP readiness | Ready |
 
 ### ⏳ Left for production readiness
@@ -65,7 +66,7 @@ IncidentAI features a state-of-the-art enterprise design system crafted for high
 | Area | Gap |
 |---|---|
 | **Persistence** | Backend is in-memory, resets on restart. Needs Postgres + `pgvector` in place of the TF-IDF cosine similarity used today. |
-| **AI coverage** | Real Claude reasoning now covers severity, root cause, and copilot chat (see above) — the 10-feature roadmap's explainability/business-impact/executive-summary services and the RAG/duplicate-detection engine are still deterministic (TF-IDF, not embeddings or LLM calls). |
+| **AI coverage** | Real Claude reasoning now covers severity, root cause, copilot chat, duplicate detection, and knowledge search (see above) — the 10-feature roadmap's explainability/business-impact/executive-summary services are still template-based, not LLM-generated. |
 | **Auth & RBAC** | The role switcher is a client-side toggle only — no real accounts, sessions, or server-side permission checks. |
 | **API hardening** | Minimal input validation, no rate limiting, permissive `*` CORS. |
 | **Testing** | No automated tests anywhere (frontend or backend). |
@@ -212,9 +213,9 @@ Unified auto-refreshing dashboard tracking live incidents, developer capacity, A
 
 **Backend** (`server/`)
 - Plain Node.js `http` server — otherwise zero external dependencies, no framework
-- `@anthropic-ai/sdk` (`claude-opus-4-8`) for real AI reasoning on severity scoring, root cause prediction, and copilot chat (`server/services/llmService.js`) — requires `ANTHROPIC_API_KEY`, falls back to deterministic logic without it
+- `@anthropic-ai/sdk` (`claude-opus-4-8`) for real AI reasoning on severity scoring, root cause prediction, copilot chat, and RAG reranking (`server/services/llmService.js`) — requires `ANTHROPIC_API_KEY`, falls back to deterministic logic without it
 - In-memory data store (`server/db/`) seeded with sample developers, tickets, and knowledge base articles
-- Custom TF-IDF cosine similarity engine (`server/utils/textSimilarity.js`) powering duplicate detection and RAG knowledge search — not yet real embeddings
+- Custom TF-IDF cosine similarity engine (`server/utils/textSimilarity.js`) for first-pass candidate retrieval, with Claude re-ranking the shortlist for duplicate detection and knowledge search — not real vector embeddings
 - Rule/keyword-based classifier for OCR text interpretation (module/error-code extraction)
 
 **Not yet integrated**: no database (Postgres/pgvector), no auth — see the gaps table below.

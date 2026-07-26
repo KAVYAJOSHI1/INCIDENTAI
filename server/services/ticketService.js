@@ -6,8 +6,8 @@ import crypto from "node:crypto";
 import { analyzeMultimodalInput } from "./ocrService.js";
 import { scoreSeverity, scoreSeverityWithAI } from "./severityService.js";
 import { predictRootCause, predictRootCauseWithAI } from "./rootCauseService.js";
-import { findDuplicateTickets } from "./duplicateService.js";
-import { searchKnowledgeBase } from "./knowledgeService.js";
+import { findDuplicateTickets, findDuplicateTicketsWithAI } from "./duplicateService.js";
+import { searchKnowledgeBase, searchKnowledgeBaseWithAI } from "./knowledgeService.js";
 import { recommendDeveloperForTicket } from "./loadBalancerService.js";
 import { listTickets, listKnowledgeBase, listDevelopers, addTicket, updateDeveloper, getTicketById, getDeveloperById, updateTicket } from "../db/store.js";
 import { CLOSED_STATUSES } from "../constants.js";
@@ -77,8 +77,14 @@ export async function runIncidentIngestPipeline(inputPayload) {
   const rootCause =
     (await predictRootCauseWithAI(ocrFindings.extracted_error_code, ocrFindings.erp_module, ocrFindings.detected_ui_component, inputPayload.text)) ??
     predictRootCause(ocrFindings.extracted_error_code, ocrFindings.erp_module, ocrFindings.detected_ui_component);
-  const duplicateResult = findDuplicateTickets(inputPayload.text || title, listTickets());
-  const kbMatches = searchKnowledgeBase(inputPayload.text || title, ocrFindings.erp_module, listKnowledgeBase());
+  const tfidfDuplicateResult = findDuplicateTickets(inputPayload.text || title, listTickets());
+  const duplicateResult = (await findDuplicateTicketsWithAI(inputPayload.text || title, tfidfDuplicateResult)) ?? tfidfDuplicateResult;
+
+  // Broader, unfiltered shortlist feeds the AI re-ranker so it can catch matches TF-IDF alone would score too low to surface
+  const kbShortlist = searchKnowledgeBase(inputPayload.text || title, ocrFindings.erp_module, listKnowledgeBase(), { minScore: 0.05 });
+  const kbMatches =
+    (await searchKnowledgeBaseWithAI(inputPayload.text || title, ocrFindings.erp_module, kbShortlist)) ??
+    searchKnowledgeBase(inputPayload.text || title, ocrFindings.erp_module, listKnowledgeBase());
   const routing = recommendDeveloperForTicket({ erp_module: ocrFindings.erp_module }, listDevelopers());
 
   const ticket = {
@@ -107,12 +113,16 @@ export async function runIncidentIngestPipeline(inputPayload) {
             similarity_score: duplicateResult.top_match.similarity_score
           }
         : null,
-      related: duplicateResult.related.map((r) => ({ ticket_id: r.ticket.id, similarity_score: r.similarity_score }))
+      related: duplicateResult.related.map((r) => ({ ticket_id: r.ticket.id, similarity_score: r.similarity_score })),
+      reasoning: duplicateResult.reasoning || null,
+      ai_generated: duplicateResult.ai_generated
     },
     rag_kb_matches: kbMatches.map((m) => ({
       article: m.article,
       score: m.score,
-      confidence_percentage: m.confidence_percentage
+      confidence_percentage: m.confidence_percentage,
+      why_relevant: m.why_relevant || null,
+      ai_generated: m.ai_generated ?? false
     })),
     developer_routing: routing,
     ai_root_cause: rootCause.root_cause,

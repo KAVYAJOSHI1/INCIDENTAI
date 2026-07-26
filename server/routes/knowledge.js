@@ -1,13 +1,16 @@
 import crypto from "node:crypto";
 import { listKnowledgeBase, addKnowledgeArticle } from "../db/store.js";
-import { searchKnowledgeBase } from "../services/knowledgeService.js";
+import { searchKnowledgeBase, searchKnowledgeBaseWithAI } from "../services/knowledgeService.js";
 import { sendJson, ApiError } from "../utils/http.js";
 
 export function registerKnowledgeRoutes(router) {
   router.get("/api/knowledge", ({ res }) => sendJson(res, 200, { articles: listKnowledgeBase() }));
 
-  router.get("/api/knowledge/search", ({ res, query }) => {
-    const results = searchKnowledgeBase(query.q || "", query.module || null, listKnowledgeBase());
+  router.get("/api/knowledge/search", async ({ res, query }) => {
+    const q = query.q || "";
+    const module = query.module || null;
+    const shortlist = searchKnowledgeBase(q, module, listKnowledgeBase(), { minScore: 0.05 });
+    const results = (await searchKnowledgeBaseWithAI(q, module, shortlist)) ?? searchKnowledgeBase(q, module, listKnowledgeBase());
     sendJson(res, 200, { results });
   });
 
