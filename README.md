@@ -35,26 +35,73 @@ ERP platforms (SAP, NetSuite, Odoo, Oracle ERP) handle mission-critical business
 
 ---
 
-## 🗺️ Roadmap & Upcoming System Enhancements
+## 🚀 Enterprise 10-Feature Architecture Roadmap
 
-To make every interface a deep production-level system, the following interface-specific enhancements are planned:
+To scale **IncidentAI** into a 10/10 Enterprise SaaS product (Microsoft Azure + ServiceNow + Datadog + GitHub Copilot experience), the architecture specifies the following 10 advanced modules:
 
-### 1. Smart Reporter & OCR Vision AI Interface
-- **Web Speech API Speech-to-Text**: Real browser microphone audio transcription for voice bug reports.
-- **Interactive Canvas Bounding Box Annotator**: Dynamic polygon drawing tool on uploaded ERP screenshots highlighting exact error code locations.
+```
+========================================================================================
+                          INCIDENTAI ENTERPRISE PLATFORM MAP
+========================================================================================
 
-### 2. Support Triage & Jira Ticket View Interface
-- **Interactive Ticket Spec Editor**: Modal to edit summaries, override severity levels (`P0` to `P3`), and re-tag ERP modules.
-- **Export Ticket Payloads**: One-click export of structured ticket payloads in JSON and Markdown formats.
+ ┌───────────────────────────┐      ┌───────────────────────────┐      ┌───────────────────────────┐
+ │ 1. AI ROOT CAUSE ENGINE   │ ───► │ 2. DECISION EXPLAINABILITY│ ───► │ 3. BUSINESS IMPACT ENGINE │
+ │ (Dependency Tree & Code)  │      │ (Score % & Reasoning)     │      │ ($/hr Revenue Loss & SLA) │
+ └───────────────────────────┘      └───────────────────────────┘      └───────────────────────────┘
+               │                                  │                                  │
+               ▼                                  ▼                                  ▼
+ ┌───────────────────────────┐      ┌───────────────────────────┐      ┌───────────────────────────┐
+ │ 4. AI INCIDENT TIMELINE   │ ───► │ 5. EXECUTIVE AI SUMMARY   │ ───► │ 6. ENTERPRISE WAR ROOM    │
+ │ (Animated Workflow Steps) │      │ ("Explain to Executive")  │      │ (Live Ops & System Pulse) │
+ └───────────────────────────┘      └───────────────────────────┘      └───────────────────────────┘
+               │                                  │                                  │
+               ▼                                  ▼                                  ▼
+ ┌───────────────────────────┐      ┌───────────────────────────┐      ┌───────────────────────────┐
+ │ 7. ERP DIGITAL TWIN       │ ───► │ 8. INCIDENT REPLAY ENGINE │ ───► │ 9. AI PATCH PREVIEW       │
+ │ (Live Topology & Health)  │      │ (Visual Step Playback)    │      │ (Rollback & Risk Score)   │
+ └───────────────────────────┘      └───────────────────────────┘      └───────────────────────────┘
+                                                  │
+                                                  ▼
+                                    ┌───────────────────────────┐
+                                    │ 10. MISSION CONTROL       │
+                                    │ (Command Center Dashboard)│
+                                    └───────────────────────────┘
+```
 
-### 3. Developer Workbench & Copilot Interface
-- **Interactive Patch Execution Terminal**: Live console window displaying real-time execution logs (`[CONNECTING TO DB...]`, `[EXECUTING SQL...]`, `[0 ERRORS]`).
-- **Editable SQL/Code Patch Sandbox**: Code editor allowing engineers to modify AI-suggested SQL patches prior to running.
-- **Export Post-Mortem Report**: Downloadable incident resolution post-mortem reports.
+### 1. 🌲 AI Root Cause Engine
+Interactive visual dependency tree mapping root cause, file name, function name, ERP module, suspected trigger, dependency chain, confidence score, and human error likelihood.
 
-### 4. RAG Knowledge Base & Analytics Interfaces
-- **Interactive Node Inspection on AI Pipeline Flow**: Clicking nodes in the React Flow visualizer opens raw JSON data payloads passing through that pipeline step.
-- **Persistent Database Adapter**: Swap in-memory store for PostgreSQL + `pgvector` HNSW indexes.
+### 2. 💡 AI Decision Explainability Matrix
+Explicit reasoning breakdowns for every AI decision:
+- **Severity**: Why `P0 Critical` (Payroll affected, Production environment, DB lock).
+- **Developer Routing**: Why `Sarah` (48 similar incidents solved, 27% workload, 1.3h MTTR).
+- **Duplicate Match**: Why `89%` (Error code, stack trace, OCR symbol match).
+
+### 3. 📉 Business Impact & Financial Loss Engine
+Real-time financial and operational loss predictor showing estimated revenue loss ($/hr), affected users, impacted departments, compliance risk level, and SLA breach probability.
+
+### 4. ⏳ Animated AI Incident Lifecycle Timeline
+Visual step-by-step progress tracking:  
+`Incident Created ➔ OCR Diagnostics ➔ Vision Analysis ➔ Duplicate Search ➔ Knowledge Retrieval ➔ Root Cause ➔ Dev Assigned ➔ Patch Generated ➔ Resolved`.
+
+### 5. 👔 Executive AI Summary ("Explain to Executive")
+One-click executive briefing card generating non-technical business summaries, financial exposure risks, resolution ETAs, and recommended leadership actions.
+
+### 6. 🚨 Enterprise War Room Operations Center
+Real-time live operations center featuring status cards for all enterprise ERP modules (Payroll, Inventory, Finance, Sales), live activity feeds, critical incident tickers, and animated system pulse indicators.
+
+### 7. 🗺️ ERP Digital Twin System Topology
+Visual interactive map of interconnected ERP microservices and modules displaying green/yellow/red health statuses, failure predictions, and active incident overlaps.
+
+### 8. 🎬 Incident Replay Engine
+Step-by-step visual replay engine animating:  
+`User Action ➔ API Call ➔ SQL Query ➔ ERP Service ➔ Failure Point ➔ AI Diagnosis ➔ Resolution`.
+
+### 9. 🛡️ AI Patch Preview & Safety Guardrails
+Pre-execution safety modal displaying affected files, estimated success %, rollback plan, side effect warnings, risk scores, and step-by-step execution steps.
+
+### 10. 🎛️ Mission Control Command Center
+Unified auto-refreshing dashboard tracking live incidents, developer capacity, AI queue latency, knowledge base hits, system health, daily cost savings, and team MTTR.
 
 ---
 
@@ -100,7 +147,7 @@ To make every interface a deep production-level system, the following interface-
                 ┌────────────────────────────────────────────────────────┐
                 │    7. EXECUTIVE ANALYTICS & REACT FLOW AI PIPELINE     │
                 │    (MTTR Reduction Charts, Heatmap, Execution Graph)   │
-                └────────────────────────────────────────────────────────┘
+                └───────────────────────────┬────────────────────────────┘
 ```
 
 ### Module Details
