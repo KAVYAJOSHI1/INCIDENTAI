@@ -1,6 +1,37 @@
 /**
- * Module 3: AI Root Cause & Patch Predictor — rule-engine over known error signatures with a generic fallback.
+ * Module 3: AI Root Cause & Patch Predictor. Tries real Claude reasoning first
+ * (predictRootCauseWithAI); falls back to the signature lookup table (predictRootCause)
+ * when no API key is configured or the call fails for any reason.
  */
+
+import { completeJson } from "./llmService.js";
+
+const ROOT_CAUSE_SCHEMA = {
+  type: "object",
+  properties: {
+    root_cause: { type: "string" },
+    suggested_patch: { type: "string" },
+    confidence: { type: "number" }
+  },
+  required: ["root_cause", "suggested_patch", "confidence"],
+  additionalProperties: false
+};
+
+const ROOT_CAUSE_SYSTEM_PROMPT = `You are a senior ERP backend engineer investigating production incidents across SAP, NetSuite, Odoo, and Oracle ERP systems.
+
+Given an error code, the ERP module it occurred in, and the UI component that triggered it, infer the single most likely backend root cause and propose one concrete, realistic patch (SQL statement, index, or short code snippet — whichever fits the described failure). Use ERP conventions appropriate to the module (e.g. SAP ABAP table naming, Odoo/Python ORM patterns, Oracle PL/SQL, NetSuite SuiteScript) and invent plausible table/field names consistent with the error description. confidence is your calibrated probability (0-1) that this diagnosis is correct given the limited information available.`;
+
+export async function predictRootCauseWithAI(errorCode, erpModule, component, contextText) {
+  const result = await completeJson({
+    system: ROOT_CAUSE_SYSTEM_PROMPT,
+    prompt: `Error code: ${errorCode}\nERP module: ${erpModule}\nUI component: <${component}/>\nOriginal report: "${contextText || ""}"\n\nDiagnose the root cause and propose a patch.`,
+    schema: ROOT_CAUSE_SCHEMA,
+    maxTokens: 512
+  });
+
+  if (!result) return null;
+  return { ...result, ai_generated: true };
+}
 
 const ROOT_CAUSE_SIGNATURES = {
   ERR_TAX_VAL_402: {
@@ -32,11 +63,12 @@ const ROOT_CAUSE_SIGNATURES = {
 
 export function predictRootCause(errorCode, erpModule, component) {
   const signature = ROOT_CAUSE_SIGNATURES[errorCode];
-  if (signature) return { ...signature };
+  if (signature) return { ...signature, ai_generated: false };
 
   return {
     root_cause: `Constraint violation or missing required field mapping in ${String(erpModule).toLowerCase()} backend service triggered via <${component}/>.`,
     suggested_patch: `-- Suggested SQL Patch for ${errorCode}\nUPDATE erp_${String(erpModule).toLowerCase()}_config SET status = 'ACTIVE' WHERE error_ref = '${errorCode}';`,
-    confidence: 0.55
+    confidence: 0.55,
+    ai_generated: false
   };
 }

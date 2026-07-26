@@ -4,8 +4,8 @@
 
 import crypto from "node:crypto";
 import { analyzeMultimodalInput } from "./ocrService.js";
-import { scoreSeverity } from "./severityService.js";
-import { predictRootCause } from "./rootCauseService.js";
+import { scoreSeverity, scoreSeverityWithAI } from "./severityService.js";
+import { predictRootCause, predictRootCauseWithAI } from "./rootCauseService.js";
 import { findDuplicateTickets } from "./duplicateService.js";
 import { searchKnowledgeBase } from "./knowledgeService.js";
 import { recommendDeveloperForTicket } from "./loadBalancerService.js";
@@ -48,13 +48,15 @@ export function applyTicketUpdate(id, patch) {
   return updateTicket(id, nextPatch);
 }
 
-export function runIncidentIngestPipeline(inputPayload) {
+export async function runIncidentIngestPipeline(inputPayload) {
   const t0 = Date.now();
 
   const ocrFindings = analyzeMultimodalInput(inputPayload);
   const ocrDurationMs = Date.now() - t0;
 
-  const severityResult = scoreSeverity(inputPayload.text || "", ocrFindings.erp_module);
+  const severityResult =
+    (await scoreSeverityWithAI(inputPayload.text || "", ocrFindings.erp_module)) ??
+    scoreSeverity(inputPayload.text || "", ocrFindings.erp_module);
   const severityDurationMs = Date.now() - t0 - ocrDurationMs;
 
   const title = `[${ocrFindings.erp_module}] ${ocrFindings.extracted_error_code}: ${(inputPayload.text || "Unexpected ERP Exception").slice(0, 60)}`;
@@ -72,7 +74,9 @@ export function runIncidentIngestPipeline(inputPayload) {
   const expectedBehavior = `ERP processes ${ocrFindings.erp_module} payload without validation failures and records the transaction.`;
   const actualBehavior = `System triggers ${ocrFindings.extracted_error_code} exception pop-up and aborts the transaction thread.`;
 
-  const rootCause = predictRootCause(ocrFindings.extracted_error_code, ocrFindings.erp_module, ocrFindings.detected_ui_component);
+  const rootCause =
+    (await predictRootCauseWithAI(ocrFindings.extracted_error_code, ocrFindings.erp_module, ocrFindings.detected_ui_component, inputPayload.text)) ??
+    predictRootCause(ocrFindings.extracted_error_code, ocrFindings.erp_module, ocrFindings.detected_ui_component);
   const duplicateResult = findDuplicateTickets(inputPayload.text || title, listTickets());
   const kbMatches = searchKnowledgeBase(inputPayload.text || title, ocrFindings.erp_module, listKnowledgeBase());
   const routing = recommendDeveloperForTicket({ erp_module: ocrFindings.erp_module }, listDevelopers());

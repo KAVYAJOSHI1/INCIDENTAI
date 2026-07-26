@@ -57,6 +57,7 @@ IncidentAI features a state-of-the-art enterprise design system crafted for high
 | Frontend ↔ backend integration | Done — every action (submit, assign, resolve, merge, rebalance, copilot chat, KB search/add) hits the real API |
 | UI polish | Done — fixed Tailwind CSS never being wired up (it was inert since day one), added loading skeletons and proper empty states across every panel, made the navbar and AI Insights tabs scroll on mobile instead of overflowing |
 | Build/deploy plumbing | Done — fixed `vite preview` missing the `/api` proxy (only `server.proxy` existed, not `preview.proxy`), which broke every API call under a production build |
+| Real AI reasoning | Done — severity scoring, root cause prediction, and the developer copilot chat now call the real Claude API (`@anthropic-ai/sdk`, `claude-opus-4-8`) via `server/services/llmService.js`. **Requires `ANTHROPIC_API_KEY`** (copy `.env.example` to `.env`) — without a key, or on any API failure, each one transparently falls back to its original deterministic rule-based logic, so the app never breaks either way. Check `ai_generated: true/false` on the response to see which path served a given result. |
 | MVP readiness | Ready |
 
 ### ⏳ Left for production readiness
@@ -64,7 +65,7 @@ IncidentAI features a state-of-the-art enterprise design system crafted for high
 | Area | Gap |
 |---|---|
 | **Persistence** | Backend is in-memory, resets on restart. Needs Postgres + `pgvector` in place of the TF-IDF cosine similarity used today. |
-| **Real AI** | Severity scoring, root cause prediction, and copilot chat are rule/keyword-based simulators, not LLM calls. (Text extraction from images is real — see Tesseract.js above — but the *classification* of that text is still rule-based.) Needs Gemini or equivalent wired in for genuine reasoning. |
+| **AI coverage** | Real Claude reasoning now covers severity, root cause, and copilot chat (see above) — the 10-feature roadmap's explainability/business-impact/executive-summary services and the RAG/duplicate-detection engine are still deterministic (TF-IDF, not embeddings or LLM calls). |
 | **Auth & RBAC** | The role switcher is a client-side toggle only — no real accounts, sessions, or server-side permission checks. |
 | **API hardening** | Minimal input validation, no rate limiting, permissive `*` CORS. |
 | **Testing** | No automated tests anywhere (frontend or backend). |
@@ -210,12 +211,13 @@ Unified auto-refreshing dashboard tracking live incidents, developer capacity, A
 - `tesseract.js` — real in-browser OCR (Web Worker + WASM) for uploaded screenshots
 
 **Backend** (`server/`)
-- Plain Node.js `http` server — zero external dependencies, no framework
+- Plain Node.js `http` server — otherwise zero external dependencies, no framework
+- `@anthropic-ai/sdk` (`claude-opus-4-8`) for real AI reasoning on severity scoring, root cause prediction, and copilot chat (`server/services/llmService.js`) — requires `ANTHROPIC_API_KEY`, falls back to deterministic logic without it
 - In-memory data store (`server/db/`) seeded with sample developers, tickets, and knowledge base articles
-- Custom TF-IDF cosine similarity engine (`server/utils/textSimilarity.js`) powering duplicate detection and RAG knowledge search
-- Rule/keyword-based classifiers for OCR text interpretation, severity scoring, and root-cause prediction — **not** an LLM call (see Project Status below)
+- Custom TF-IDF cosine similarity engine (`server/utils/textSimilarity.js`) powering duplicate detection and RAG knowledge search — not yet real embeddings
+- Rule/keyword-based classifier for OCR text interpretation (module/error-code extraction)
 
-**Not yet integrated**: no real LLM (Gemini or otherwise), no database, no auth — see the gaps table below.
+**Not yet integrated**: no database (Postgres/pgvector), no auth — see the gaps table below.
 
 ---
 
@@ -237,11 +239,15 @@ cd INCIDENTAI
 # 2. Install dependencies
 npm install
 
-# 3. Start the backend API (terminal 1)
+# 3. (Optional) Enable real Claude reasoning — copy .env.example to .env and add your key.
+# Without this step the backend runs fine, just with rule-based logic instead of live AI.
+cp .env.example .env
+
+# 4. Start the backend API (terminal 1)
 npm run server
 # -> IncidentAI backend listening on http://localhost:4000
 
-# 4. Start the Vite development server (terminal 2)
+# 5. Start the Vite development server (terminal 2)
 npm run dev
 ```
 
