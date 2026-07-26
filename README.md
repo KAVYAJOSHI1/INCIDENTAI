@@ -24,14 +24,32 @@ ERP platforms (SAP, NetSuite, Odoo, Oracle ERP) handle mission-critical business
 
 ## 📊 Project Status
 
-**Working end-to-end** — a real Node.js backend (`server/`, zero external dependencies) implements all 7 modules below with genuine logic, and the React frontend is fully wired to it (no more client-side mocks). Submitting an incident runs the full pipeline server-side: OCR classification → severity scoring → duplicate detection → RAG knowledge search → developer routing → ticket creation, all persisted in the running backend and reflected live across every role view.
+**Working end-to-end as a hackathon-grade demo (~90% of that target).** A real Node.js backend (`server/`, zero external dependencies) implements all 7 core modules plus the 10-feature Enterprise Roadmap below with genuine logic, and the React frontend is fully wired to it — no client-side mocks remain. Submitting an incident runs the full pipeline server-side: OCR classification → severity scoring → duplicate detection → RAG knowledge search → developer routing → ticket creation, all persisted in the running backend and reflected live across every role view.
+
+**Against the full enterprise SaaS vision (`SAAS_ARCHITECTURE_SPEC.md`): roughly 35–40%.** The module *logic and plumbing* is real and complete; what's still simulated is the infrastructure underneath it.
+
+### ✅ Done
 
 | Area | Status |
 |---|---|
-| All 7 module UIs | ✅ Done |
-| Backend logic for all 7 modules | ✅ Done — TF-IDF cosine duplicate/RAG search, weighted severity scoring, load-balancer formula + dynamic rebalancing, analytics | 
-| Frontend ↔ backend integration | ✅ Done — every action (submit, assign, resolve, merge, rebalance, copilot chat, KB search/add) hits the real API |
-| Hackathon demo readiness | ✅ Ready |
+| All 7 core module UIs | Done |
+| Backend logic for all 7 core modules | Done — TF-IDF cosine duplicate/RAG search, weighted severity scoring, load-balancer formula + dynamic rebalancing, analytics |
+| 10-feature Enterprise Roadmap (backend + UI) | Done — see section below |
+| Frontend ↔ backend integration | Done — every action (submit, assign, resolve, merge, rebalance, copilot chat, KB search/add) hits the real API |
+| Hackathon demo readiness | Ready |
+
+### ⏳ Left for production readiness
+
+| Area | Gap |
+|---|---|
+| **Persistence** | Backend is in-memory, resets on restart. Needs Postgres + `pgvector` in place of the TF-IDF cosine similarity used today. |
+| **Real AI** | Severity scoring, root cause, OCR, and copilot chat are rule-based simulators, not LLM calls. Needs Gemini (or equivalent) wired in. |
+| **Real OCR** | Error extraction is text-pattern matching; uploaded screenshots/PDFs in the Reporter aren't actually parsed yet. |
+| **Auth & RBAC** | The role switcher is a client-side toggle only — no real accounts, sessions, or server-side permission checks. |
+| **API hardening** | Minimal input validation, no rate limiting, permissive `*` CORS. |
+| **Testing** | No automated tests anywhere (frontend or backend). |
+| **Ops** | No logging/monitoring, no containerization, no env-based config beyond `PORT`. |
+| **Deployment** | Nothing is hosted yet — needs a home for the API + a static build of the frontend, behind HTTPS. |
 
 ---
 
