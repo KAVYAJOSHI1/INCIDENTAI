@@ -10,12 +10,11 @@ import { findDuplicateTickets } from "./duplicateService.js";
 import { searchKnowledgeBase } from "./knowledgeService.js";
 import { recommendDeveloperForTicket } from "./loadBalancerService.js";
 import { listTickets, listKnowledgeBase, listDevelopers, addTicket, updateDeveloper, getTicketById, getDeveloperById, updateTicket } from "../db/store.js";
+import { CLOSED_STATUSES } from "../constants.js";
 
 function generateTicketNumber() {
   return `INC-${crypto.randomInt(1000, 9999)}`;
 }
-
-const CLOSED_STATUSES = ["RESOLVED", "CLOSED"];
 
 /**
  * Applies a ticket PATCH while keeping developer active_tickets counts consistent:

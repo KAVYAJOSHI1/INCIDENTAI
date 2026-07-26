@@ -1,5 +1,6 @@
 import React from 'react';
 import { ShieldAlert, GitMerge, FileText, CheckCircle2, User, Clock, AlertTriangle, Layers, BookOpen, ChevronRight } from 'lucide-react';
+import AIInsightsPanel from './AIInsightsPanel';
 
 export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDeveloper }) {
   if (!ticket) return null;
@@ -158,6 +159,9 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
           </div>
         )}
       </div>
+
+      {/* Enterprise 10-Feature Roadmap: AI Insights Panel */}
+      <AIInsightsPanel ticket={ticket} />
     </div>
   );
 }

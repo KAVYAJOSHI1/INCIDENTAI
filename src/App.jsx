@@ -7,6 +7,9 @@ import DeveloperWorkbench from './components/Workbench/DeveloperWorkbench';
 import KnowledgeHub from './components/Knowledge/KnowledgeHub';
 import ExecutiveDashboard from './components/Analytics/ExecutiveDashboard';
 import AIPipelineVisualizer from './components/Pipeline/AIPipelineVisualizer';
+import WarRoom from './components/Operations/WarRoom';
+import DigitalTwin from './components/Operations/DigitalTwin';
+import MissionControl from './components/Operations/MissionControl';
 
 import * as api from './services/apiClient';
 import { ShieldAlert, Loader2 } from 'lucide-react';
@@ -276,6 +279,15 @@ export default function App() {
         {currentRole === 'PIPELINE' && (
           <AIPipelineVisualizer ticket={selectedTicket} />
         )}
+
+        {/* Role 6: Enterprise War Room */}
+        {currentRole === 'WARROOM' && <WarRoom />}
+
+        {/* Role 7: ERP Digital Twin */}
+        {currentRole === 'DIGITALTWIN' && <DigitalTwin />}
+
+        {/* Role 8: Mission Control Command Center */}
+        {currentRole === 'MISSIONCONTROL' && <MissionControl />}
       </main>
     </div>
   );

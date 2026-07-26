@@ -57,3 +57,17 @@ export const fetchPipelineTrace = (ticketId) => request(`/analytics/pipeline/${t
 
 export const copilotChat = (ticketId, message) =>
   request("/copilot/chat", { method: "POST", body: JSON.stringify({ ticket_id: ticketId, message }) }).then((d) => d.reply);
+
+// Enterprise 10-feature roadmap — ticket-scoped insights
+export const fetchRootCauseTree = (ticketId) => request(`/tickets/${ticketId}/root-cause-tree`).then((d) => d.tree);
+export const fetchExplainability = (ticketId) => request(`/tickets/${ticketId}/explainability`).then((d) => d.explainability);
+export const fetchBusinessImpact = (ticketId) => request(`/tickets/${ticketId}/business-impact`).then((d) => d.impact);
+export const fetchTicketTimeline = (ticketId) => request(`/tickets/${ticketId}/timeline`).then((d) => d.timeline);
+export const fetchExecutiveSummary = (ticketId) => request(`/tickets/${ticketId}/executive-summary`).then((d) => d.summary);
+export const fetchIncidentReplay = (ticketId) => request(`/tickets/${ticketId}/replay`).then((d) => d.replay);
+export const fetchPatchPreview = (ticketId) => request(`/tickets/${ticketId}/patch-preview`).then((d) => d.preview);
+
+// Enterprise 10-feature roadmap — standalone operations views
+export const fetchWarRoom = () => request("/warroom").then((d) => d.warroom);
+export const fetchDigitalTwin = () => request("/digital-twin").then((d) => d.twin);
+export const fetchMissionControl = () => request("/mission-control").then((d) => d.missionControl);

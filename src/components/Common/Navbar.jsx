@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldAlert, UserCheck, Code2, BarChart3, GitFork, Sparkles, AlertTriangle } from 'lucide-react';
+import { ShieldAlert, UserCheck, Code2, BarChart3, GitFork, Sparkles, AlertTriangle, Radio, Map, Gauge } from 'lucide-react';
 
 export default function Navbar({ currentRole, setCurrentRole, activeIncidentsCount, onTriggerPreset }) {
   const roles = [
@@ -8,6 +8,9 @@ export default function Navbar({ currentRole, setCurrentRole, activeIncidentsCou
     { id: 'DEVELOPER', label: '3. Developer Workbench', icon: Code2 },
     { id: 'ADMIN', label: '4. Executive Analytics', icon: BarChart3 },
     { id: 'PIPELINE', label: '5. AI Pipeline Flow', icon: GitFork },
+    { id: 'WARROOM', label: '6. War Room', icon: Radio },
+    { id: 'DIGITALTWIN', label: '7. Digital Twin', icon: Map },
+    { id: 'MISSIONCONTROL', label: '8. Mission Control', icon: Gauge },
   ];
 
   return (

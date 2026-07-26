@@ -13,6 +13,8 @@ import { registerKnowledgeRoutes } from "./routes/knowledge.js";
 import { registerLoadBalancerRoutes } from "./routes/loadbalancer.js";
 import { registerAnalyticsRoutes } from "./routes/analytics.js";
 import { registerCopilotRoutes } from "./routes/copilot.js";
+import { registerTicketInsightRoutes } from "./routes/ticketInsights.js";
+import { registerOperationsRoutes } from "./routes/operations.js";
 
 const router = new Router();
 registerHealthRoutes(router);
@@ -24,6 +26,8 @@ registerKnowledgeRoutes(router);
 registerLoadBalancerRoutes(router);
 registerAnalyticsRoutes(router);
 registerCopilotRoutes(router);
+registerTicketInsightRoutes(router);
+registerOperationsRoutes(router);
 
 const PORT = process.env.PORT || 4000;
 const server = http.createServer((req, res) => router.handle(req, res));
