@@ -1,18 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import { UserCheck, Sparkles, CheckCircle2, AlertTriangle, ShieldCheck, Zap, Activity, Award } from 'lucide-react';
 import { routeDeveloper } from '../../services/apiClient';
+import { InlineLoading } from '../Common/Loading';
 
 export default function DeveloperLoadBalancer({ currentTicket, developers, onAssignDeveloper, onRebalanceLoad }) {
   const [liveRouting, setLiveRouting] = useState(null);
+  const [isRoutingLoading, setIsRoutingLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     if (currentTicket && !currentTicket.developer_routing) {
+      setIsRoutingLoading(true);
       routeDeveloper(currentTicket.erp_module)
         .then((routing) => { if (!cancelled) setLiveRouting(routing); })
-        .catch(() => { if (!cancelled) setLiveRouting(null); });
+        .catch(() => { if (!cancelled) setLiveRouting(null); })
+        .finally(() => { if (!cancelled) setIsRoutingLoading(false); });
     } else {
       setLiveRouting(null);
+      setIsRoutingLoading(false);
     }
     return () => { cancelled = true; };
   }, [currentTicket?.id, currentTicket?.erp_module]);
@@ -47,6 +52,12 @@ export default function DeveloperLoadBalancer({ currentTicket, developers, onAss
       </div>
 
       {/* AI Routing Recommendation Box for Active Ticket */}
+      {currentTicket && isRoutingLoading && !recommendedDev && (
+        <div className="p-5 rounded-2xl bg-slate-900/60 border border-white/10">
+          <InlineLoading label="Computing optimal developer routing..." />
+        </div>
+      )}
+
       {currentTicket && recommendedDev && (
         <div className="p-5 rounded-2xl bg-gradient-to-r from-indigo-950/60 to-purple-950/60 border border-indigo-500/50 shadow-xl space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">

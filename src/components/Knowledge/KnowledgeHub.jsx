@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { BookOpen, Search, Sparkles, Tag, Plus, CheckCircle2 } from 'lucide-react';
 import { searchKnowledge } from '../../services/apiClient';
+import { Spinner } from '../Common/Loading';
 
 export default function KnowledgeHub({ knowledgeBase, onAddArticle }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedModule, setSelectedModule] = useState('ALL');
   const [showAddForm, setShowAddForm] = useState(false);
   const [remoteResults, setRemoteResults] = useState(null);
+  const [isSearching, setIsSearching] = useState(false);
 
   const [newTitle, setNewTitle] = useState('');
   const [newModule, setNewModule] = useState('INVOICING');
@@ -16,13 +18,16 @@ export default function KnowledgeHub({ knowledgeBase, onAddArticle }) {
   useEffect(() => {
     if (!searchQuery) {
       setRemoteResults(null);
+      setIsSearching(false);
       return undefined;
     }
     let cancelled = false;
+    setIsSearching(true);
     const debounce = setTimeout(() => {
       searchKnowledge(searchQuery, selectedModule === 'ALL' ? '' : selectedModule)
         .then((results) => { if (!cancelled) setRemoteResults(results); })
-        .catch(() => { if (!cancelled) setRemoteResults([]); });
+        .catch(() => { if (!cancelled) setRemoteResults([]); })
+        .finally(() => { if (!cancelled) setIsSearching(false); });
     }, 300);
     return () => { cancelled = true; clearTimeout(debounce); };
   }, [searchQuery, selectedModule]);
@@ -120,15 +125,16 @@ export default function KnowledgeHub({ knowledgeBase, onAddArticle }) {
 
       {/* Search & Filter Controls */}
       <div className="flex flex-wrap items-center gap-4">
-        <div className="flex-1 relative">
+        <div className="flex-1 relative min-w-[200px]">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search RAG vector index for error codes, stack trace phrases, or solutions..."
-            className="w-full bg-slate-900/80 border border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+            className="w-full bg-slate-900/80 border border-white/10 rounded-xl pl-9 pr-9 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
           />
+          {isSearching && <Spinner className="w-3.5 h-3.5 absolute right-3 top-3" />}
         </div>
 
         <div className="flex items-center gap-1.5 bg-slate-900 p-1 rounded-xl border border-white/10 text-xs">

@@ -58,7 +58,7 @@ export default function Navbar({ currentRole, setCurrentRole, activeIncidentsCou
         </div>
 
         {/* Navigation Role Switcher */}
-        <nav className="flex items-center gap-1 bg-slate-900/80 p-1 rounded-xl border border-white/10">
+        <nav className="flex items-center gap-1 bg-slate-900/80 p-1 rounded-xl border border-white/10 overflow-x-auto max-w-full w-full sm:w-auto">
           {roles.map((r) => {
             const IconComponent = r.icon;
             const isActive = currentRole === r.id;
@@ -66,16 +66,17 @@ export default function Navbar({ currentRole, setCurrentRole, activeIncidentsCou
               <button
                 key={r.id}
                 onClick={() => setCurrentRole(r.id)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                title={r.label}
+                className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 ${
                   isActive
                     ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-500/20'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
                 }`}
               >
-                <IconComponent className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
-                <span>{r.label}</span>
+                <IconComponent className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                <span className="hidden xl:inline whitespace-nowrap">{r.label}</span>
                 {r.id === 'TRIAGE' && activeIncidentsCount > 0 && (
-                  <span className="ml-1 px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-rose-500 text-white">
+                  <span className="ml-0.5 px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-rose-500 text-white shrink-0">
                     {activeIncidentsCount}
                   </span>
                 )}

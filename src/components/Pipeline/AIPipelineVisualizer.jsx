@@ -3,6 +3,7 @@ import { ReactFlow, Background, Controls } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { GitFork, Sparkles } from 'lucide-react';
 import { fetchPipelineTrace } from '../../services/apiClient';
+import { InlineLoading } from '../Common/Loading';
 
 const STAGE_STYLES = {
   ingest: { background: '#1E1B4B', color: '#A5B4FC', border: '1px solid #6366F1' },
@@ -16,16 +17,20 @@ const STAGE_STYLES = {
 
 export default function AIPipelineVisualizer({ ticket }) {
   const [pipeline, setPipeline] = useState(null);
+  const [isLoadingTrace, setIsLoadingTrace] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     if (!ticket) {
       setPipeline(null);
+      setIsLoadingTrace(false);
       return undefined;
     }
+    setIsLoadingTrace(true);
     fetchPipelineTrace(ticket.id)
       .then((data) => { if (!cancelled) setPipeline(data); })
-      .catch(() => { if (!cancelled) setPipeline(null); });
+      .catch(() => { if (!cancelled) setPipeline(null); })
+      .finally(() => { if (!cancelled) setIsLoadingTrace(false); });
     return () => { cancelled = true; };
   }, [ticket?.id]);
 
@@ -68,9 +73,13 @@ export default function AIPipelineVisualizer({ ticket }) {
             <Background color="#334155" gap={16} size={1} />
             <Controls className="bg-slate-900 border border-white/10 text-white fill-white rounded-xl" />
           </ReactFlow>
+        ) : isLoadingTrace ? (
+          <div className="w-full h-full flex items-center justify-center">
+            <InlineLoading label="Fetching real execution trace..." className="text-sm" />
+          </div>
         ) : (
           <div className="w-full h-full flex items-center justify-center text-slate-500 text-sm gap-2">
-            <Sparkles className="w-4 h-4" /> No pipeline trace to display yet.
+            <Sparkles className="w-4 h-4" /> {ticket ? 'No pipeline trace found for this ticket.' : 'No ticket selected — pick one from the Support Triage Feed.'}
           </div>
         )}
       </div>

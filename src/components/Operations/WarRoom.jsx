@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Radio, AlertTriangle, Activity, Sparkles } from 'lucide-react';
+import { Radio, AlertTriangle, Activity } from 'lucide-react';
 import { fetchWarRoom } from '../../services/apiClient';
+import { Skeleton, InlineLoading } from '../Common/Loading';
 
 const HEALTH_STYLES = {
   RED: 'border-rose-500/60 bg-rose-950/30 text-rose-400',
@@ -35,16 +36,18 @@ export default function WarRoom() {
 
       {/* Module Status Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        {(snapshot?.module_status || []).map((m) => (
-          <div key={m.module} className={`glass-panel p-4 border ${HEALTH_STYLES[m.health]}`}>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold text-white">{m.module}</span>
-              <span className={`w-2.5 h-2.5 rounded-full ${m.health === 'RED' ? 'bg-rose-500 animate-pulse' : m.health === 'YELLOW' ? 'bg-amber-500' : 'bg-emerald-500'}`} />
-            </div>
-            <p className="text-[11px] text-slate-400">Open Incidents</p>
-            <p className={`text-xl font-mono font-extrabold ${HEALTH_STYLES[m.health].split(' ')[2]}`}>{m.open_incidents}</p>
-          </div>
-        ))}
+        {!snapshot
+          ? Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)
+          : snapshot.module_status.map((m) => (
+              <div key={m.module} className={`glass-panel p-4 border ${HEALTH_STYLES[m.health]}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-white">{m.module}</span>
+                  <span className={`w-2.5 h-2.5 rounded-full ${m.health === 'RED' ? 'bg-rose-500 animate-pulse' : m.health === 'YELLOW' ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                </div>
+                <p className="text-[11px] text-slate-400">Open Incidents</p>
+                <p className={`text-xl font-mono font-extrabold ${HEALTH_STYLES[m.health].split(' ')[2]}`}>{m.open_incidents}</p>
+              </div>
+            ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -54,7 +57,8 @@ export default function WarRoom() {
             <AlertTriangle className="w-4 h-4" /> Critical P0 Ticker ({snapshot?.critical_ticker.length ?? 0})
           </h3>
           <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-            {(snapshot?.critical_ticker || []).length === 0 && <p className="text-xs text-slate-500">No active P0 incidents.</p>}
+            {!snapshot && <InlineLoading label="Loading critical ticker..." />}
+            {snapshot && snapshot.critical_ticker.length === 0 && <p className="text-xs text-slate-500">No active P0 incidents.</p>}
             {(snapshot?.critical_ticker || []).map((t) => (
               <div key={t.ticket_number} className="p-3 rounded-lg bg-rose-950/20 border border-rose-500/30 text-xs">
                 <span className="font-mono font-bold text-rose-300">{t.ticket_number}</span>
@@ -71,6 +75,7 @@ export default function WarRoom() {
             <Activity className="w-4 h-4 text-indigo-400" /> Live Activity Feed
           </h3>
           <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+            {!snapshot && <InlineLoading label="Loading live feed..." />}
             {(snapshot?.activity_feed || []).map((t) => (
               <div key={t.ticket_number} className="flex items-center justify-between p-2.5 rounded-lg bg-slate-900/60 border border-white/5 text-xs">
                 <div className="flex items-center gap-2 min-w-0">
@@ -80,7 +85,6 @@ export default function WarRoom() {
                 <span className={`${SEVERITY_BADGE[t.severity] || 'badge-p2'} shrink-0 ml-2`}>{t.severity}</span>
               </div>
             ))}
-            {!snapshot && <p className="text-xs text-slate-500 flex items-center gap-1"><Sparkles className="w-3 h-3" /> Loading live feed...</p>}
           </div>
         </div>
       </div>

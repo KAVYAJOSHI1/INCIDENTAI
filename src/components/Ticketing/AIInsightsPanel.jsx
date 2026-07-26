@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Network, Lightbulb, TrendingDown, History, Presentation, Film, ShieldAlert, Copy, CheckCircle2 } from 'lucide-react';
+import { Skeleton, InlineLoading } from '../Common/Loading';
 import {
   fetchRootCauseTree,
   fetchExplainability,
@@ -69,18 +70,18 @@ export default function AIInsightsPanel({ ticket }) {
 
   return (
     <div className="glass-panel p-5 space-y-4 border-indigo-500/30">
-      <div className="flex items-center justify-between flex-wrap gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <h3 className="text-sm font-bold text-white flex items-center gap-2">
           <Network className="w-4 h-4 text-indigo-400" /> Enterprise AI Insights
         </h3>
-        <div className="flex items-center gap-1 flex-wrap">
+        <div className="flex items-center gap-1 overflow-x-auto pb-1 -mx-1 px-1 sm:mx-0 sm:px-0">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`text-[10px] px-2.5 py-1.5 rounded-lg font-semibold flex items-center gap-1 transition-all ${
+                className={`text-[10px] px-2.5 py-1.5 rounded-lg font-semibold flex items-center gap-1 transition-all shrink-0 ${
                   activeTab === tab.id ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white border border-white/10'
                 }`}
               >
@@ -270,5 +271,16 @@ function Metric({ label, value, color }) {
 }
 
 function LoadingState() {
-  return <p className="text-xs text-slate-500">Loading AI insight...</p>;
+  return (
+    <div className="space-y-3">
+      <InlineLoading label="Loading AI insight..." />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Skeleton className="h-14" />
+        <Skeleton className="h-14" />
+        <Skeleton className="h-14" />
+        <Skeleton className="h-14" />
+      </div>
+      <Skeleton className="h-16 w-full" />
+    </div>
+  );
 }

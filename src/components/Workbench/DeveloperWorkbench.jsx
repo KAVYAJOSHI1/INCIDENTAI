@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Code2, Play, CheckCircle2, MessageSquare, Terminal, Sparkles, Send, Copy, ShieldAlert, Cpu } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { copilotChat } from '../../services/apiClient';
+import { Spinner } from '../Common/Loading';
 
 export default function DeveloperWorkbench({ ticket, onResolveTicket }) {
   const [chatMessages, setChatMessages] = useState([
@@ -12,6 +13,7 @@ export default function DeveloperWorkbench({ ticket, onResolveTicket }) {
   ]);
   const [inputQuery, setInputQuery] = useState('');
   const [isPatchExecuted, setIsPatchExecuted] = useState(false);
+  const [isCopilotTyping, setIsCopilotTyping] = useState(false);
 
   if (!ticket) {
     return (
@@ -31,12 +33,15 @@ export default function DeveloperWorkbench({ ticket, onResolveTicket }) {
     const query = inputQuery;
     setChatMessages((prev) => [...prev, userMsg]);
     setInputQuery('');
+    setIsCopilotTyping(true);
 
     try {
       const copilotReply = await copilotChat(ticket.id, query);
       setChatMessages((prev) => [...prev, copilotReply]);
     } catch (err) {
       setChatMessages((prev) => [...prev, { sender: "AI_COPILOT", message: `Error contacting IncidentAI Copilot: ${err.message}` }]);
+    } finally {
+      setIsCopilotTyping(false);
     }
   };
 
@@ -178,6 +183,11 @@ export default function DeveloperWorkbench({ ticket, onResolveTicket }) {
                   <div className="whitespace-pre-line">{msg.message}</div>
                 </div>
               ))}
+              {isCopilotTyping && (
+                <div className="p-3 rounded-xl text-xs bg-slate-900/80 text-slate-400 mr-4 border border-white/10 flex items-center gap-2">
+                  <Spinner className="w-3.5 h-3.5" /> AI Copilot is typing...
+                </div>
+              )}
             </div>
           </div>
 

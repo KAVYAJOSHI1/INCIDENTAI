@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Gauge, Users, Zap, BookOpen, DollarSign, Clock, Activity } from 'lucide-react';
 import { fetchMissionControl } from '../../services/apiClient';
+import { Skeleton, InlineLoading } from '../Common/Loading';
 
 export default function MissionControl() {
   const [snapshot, setSnapshot] = useState(null);
@@ -43,6 +44,12 @@ export default function MissionControl() {
       <div className="glass-panel p-5 space-y-3">
         <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">Module Health Snapshot</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          {!snapshot && (
+            <>
+              <InlineLoading label="Loading module health..." className="col-span-full" />
+              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-lg" />)}
+            </>
+          )}
           {(snapshot?.module_health || []).map((m) => (
             <div key={m.erp_module} className="bg-slate-900/60 p-3 rounded-lg border border-white/5 text-xs">
               <span className="text-slate-400 font-semibold block">{m.erp_module}</span>
@@ -57,13 +64,16 @@ export default function MissionControl() {
 }
 
 function Tile({ icon: Icon, label, value, sub, color }) {
+  const isLoading = value === '—';
   return (
     <div className={`glass-panel p-5 space-y-2 border ${color.split(' ')[1]}`}>
       <div className="flex items-center justify-between">
         <span className="text-xs text-slate-400 font-semibold uppercase">{label}</span>
         <Icon className={`w-4 h-4 ${color.split(' ')[0]}`} />
       </div>
-      <div className={`text-2xl font-extrabold font-mono ${color.split(' ')[0]}`}>{value}</div>
+      <div className={`text-2xl font-extrabold font-mono ${color.split(' ')[0]}`}>
+        {isLoading ? <Skeleton className="h-7 w-16" /> : value}
+      </div>
       {sub && <p className="text-[11px] text-slate-400">{sub}</p>}
     </div>
   );
