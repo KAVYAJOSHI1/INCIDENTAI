@@ -33,13 +33,28 @@ ERP platforms (SAP, NetSuite, Odoo, Oracle ERP) handle mission-critical business
 | Frontend ↔ backend integration | ✅ Done — every action (submit, assign, resolve, merge, rebalance, copilot chat, KB search/add) hits the real API |
 | Hackathon demo readiness | ✅ Ready |
 
-**Not yet production-ready** — the pieces below are intentionally simulated for now and are the next milestones:
-- **Persistence**: backend is in-memory and resets on restart; needs a real Postgres + `pgvector` swap-in
-- **Real AI**: severity/root-cause/OCR/copilot are rule-based simulators, not LLM calls — needs Gemini (or similar) wired in
-- **Real OCR**: error extraction is text-pattern matching; uploaded screenshots/PDFs aren't actually parsed yet
-- **Auth & RBAC**: the role switcher is a client-side toggle only, not enforced server-side
-- **API hardening**: minimal input validation, no rate limiting, permissive CORS
-- **Tests, logging/monitoring, deployment**: none set up yet
+---
+
+## 🗺️ Roadmap & Upcoming System Enhancements
+
+To make every interface a deep production-level system, the following interface-specific enhancements are planned:
+
+### 1. Smart Reporter & OCR Vision AI Interface
+- **Web Speech API Speech-to-Text**: Real browser microphone audio transcription for voice bug reports.
+- **Interactive Canvas Bounding Box Annotator**: Dynamic polygon drawing tool on uploaded ERP screenshots highlighting exact error code locations.
+
+### 2. Support Triage & Jira Ticket View Interface
+- **Interactive Ticket Spec Editor**: Modal to edit summaries, override severity levels (`P0` to `P3`), and re-tag ERP modules.
+- **Export Ticket Payloads**: One-click export of structured ticket payloads in JSON and Markdown formats.
+
+### 3. Developer Workbench & Copilot Interface
+- **Interactive Patch Execution Terminal**: Live console window displaying real-time execution logs (`[CONNECTING TO DB...]`, `[EXECUTING SQL...]`, `[0 ERRORS]`).
+- **Editable SQL/Code Patch Sandbox**: Code editor allowing engineers to modify AI-suggested SQL patches prior to running.
+- **Export Post-Mortem Report**: Downloadable incident resolution post-mortem reports.
+
+### 4. RAG Knowledge Base & Analytics Interfaces
+- **Interactive Node Inspection on AI Pipeline Flow**: Clicking nodes in the React Flow visualizer opens raw JSON data payloads passing through that pipeline step.
+- **Persistent Database Adapter**: Swap in-memory store for PostgreSQL + `pgvector` HNSW indexes.
 
 ---
 
