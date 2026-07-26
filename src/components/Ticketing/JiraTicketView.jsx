@@ -31,14 +31,20 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
               <AlertTriangle className="w-5 h-5 text-amber-400" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs font-bold uppercase tracking-wider text-amber-400">
-                  pgvector Duplicate Engine Match ({ticket.duplicate_check.similarity_score * 100}%)
+                  Duplicate Engine Match ({Math.round(ticket.duplicate_check.similarity_score * 100)}%)
+                </span>
+                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${ticket.duplicate_check.ai_generated ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-slate-700/50 text-slate-400 border-white/10'}`}>
+                  {ticket.duplicate_check.ai_generated ? 'CLAUDE' : 'TF-IDF'}
                 </span>
               </div>
               <p className="text-sm font-semibold text-white mt-0.5">
                 High similarity detected with existing ticket <code className="text-amber-300 font-mono font-bold">{ticket.duplicate_check.top_match?.ticket?.ticket_number || 'INC-8840'}</code>
               </p>
+              {ticket.duplicate_check.reasoning && (
+                <p className="text-xs text-amber-200/80 italic mt-1">"{ticket.duplicate_check.reasoning}"</p>
+              )}
             </div>
           </div>
 
@@ -154,14 +160,24 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
             </h4>
             <div className="space-y-2">
               {ticket.rag_kb_matches.map((item, kIdx) => (
-                <div key={kIdx} className="p-3 rounded-lg bg-slate-900/60 border border-white/10 flex items-center justify-between hover:border-cyan-500/30 transition-all text-xs">
-                  <div>
-                    <span className="font-bold text-cyan-300">{item.article.title}</span>
-                    <p className="text-slate-400 text-[11px] mt-0.5">{item.article.solution}</p>
+                <div key={kIdx} className="p-3 rounded-lg bg-slate-900/60 border border-white/10 hover:border-cyan-500/30 transition-all text-xs">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <span className="font-bold text-cyan-300">{item.article.title}</span>
+                      <p className="text-slate-400 text-[11px] mt-0.5">{item.article.solution}</p>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${item.ai_generated ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-slate-700/50 text-slate-400 border-white/10'}`}>
+                        {item.ai_generated ? 'CLAUDE' : 'TF-IDF'}
+                      </span>
+                      <span className="px-2 py-1 rounded bg-cyan-500/20 text-cyan-300 font-mono font-bold">
+                        {item.confidence_percentage}% Match
+                      </span>
+                    </div>
                   </div>
-                  <span className="px-2 py-1 rounded bg-cyan-500/20 text-cyan-300 font-mono font-bold shrink-0">
-                    {item.confidence_percentage}% Match
-                  </span>
+                  {item.why_relevant && (
+                    <p className="text-cyan-200/70 text-[11px] italic mt-1.5 pt-1.5 border-t border-white/5">"{item.why_relevant}"</p>
+                  )}
                 </div>
               ))}
             </div>
