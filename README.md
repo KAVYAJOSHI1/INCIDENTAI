@@ -22,6 +22,27 @@ ERP platforms (SAP, NetSuite, Odoo, Oracle ERP) handle mission-critical business
 
 ---
 
+## 📊 Project Status
+
+**Working end-to-end** — a real Node.js backend (`server/`, zero external dependencies) implements all 7 modules below with genuine logic, and the React frontend is fully wired to it (no more client-side mocks). Submitting an incident runs the full pipeline server-side: OCR classification → severity scoring → duplicate detection → RAG knowledge search → developer routing → ticket creation, all persisted in the running backend and reflected live across every role view.
+
+| Area | Status |
+|---|---|
+| All 7 module UIs | ✅ Done |
+| Backend logic for all 7 modules | ✅ Done — TF-IDF cosine duplicate/RAG search, weighted severity scoring, load-balancer formula + dynamic rebalancing, analytics | 
+| Frontend ↔ backend integration | ✅ Done — every action (submit, assign, resolve, merge, rebalance, copilot chat, KB search/add) hits the real API |
+| Hackathon demo readiness | ✅ Ready |
+
+**Not yet production-ready** — the pieces below are intentionally simulated for now and are the next milestones:
+- **Persistence**: backend is in-memory and resets on restart; needs a real Postgres + `pgvector` swap-in
+- **Real AI**: severity/root-cause/OCR/copilot are rule-based simulators, not LLM calls — needs Gemini (or similar) wired in
+- **Real OCR**: error extraction is text-pattern matching; uploaded screenshots/PDFs aren't actually parsed yet
+- **Auth & RBAC**: the role switcher is a client-side toggle only, not enforced server-side
+- **API hardening**: minimal input validation, no rate limiting, permissive CORS
+- **Tests, logging/monitoring, deployment**: none set up yet
+
+---
+
 ## 🌟 7 Core AI Modules
 
 ```
@@ -98,6 +119,8 @@ ERP platforms (SAP, NetSuite, Odoo, Oracle ERP) handle mission-critical business
 
 ### Installation & Running Locally
 
+The app is two processes: the backend API (`server/`) and the Vite frontend. Both need to be running.
+
 ```bash
 # 1. Clone the repository
 git clone https://github.com/KAVYAJOSHI1/INCIDENTAI.git
@@ -106,11 +129,15 @@ cd INCIDENTAI
 # 2. Install dependencies
 npm install
 
-# 3. Start the Vite development server
+# 3. Start the backend API (terminal 1)
+npm run server
+# -> IncidentAI backend listening on http://localhost:4000
+
+# 4. Start the Vite development server (terminal 2)
 npm run dev
 ```
 
-Open your browser and navigate to **`http://localhost:3000/`**.
+Open your browser and navigate to **`http://localhost:3000/`**. The frontend proxies all `/api/*` requests to the backend (see `vite.config.js`), so both must be running for the app to load data.
 
 ---
 
