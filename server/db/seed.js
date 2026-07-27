@@ -9,10 +9,21 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getPool, query } from "./postgres.js";
 import { developers, tickets, knowledgeBase } from "./seedData.js";
-import { addTicket, addKnowledgeArticle } from "./store.js";
+import { addTicket, addKnowledgeArticle, createUser } from "./store.js";
+import { hashPassword } from "../services/authService.js";
 
 const schemaPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "schema.sql");
 const force = process.argv.includes("--force");
+
+// One demo login per role, all sharing the same password, so a fresh checkout can be
+// logged into immediately without registering. Never use these for a real deployment.
+const DEMO_PASSWORD = "demopass123";
+const DEMO_USERS = [
+  { id: "user_demo_enduser", email: "enduser@incidentai.demo", name: "Dana Reporter", role: "END_USER" },
+  { id: "user_demo_triage", email: "triage@incidentai.demo", name: "Tariq Triage", role: "SUPPORT_TRIAGE" },
+  { id: "user_demo_developer", email: "developer@incidentai.demo", name: "Devi Developer", role: "DEVELOPER" },
+  { id: "user_demo_executive", email: "executive@incidentai.demo", name: "Erin Executive", role: "EXECUTIVE" }
+];
 
 async function seedDevelopers() {
   for (const dev of developers) {
@@ -71,6 +82,14 @@ async function seedKnowledgeBase() {
   console.log(`[seed] ${knowledgeBase.length} knowledge base articles`);
 }
 
+async function seedUsers() {
+  const password_hash = await hashPassword(DEMO_PASSWORD);
+  for (const user of DEMO_USERS) {
+    await createUser({ ...user, password_hash });
+  }
+  console.log(`[seed] ${DEMO_USERS.length} demo users (password: "${DEMO_PASSWORD}" for all)`);
+}
+
 async function main() {
   const pool = getPool();
   await pool.query(fs.readFileSync(schemaPath, "utf8"));
@@ -87,6 +106,7 @@ async function main() {
   await seedDevelopers();
   await seedTickets();
   await seedKnowledgeBase();
+  await seedUsers();
 
   console.log("[seed] done");
   await pool.end();

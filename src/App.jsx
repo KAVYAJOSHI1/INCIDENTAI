@@ -14,9 +14,13 @@ import MissionControl from './components/Operations/MissionControl';
 import * as api from './services/apiClient';
 import { ShieldAlert, Loader2, Inbox, RefreshCw } from 'lucide-react';
 import EmptyState from './components/Common/EmptyState';
+import LoginScreen from './components/Auth/LoginScreen';
+import { useAuth } from './context/AuthContext';
+import { VIEWS_BY_ROLE } from './constants/roles';
 
 export default function App() {
-  const [currentRole, setCurrentRole] = useState('REPORTER');
+  const { user, isLoading: isAuthLoading, logout } = useAuth();
+  const [currentView, setCurrentView] = useState('REPORTER');
   const [tickets, setTickets] = useState([]);
   const [developers, setDevelopers] = useState([]);
   const [knowledgeBase, setKnowledgeBase] = useState([]);
@@ -49,10 +53,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!user) return undefined;
     const signal = { cancelled: false };
     loadInitialData({ signal });
     return () => { signal.cancelled = true; };
-  }, [loadInitialData]);
+  }, [user, loadInitialData]);
+
+  const allowedViews = user ? VIEWS_BY_ROLE[user.role] : [];
 
   // Submit New Multimodal Incident — runs the full AI pipeline on the backend
   const handleSubmitIncident = async (inputPayload) => {
@@ -60,7 +67,7 @@ export default function App() {
       const newTicket = await api.ingestIncident(inputPayload);
       setTickets((prev) => [newTicket, ...prev]);
       setSelectedTicketId(newTicket.id);
-      setCurrentRole('TRIAGE');
+      if (allowedViews.includes('TRIAGE')) setCurrentView('TRIAGE');
       const refreshedDevelopers = await api.fetchDevelopers();
       setDevelopers(refreshedDevelopers);
     } catch (err) {
@@ -146,6 +153,19 @@ export default function App() {
     return t.erp_module === filterModule;
   });
 
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-slate-400">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-400" />
+        <p className="text-sm">Checking session...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginScreen />;
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-slate-400">
@@ -173,21 +193,24 @@ export default function App() {
     <div className="min-h-screen flex flex-col pb-12">
       {/* Top Navbar */}
       <Navbar
-        currentRole={currentRole}
-        setCurrentRole={setCurrentRole}
+        currentView={currentView}
+        setCurrentView={setCurrentView}
+        allowedViews={allowedViews}
+        user={user}
+        onLogout={logout}
         activeIncidentsCount={tickets.filter((t) => t.status !== 'RESOLVED').length}
         onTriggerPreset={handleTriggerPreset}
       />
 
-      {/* Main Role Content Container */}
+      {/* Main View Content Container */}
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6">
-        {/* Role 1: End User Reporter */}
-        {currentRole === 'REPORTER' && (
+        {/* View 1: End User Reporter */}
+        {currentView === 'REPORTER' && (
           <SmartReporter onSubmitIncident={handleSubmitIncident} />
         )}
 
-        {/* Role 2: Support Triage Feed & Jira View */}
-        {currentRole === 'TRIAGE' && (
+        {/* View 2: Support Triage Feed & Jira View */}
+        {currentView === 'TRIAGE' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Left Column: Tickets Queue Feed (4 cols) */}
             <div className="lg:col-span-4 space-y-4">
@@ -262,16 +285,16 @@ export default function App() {
           </div>
         )}
 
-        {/* Role 3: Developer Workbench & Copilot */}
-        {currentRole === 'DEVELOPER' && (
+        {/* View 3: Developer Workbench & Copilot */}
+        {currentView === 'DEVELOPER' && (
           <DeveloperWorkbench
             ticket={selectedTicket}
             onResolveTicket={handleResolveTicket}
           />
         )}
 
-        {/* Role 4: Executive Analytics & Workload Matrix */}
-        {currentRole === 'ADMIN' && (
+        {/* View 4: Executive Analytics & Workload Matrix */}
+        {currentView === 'ADMIN' && (
           <div className="space-y-8">
             <ExecutiveDashboard tickets={tickets} developers={developers} />
             <DeveloperLoadBalancer
@@ -287,19 +310,19 @@ export default function App() {
           </div>
         )}
 
-        {/* Role 5: React Flow AI Execution Pipeline Visualizer */}
-        {currentRole === 'PIPELINE' && (
+        {/* View 5: React Flow AI Execution Pipeline Visualizer */}
+        {currentView === 'PIPELINE' && (
           <AIPipelineVisualizer ticket={selectedTicket} />
         )}
 
-        {/* Role 6: Enterprise War Room */}
-        {currentRole === 'WARROOM' && <WarRoom />}
+        {/* View 6: Enterprise War Room */}
+        {currentView === 'WARROOM' && <WarRoom />}
 
-        {/* Role 7: ERP Digital Twin */}
-        {currentRole === 'DIGITALTWIN' && <DigitalTwin />}
+        {/* View 7: ERP Digital Twin */}
+        {currentView === 'DIGITALTWIN' && <DigitalTwin />}
 
-        {/* Role 8: Mission Control Command Center */}
-        {currentRole === 'MISSIONCONTROL' && <MissionControl />}
+        {/* View 8: Mission Control Command Center */}
+        {currentView === 'MISSIONCONTROL' && <MissionControl />}
       </main>
     </div>
   );

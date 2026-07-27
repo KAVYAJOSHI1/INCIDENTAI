@@ -95,11 +95,11 @@ Follow this exact sequence for implementation:
 
 ### 📍 Phase 12: Authentication, Security & Server-Side RBAC
 > **Goal:** Replace client-side role toggle with real security, authentication, and permission enforcement.
-- [ ] **Task 12.1**: Add user registration, login (`/api/auth/login`), and JWT token generation using `bcrypt` and `jsonwebtoken`.
-- [ ] **Task 12.2**: Implement authentication middleware (`server/middleware/authMiddleware.js`) to verify Bearer JWT tokens on protected routes.
-- [ ] **Task 12.3**: Implement Role-Based Access Control (RBAC) middleware enforcing permissions per role (`END_USER`, `SUPPORT_TRIAGE`, `DEVELOPER`, `EXECUTIVE`).
-- [ ] **Task 12.4**: Add Zod request body validation schemas for ticket creation, copilot chat, and user updates.
-- [ ] **Task 12.5**: Add API rate limiting middleware to prevent prompt injection and API key quota exhaustion.
+- [x] **Task 12.1**: Added a `users` table + `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/me` (`server/routes/auth.js`, `server/services/authService.js`). JWT via `jsonwebtoken`; password hashing via `bcryptjs` rather than `bcrypt` — `bcrypt` requires compiling a native addon, and this machine has no Visual Studio Build Tools (same constraint hit with pgvector in Phase 11), so `bcryptjs` (pure JS, equally secure) was used instead. `JWT_SECRET` is optional — a random per-process secret is generated with a console warning when unset, same zero-setup-by-default pattern as the rest of the app.
+- [x] **Task 12.2**: `server/middleware/authMiddleware.js` — `requireAuth(handler)` verifies the Bearer JWT and attaches `ctx.user`; wraps a route handler rather than changing the router itself.
+- [x] **Task 12.3**: `requireRole(roles, handler)` (same file) composes with `requireAuth`. Policy: all reads require any authenticated role; `PATCH /api/tickets/:id`, `POST /api/knowledge`, `POST /api/loadbalancer/*`, and `POST /api/copilot/chat` require `SUPPORT_TRIAGE`/`DEVELOPER`/`EXECUTIVE` (`STAFF_ROLES` in `server/constants.js`) — `END_USER` can submit incidents but not act on them once triaged. **Full-stack**, not backend-only: the frontend's client-side role switcher (`App.jsx`, no persistence, resets on refresh) is replaced with a real login screen (`src/components/Auth/LoginScreen.jsx`), `AuthContext` (JWT persisted in `localStorage`), and role-gated navigation — `END_USER` accounts only see the incident reporter tab, the other three roles see the full 8-tab console.
+- [x] **Task 12.4**: `server/utils/schemas.js` (Zod) + `server/utils/validate.js` — validates register/login, incident ingestion, copilot chat, ticket PATCH, knowledge article creation, and load balancer routing. ("user updates" wasn't validated because no such endpoint exists in this app — there's no user-profile-update feature.)
+- [ ] **Task 12.5**: Rate limiting — deferred, not done in this pass.
 
 ### 📍 Phase 13: Containerization & DevOps Setup
 > **Goal:** Containerize the full stack for zero-friction deployment on any cloud host.

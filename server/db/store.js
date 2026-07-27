@@ -8,6 +8,17 @@
 import { query } from "./postgres.js";
 import { embedDocuments, toVectorLiteral } from "../services/embeddingService.js";
 
+function rowToUser(row) {
+  return {
+    id: row.id,
+    email: row.email,
+    password_hash: row.password_hash,
+    name: row.name,
+    role: row.role,
+    created_at: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at
+  };
+}
+
 function rowToDeveloper(row) {
   return {
     id: row.id,
@@ -202,4 +213,22 @@ export async function recordPipelineTrace(trace) {
 export async function listPipelineTraces(limit = 10) {
   const { rows } = await query("SELECT trace FROM pipeline_traces ORDER BY created_at DESC LIMIT $1", [limit]);
   return rows.map((r) => r.trace);
+}
+
+export async function createUser(user) {
+  const { rows } = await query(
+    "INSERT INTO users (id, email, password_hash, name, role) VALUES ($1,$2,$3,$4,$5) RETURNING *",
+    [user.id, user.email.toLowerCase(), user.password_hash, user.name, user.role]
+  );
+  return rowToUser(rows[0]);
+}
+
+export async function getUserByEmail(email) {
+  const { rows } = await query("SELECT * FROM users WHERE email = $1", [email.toLowerCase()]);
+  return rows[0] ? rowToUser(rows[0]) : null;
+}
+
+export async function getUserById(id) {
+  const { rows } = await query("SELECT * FROM users WHERE id = $1", [id]);
+  return rows[0] ? rowToUser(rows[0]) : null;
 }

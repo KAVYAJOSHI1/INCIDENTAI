@@ -5,6 +5,7 @@
 
 import http from "node:http";
 import { Router } from "./router.js";
+import { registerAuthRoutes } from "./routes/auth.js";
 import { registerHealthRoutes } from "./routes/health.js";
 import { registerDeveloperRoutes } from "./routes/developers.js";
 import { registerTicketRoutes } from "./routes/tickets.js";
@@ -18,6 +19,7 @@ import { registerTicketInsightRoutes } from "./routes/ticketInsights.js";
 import { registerOperationsRoutes } from "./routes/operations.js";
 
 const router = new Router();
+registerAuthRoutes(router);
 registerHealthRoutes(router);
 registerDeveloperRoutes(router);
 registerTicketRoutes(router);

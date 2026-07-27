@@ -61,6 +61,8 @@ IncidentAI features a state-of-the-art enterprise design system crafted for high
 | RAG duplicate detection & knowledge search | Done — retrieve-then-rerank, now three-tier: pgvector cosine-distance retrieval (`findDuplicateTicketsWithVector` / `searchKnowledgeBaseWithVector`) runs first when `VOYAGE_API_KEY` is configured, falling back to the original TF-IDF candidate retrieval (`findDuplicateTickets` / `searchKnowledgeBase`) when it isn't; either way, Claude then semantically judges/ranks that shortlist (`findDuplicateTicketsWithAI` / `searchKnowledgeBaseWithAI`), catching matches worded completely differently that lexical similarity alone would miss. Reranker calls are cached in-memory (`server/utils/simpleCache.js`, 60s for KB search, 30s for duplicate judging). Every layer degrades gracefully: no Voyage key → TF-IDF; no Claude key → the vector/TF-IDF ranking is served directly. |
 | Postgres + pgvector persistence | Done — `server/db/store.js` is fully Postgres-backed (`pg` connection pool, `server/db/postgres.js`) with a real schema (`server/db/schema.sql`: `developers`, `tickets`, `knowledge_base`, `pipeline_traces`, `vector(1024)` embedding columns + HNSW indexes), a migration runner (`npm run db:migrate`), and an idempotent seed script (`npm run db:seed`). `docker-compose.yml` spins up `pgvector/pgvector:pg16` for local dev. **Live-verified** against a natively-installed PostgreSQL 17 (Docker still unavailable in this environment — no WSL2): full CRUD and the entire incident ingestion pipeline confirmed working end-to-end, every route returns 200 with zero server errors. The one thing still unverified is the `pgvector` extension itself (this native install doesn't have it) — the vector-specific `<=>` SQL paths need `docker compose up -d` or an equivalent instance to confirm; everything else degrades to TF-IDF exactly as designed in the meantime. |
 | Real vector embeddings | Done — `server/services/embeddingService.js` calls Voyage AI (`voyage-3.5`, 1024-dim) to embed tickets/KB articles at write time and search queries at read time. **Requires `VOYAGE_API_KEY`** — without it, embedding columns stay `NULL` and duplicate/knowledge search silently use the TF-IDF path as before. |
+| Authentication & RBAC | Done — real login replaces the old client-side role switcher. `POST /api/auth/register` / `/login` / `GET /api/auth/me` (`server/routes/auth.js`) issue JWTs; `server/middleware/authMiddleware.js` (`requireAuth`/`requireRole`) gates every route — all reads need any authenticated role, ticket mutation/knowledge-write/load-balancer/copilot endpoints need `SUPPORT_TRIAGE`/`DEVELOPER`/`EXECUTIVE` (`END_USER` can submit incidents but not act on them). Passwords hashed with `bcryptjs` (not `bcrypt` — no native build tools on the dev machine this was built on; pure-JS, equally secure). Frontend: `src/components/Auth/LoginScreen.jsx` + `AuthContext` (JWT in `localStorage`), nav tabs gated by role (`END_USER` only sees the incident reporter). `npm run db:seed` creates one demo login per role (`enduser@incidentai.demo` / `triage@...` / `developer@...` / `executive@...`, password `demopass123` for all — **change or remove these before any real deployment**). Live-verified end-to-end: login, `/me`, 401 on no/bad token, 403 on wrong role, 400 on invalid input, 409 on duplicate email all confirmed against a real Postgres instance. |
+| Request validation | Done — Zod schemas (`server/utils/schemas.js`) validate register/login, incident ingestion, copilot chat, ticket PATCH, knowledge article creation, and load-balancer routing bodies, returning readable 400s instead of failing deeper in the pipeline. |
 | MVP readiness | Ready |
 
 ### ⏳ Left for production readiness
@@ -69,8 +71,8 @@ IncidentAI features a state-of-the-art enterprise design system crafted for high
 |---|---|
 | **Persistence** | Postgres + pgvector migration complete and live-verified (native Postgres, see above); the `pgvector` extension itself still needs a Docker or WSL2 environment to confirm the vector-search SQL paths specifically. |
 | **AI coverage** | Real Claude reasoning now covers severity, root cause, copilot chat, duplicate detection, knowledge search, decision explainability narrative, business impact estimation, executive summary prose, and patch preview risk review — every enterprise service has a Claude path with a deterministic fallback. Real Voyage AI embeddings now back duplicate/knowledge candidate retrieval when configured. |
-| **Auth & RBAC** | The role switcher is a client-side toggle only — no real accounts, sessions, or server-side permission checks. |
-| **API hardening** | Minimal input validation, no rate limiting, permissive `*` CORS. |
+| **Auth & RBAC** | Done (see above) — real JWT auth + role gating, both backend and frontend. Not yet done: rate limiting, email verification/password reset, and admin-assigned roles (registration is currently self-service role selection, a demo simplification). |
+| **API hardening** | Zod request validation now in place; still no rate limiting, permissive `*` CORS. |
 | **Testing** | No automated tests anywhere (frontend or backend). |
 | **Ops** | No logging/monitoring, no full-stack containerization (only the DB is dockerized so far), no env-based config beyond `PORT`/DB/API keys. |
 | **Deployment** | Kept as final step — needs hosting for API + static build of frontend + managed Postgres behind HTTPS. |
@@ -220,8 +222,7 @@ Unified auto-refreshing dashboard tracking live incidents, developer capacity, A
 - Voyage AI (`voyage-3.5`) real vector embeddings (`server/services/embeddingService.js`) for pgvector cosine-distance candidate retrieval — requires `VOYAGE_API_KEY`, falls back to TF-IDF without it
 - Custom TF-IDF cosine similarity engine (`server/utils/textSimilarity.js`) as the fallback candidate retrieval layer, with Claude re-ranking the shortlist for duplicate detection and knowledge search either way
 - Rule/keyword-based classifier for OCR text interpretation (module/error-code extraction)
-
-**Not yet integrated**: no auth — see the gaps table below.
+- JWT auth (`jsonwebtoken`) + `bcryptjs` password hashing + Zod (`server/routes/auth.js`, `server/middleware/authMiddleware.js`, `server/utils/schemas.js`) — every route requires a valid Bearer token, mutation endpoints additionally require an internal-staff role
 
 ---
 
@@ -265,10 +266,22 @@ npm run dev
 
 Open your browser and navigate to **`http://localhost:3000/`**. The frontend proxies all `/api/*` requests to the backend (see `vite.config.js`), so both must be running for the app to load data. If Postgres isn't reachable, `npm run server` will error on the first request rather than starting in a degraded in-memory mode — the backend now assumes a real database.
 
+You'll land on a login screen. `npm run db:seed` creates one demo account per role — log in with any of these (password `demopass123` for all), or use "Create Account" to register your own:
+
+| Role | Email |
+|---|---|
+| End User | `enduser@incidentai.demo` |
+| Support Triage | `triage@incidentai.demo` |
+| Developer | `developer@incidentai.demo` |
+| Executive | `executive@incidentai.demo` |
+
+**Change or remove these before any real deployment** — they're seeded with a known password for local demo convenience only.
+
 ---
 
 ## 🎬 Product Walkthrough
 
+0. **Log in** as `developer@incidentai.demo` (or `triage@...`/`executive@...`) — any of the three internal-staff roles sees the full 8-tab nav below. The `enduser@incidentai.demo` account only sees the End-User Reporter tab, since that's the only thing an end user is allowed to do (see the Auth & RBAC section above).
 1. **Quick Scenario Triggers**: Click any sample scenario button in the top navbar (`SAP Tax Error (P1)`, `Payroll Deadlock (P0)`, or `Inventory Cache (P2)`) to submit a fully worked incident in one click.
 2. **End-User Reporter View**: Upload a screenshot for real Tesseract.js OCR extraction, or click **Voice Record**, to watch the Vision Engine extract text and display the bounding box on the error pop-up.
 3. **Support Triage View**: Switch to role **2. Support Triage Feed** to view the Jira-style ticket, AI root cause analysis, the **pgvector >85% Duplicate Match Banner**, and the Enterprise AI Insights panel (root cause tree, explainability, business impact, timeline, executive summary, replay, patch preview).

@@ -14,13 +14,16 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
     "@xyflow/react": "^12.4.4",
+    "bcryptjs": "^3.0.3",
     "canvas-confetti": "^1.9.4",
+    "jsonwebtoken": "^9.0.3",
     "lucide-react": "^1.16.0",
     "pg": "^8.22.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "recharts": "^2.15.1",
-    "tesseract.js": "^7.0.0"
+    "tesseract.js": "^7.0.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",

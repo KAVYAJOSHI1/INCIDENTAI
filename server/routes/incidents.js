@@ -1,12 +1,16 @@
 import { runIncidentIngestPipeline } from "../services/ticketService.js";
-import { sendJson, ApiError } from "../utils/http.js";
+import { requireAuth } from "../middleware/authMiddleware.js";
+import { validateBody } from "../utils/validate.js";
+import { incidentInputSchema } from "../utils/schemas.js";
+import { sendJson } from "../utils/http.js";
 
 export function registerIncidentRoutes(router) {
-  router.post("/api/incidents/ingest", async ({ res, body }) => {
-    if (!body || (!body.text && !body.fileName)) {
-      throw new ApiError(400, 'Request body must include "text" or "fileName"');
-    }
-    const ticket = await runIncidentIngestPipeline(body);
-    sendJson(res, 201, { ticket });
-  });
+  router.post(
+    "/api/incidents/ingest",
+    requireAuth(async ({ res, body }) => {
+      const input = validateBody(incidentInputSchema, body);
+      const ticket = await runIncidentIngestPipeline(input);
+      sendJson(res, 201, { ticket });
+    })
+  );
 }

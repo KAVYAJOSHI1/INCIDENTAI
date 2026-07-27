@@ -3,16 +3,44 @@
  */
 
 const API_BASE = "/api";
+const TOKEN_STORAGE_KEY = "incidentai_token";
+
+let authToken = localStorage.getItem(TOKEN_STORAGE_KEY);
+let onUnauthorized = null;
+
+export function setAuthToken(token) {
+  authToken = token;
+  if (token) localStorage.setItem(TOKEN_STORAGE_KEY, token);
+  else localStorage.removeItem(TOKEN_STORAGE_KEY);
+}
+
+export function getAuthToken() {
+  return authToken;
+}
+
+/** Registers a callback fired whenever a request comes back 401 (expired/invalid token). */
+export function setUnauthorizedHandler(handler) {
+  onUnauthorized = handler;
+}
 
 async function request(path, options = {}) {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...options
-  });
+  const headers = { "Content-Type": "application/json", ...options.headers };
+  if (authToken) headers.Authorization = `Bearer ${authToken}`;
+
+  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
   const data = await res.json().catch(() => ({}));
+
+  if (res.status === 401) {
+    setAuthToken(null);
+    onUnauthorized?.();
+  }
   if (!res.ok) throw new Error(data.error || `Request failed with status ${res.status}`);
   return data;
 }
+
+export const register = (payload) => request("/auth/register", { method: "POST", body: JSON.stringify(payload) });
+export const login = (payload) => request("/auth/login", { method: "POST", body: JSON.stringify(payload) });
+export const fetchMe = () => request("/auth/me").then((d) => d.user);
 
 export const fetchDevelopers = () => request("/developers").then((d) => d.developers);
 
