@@ -5,6 +5,11 @@
  */
 
 import { completeJson } from "./llmService.js";
+import { createTtlCache } from "../utils/simpleCache.js";
+
+// Ticket insight tabs are re-fetched every time a user opens/reopens the panel; cache the
+// estimate briefly so repeated views of the same ticket don't re-hit the Claude API.
+const impactCache = createTtlCache(60_000);
 
 const MODULE_HOURLY_REVENUE_IMPACT = { PAYROLL: 8200, INVOICING: 6400, GENERAL_LEDGER: 4100, INVENTORY: 3200, PROCUREMENT: 2100 };
 const MODULE_USER_BASE = { PAYROLL: 2400, INVOICING: 850, GENERAL_LEDGER: 120, INVENTORY: 340, PROCUREMENT: 95 };
@@ -66,6 +71,10 @@ const IMPACT_SYSTEM_PROMPT = `You are a business impact analyst for ERP incident
  * (caller falls back to computeBusinessImpact) if the LLM is unavailable or fails.
  */
 export async function computeBusinessImpactWithAI(ticket) {
+  const cacheKey = `${ticket.id}::${ticket.severity}::${ticket.sla_remaining_minutes ?? ""}`;
+  const cached = impactCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+
   const result = await completeJson({
     system: IMPACT_SYSTEM_PROMPT,
     prompt: `Ticket: "${ticket.title}"\nERP Module: ${ticket.erp_module}\nSeverity: ${ticket.severity}\nDescription: ${
@@ -77,7 +86,7 @@ export async function computeBusinessImpactWithAI(ticket) {
 
   if (!result) return null;
 
-  return {
+  const mapped = {
     ticket_id: ticket.id,
     revenue_loss_per_hour: Math.round(result.revenue_loss_per_hour),
     affected_users: Math.round(result.affected_users),
@@ -87,4 +96,6 @@ export async function computeBusinessImpactWithAI(ticket) {
     reasoning: result.reasoning,
     ai_generated: true
   };
+  impactCache.set(cacheKey, mapped);
+  return mapped;
 }

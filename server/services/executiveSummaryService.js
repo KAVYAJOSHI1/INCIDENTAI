@@ -6,6 +6,11 @@
 
 import { CLOSED_STATUSES } from "../constants.js";
 import { completeJson } from "./llmService.js";
+import { createTtlCache } from "../utils/simpleCache.js";
+
+// Ticket insight tabs are re-fetched every time a user opens/reopens the panel; cache the
+// briefing briefly so repeated views of the same ticket don't re-hit the Claude API.
+const summaryCache = createTtlCache(60_000);
 
 export function generateExecutiveSummary(ticket, businessImpact) {
   const severityLabel = ticket.severity.replace("_", " ");
@@ -66,6 +71,10 @@ const SUMMARY_SYSTEM_PROMPT = `You write concise executive briefings on ERP inci
 export async function generateExecutiveSummaryWithAI(ticket, businessImpact) {
   const isClosed = CLOSED_STATUSES.includes(ticket.status);
 
+  const cacheKey = `${ticket.id}::${ticket.status}::${businessImpact.revenue_loss_per_hour}::${businessImpact.sla_breach_probability}`;
+  const cached = summaryCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+
   const result = await completeJson({
     system: SUMMARY_SYSTEM_PROMPT,
     prompt: `Ticket: "${ticket.title}" (${ticket.ticket_number})\nSeverity: ${ticket.severity}\nModule: ${ticket.erp_module}\nStatus: ${ticket.status}${
@@ -81,5 +90,7 @@ export async function generateExecutiveSummaryWithAI(ticket, businessImpact) {
 
   if (!result) return null;
 
-  return { ticket_id: ticket.id, ...result, ai_generated: true };
+  const mapped = { ticket_id: ticket.id, ...result, ai_generated: true };
+  summaryCache.set(cacheKey, mapped);
+  return mapped;
 }

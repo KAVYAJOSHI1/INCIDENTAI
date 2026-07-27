@@ -5,6 +5,11 @@
  */
 
 import { completeJson } from "./llmService.js";
+import { createTtlCache } from "../utils/simpleCache.js";
+
+// Ticket insight tabs are re-fetched every time a user opens/reopens the panel; cache the
+// narrative briefly so repeated views of the same ticket don't re-hit the Claude API.
+const narrativeCache = createTtlCache(60_000);
 
 export function buildExplainability(ticket) {
   const severity = {
@@ -65,15 +70,23 @@ const NARRATIVE_SYSTEM_PROMPT = `You are an ERP incident triage engineer explain
  * the LLM is unavailable or fails.
  */
 export async function explainDecisionWithAI(explainability) {
+  const payload = JSON.stringify(explainability);
+  const cacheKey = `${explainability.ticket_id}::${payload}`;
+  const cached = narrativeCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+
   const result = await completeJson({
     system: NARRATIVE_SYSTEM_PROMPT,
-    prompt: JSON.stringify(explainability),
+    prompt: payload,
     schema: NARRATIVE_SCHEMA,
     maxTokens: 300
   });
 
   if (!result) return null;
-  return { narrative: result.narrative, narrative_ai_generated: true };
+
+  const mapped = { narrative: result.narrative, narrative_ai_generated: true };
+  narrativeCache.set(cacheKey, mapped);
+  return mapped;
 }
 
 export function explainDecisionFallback(explainability) {

@@ -5,6 +5,11 @@
  */
 
 import { completeJson } from "./llmService.js";
+import { createTtlCache } from "../utils/simpleCache.js";
+
+// Ticket insight tabs are re-fetched every time a user opens/reopens the panel; cache the
+// patch review briefly so repeated views of the same ticket don't re-hit the Claude API.
+const patchReviewCache = createTtlCache(60_000);
 
 const RISK_BASE_BY_SEVERITY = { P0_CRITICAL: 55, P1_HIGH: 35, P2_MEDIUM: 18, P3_LOW: 8 };
 const FINANCIAL_MODULES = ["PAYROLL", "GENERAL_LEDGER"];
@@ -65,6 +70,10 @@ export async function buildPatchPreviewWithAI(ticket) {
   const patch = ticket.ai_suggested_patch || "";
   if (!patch.trim()) return null;
 
+  const cacheKey = `${ticket.id}::${patch}`;
+  const cached = patchReviewCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+
   const result = await completeJson({
     system: PATCH_SYSTEM_PROMPT,
     prompt: `Ticket: "${ticket.title}" (${ticket.ticket_number})\nSeverity: ${ticket.severity}\nERP Module: ${ticket.erp_module}\nAI confidence: ${
@@ -76,7 +85,7 @@ export async function buildPatchPreviewWithAI(ticket) {
 
   if (!result) return null;
 
-  return {
+  const mapped = {
     ticket_id: ticket.id,
     affected_tables: result.affected_tables,
     estimated_success_percentage: Math.round(result.estimated_success_percentage),
@@ -87,4 +96,6 @@ export async function buildPatchPreviewWithAI(ticket) {
     execution_steps: result.execution_steps,
     ai_generated: true
   };
+  patchReviewCache.set(cacheKey, mapped);
+  return mapped;
 }

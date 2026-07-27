@@ -72,14 +72,49 @@ Preset scenario triggers for one-click product demos:
 
 ---
 
-## 🔮 Phase 10: Production Readiness Roadmap (Next Steps)
+## 🔮 Sequential Execution Roadmap for Enterprise Production Readiness
 
-- [ ] **1. PostgreSQL & `pgvector` Persistence Layer** — Migrate in-memory data store (`server/db/inMemoryStore.js`) to a persistent PostgreSQL database with `pgvector` embeddings for semantic vector search.
-- [x] **2. Full LLM Reasoning across Remaining Enterprise Services** — Wired Claude API into `explainabilityService.js` (decision narrative), `businessImpactService.js` (impact estimate), `executiveSummaryService.js` (briefing prose), and `patchPreviewService.js` (patch risk review), each with a deterministic fallback and `ai_generated` flag, matching the severity/duplicate/knowledge pattern.
-- [ ] **3. Authentication & Server-Side RBAC** — Replace client-side role toggle with real JWT/Session authentication, password hashing, and server-side RBAC authorization middleware.
-- [ ] **4. Containerization & Docker Orchestration** — Add `Dockerfile` and `docker-compose.yml` for unified single-command deployment of API server, Vite/Nginx frontend, and PostgreSQL + pgvector DB.
-- [ ] **5. Automated Testing Suite & API Schema Validation** — Implement Vitest / Supertest integration suites for backend routes, Zod input validation schemas, and React component tests.
+Follow this exact sequence for implementation:
+
+### 📍 Phase 10: Complete LLM Coverage Across All Enterprise Services
+> **Goal:** Upgrade remaining template-based services to use live Claude AI reasoning.
+- [x] **Task 10.1**: Refactored `server/services/explainabilityService.js` to call `llmService.completeJson()` for a dynamic decision narrative synthesizing severity/routing/duplicate/KB signals.
+- [x] **Task 10.2**: Refactored `server/services/businessImpactService.js` to use Claude for real-time financial loss estimation, compliance risk analysis, and SLA breach probability.
+- [x] **Task 10.3**: Refactored `server/services/executiveSummaryService.js` to generate dynamic non-technical executive briefings and mitigation action plans via LLM.
+- [x] **Task 10.4**: Refactored `server/services/patchPreviewService.js` (the AI Patch Preview & Safety Guardrails service) to evaluate suggested SQL patch safety, risk scores, and rollback steps using LLM reasoning.
+- [x] **Task 10.5**: `server/utils/simpleCache.js` now also caches the Task 10.1–10.4 LLM calls to keep repeated ticket-insight requests instant.
+
+### 📍 Phase 11: PostgreSQL & `pgvector` Database Persistence Layer
+> **Goal:** Replace in-memory array database (`server/db/inMemoryStore.js`) with production-grade PostgreSQL storage.
+- [ ] **Task 11.1**: Design PostgreSQL SQL schemas for `tickets`, `users`, `developer_profiles`, `knowledge_articles`, `incidents`, and `audit_logs`.
+- [ ] **Task 11.2**: Enable `pgvector` extension and add vector column (`vector(1536)`) for ticket & knowledge base embeddings.
+- [ ] **Task 11.3**: Create database client (`server/db/postgres.js`) using `pg` connection pool to execute queries.
+- [ ] **Task 11.4**: Replace `inMemoryStore.js` methods with async PostgreSQL queries and transaction management.
+- [ ] **Task 11.5**: Create database migration and initial seed scripts (`server/db/seed.js`).
+
+### 📍 Phase 12: Authentication, Security & Server-Side RBAC
+> **Goal:** Replace client-side role toggle with real security, authentication, and permission enforcement.
+- [ ] **Task 12.1**: Add user registration, login (`/api/auth/login`), and JWT token generation using `bcrypt` and `jsonwebtoken`.
+- [ ] **Task 12.2**: Implement authentication middleware (`server/middleware/authMiddleware.js`) to verify Bearer JWT tokens on protected routes.
+- [ ] **Task 12.3**: Implement Role-Based Access Control (RBAC) middleware enforcing permissions per role (`END_USER`, `SUPPORT_TRIAGE`, `DEVELOPER`, `EXECUTIVE`).
+- [ ] **Task 12.4**: Add Zod request body validation schemas for ticket creation, copilot chat, and user updates.
+- [ ] **Task 12.5**: Add API rate limiting middleware to prevent prompt injection and API key quota exhaustion.
+
+### 📍 Phase 13: Containerization & DevOps Setup
+> **Goal:** Containerize the full stack for zero-friction deployment on any cloud host.
+- [ ] **Task 13.1**: Write multi-stage production `Dockerfile` for Vite React frontend with Nginx web server.
+- [ ] **Task 13.2**: Write `Dockerfile` for Node.js API backend server.
+- [ ] **Task 13.3**: Write `docker-compose.yml` orchestrating API server, Nginx frontend, and PostgreSQL + `pgvector` database container.
+- [ ] **Task 13.4**: Implement `/api/health` endpoint with database and LLM API status checks.
+
+### 📍 Phase 14: Automated Testing Suite & CI/CD Pipeline
+> **Goal:** Ensure 100% reliability with automated tests and CI workflows.
+- [ ] **Task 14.1**: Set up Vitest test runner for backend service testing.
+- [ ] **Task 14.2**: Add unit tests for developer load balancing formula, severity matrix, and TF-IDF candidate matching.
+- [ ] **Task 14.3**: Add API endpoint integration tests using `supertest`.
+- [ ] **Task 14.4**: Create GitHub Actions CI workflow (`.github/workflows/ci.yml`) to automatically test and build on every push.
 
 ---
 *IncidentAI Team*
+
 
