@@ -171,6 +171,15 @@ export default function AIInsightsPanel({ ticket }) {
                   </ul>
                 ) : <p className="text-slate-500">No relevant knowledge base articles found.</p>}
               </div>
+              {data.explainability.narrative && (
+                <div className="md:col-span-2 lg:col-span-4 bg-slate-900/60 p-3 rounded-lg border border-white/5 space-y-1.5">
+                  <span className="text-slate-400 font-bold flex items-center gap-1.5">
+                    Overall Reasoning
+                    <AiBadge aiGenerated={data.explainability.narrative_ai_generated} />
+                  </span>
+                  <p className="text-slate-300 leading-relaxed">{data.explainability.narrative}</p>
+                </div>
+              )}
             </div>
           ) : <LoadingState />
         )}
@@ -179,6 +188,9 @@ export default function AIInsightsPanel({ ticket }) {
         {activeTab === 'impact' && (
           data.impact ? (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+              <div className="col-span-2 md:col-span-4 flex items-center justify-end">
+                <AiBadge aiGenerated={data.impact.ai_generated} />
+              </div>
               <Metric label="Revenue Loss / Hour" value={`$${data.impact.revenue_loss_per_hour.toLocaleString()}`} color="text-rose-400" />
               <Metric label="Affected Users" value={data.impact.affected_users.toLocaleString()} color="text-indigo-300" />
               <Metric label="Compliance Risk" value={data.impact.compliance_risk} color={data.impact.compliance_risk === 'HIGH' ? 'text-rose-400' : data.impact.compliance_risk === 'MEDIUM' ? 'text-amber-400' : 'text-emerald-400'} />
@@ -189,6 +201,12 @@ export default function AIInsightsPanel({ ticket }) {
                   {data.impact.impacted_departments.map((d) => <span key={d} className="badge-module text-[10px]">{d}</span>)}
                 </div>
               </div>
+              {data.impact.reasoning && (
+                <div className="col-span-2 md:col-span-4 bg-slate-900/60 p-2.5 rounded-lg border border-white/5">
+                  <span className="text-slate-500 block text-[10px] font-semibold mb-1">AI REASONING</span>
+                  <p className="text-slate-300">{data.impact.reasoning}</p>
+                </div>
+              )}
             </div>
           ) : <LoadingState />
         )}
@@ -214,7 +232,10 @@ export default function AIInsightsPanel({ ticket }) {
           data.executive ? (
             <div className="space-y-3 text-xs">
               <div className="flex items-start justify-between gap-3">
-                <h4 className="text-sm font-bold text-white">{data.executive.headline}</h4>
+                <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
+                  {data.executive.headline}
+                  <AiBadge aiGenerated={data.executive.ai_generated} />
+                </h4>
                 <button onClick={handleCopySummary} className="shrink-0 text-[11px] text-slate-400 hover:text-white flex items-center gap-1 bg-slate-800 px-2 py-1 rounded">
                   {copied ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />} {copied ? 'Copied' : 'Copy'}
                 </button>
@@ -256,6 +277,7 @@ export default function AIInsightsPanel({ ticket }) {
               <div className="flex items-center gap-2 flex-wrap">
                 <span className={`px-2.5 py-1 rounded-lg font-bold border ${RISK_COLORS[data.patch.risk_level]}`}>{data.patch.risk_level} RISK ({data.patch.risk_score})</span>
                 <span className="badge-module">Est. Success: {data.patch.estimated_success_percentage}%</span>
+                <AiBadge aiGenerated={data.patch.ai_generated} />
               </div>
               <div>
                 <span className="text-slate-400 font-bold block mb-1">Affected Tables:</span>

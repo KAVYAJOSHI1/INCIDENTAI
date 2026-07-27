@@ -4,6 +4,8 @@
  * fallback so the UI can show which one actually served the result.
  */
 
+import { completeJson } from "./llmService.js";
+
 export function buildExplainability(ticket) {
   const severity = {
     value: ticket.severity,
@@ -44,4 +46,58 @@ export function buildExplainability(ticket) {
   }));
 
   return { ticket_id: ticket.id, severity, developer_routing: routing, duplicate_match: duplicateMatch, knowledge_matches: knowledgeMatches };
+}
+
+const NARRATIVE_SCHEMA = {
+  type: "object",
+  properties: {
+    narrative: { type: "string" }
+  },
+  required: ["narrative"],
+  additionalProperties: false
+};
+
+const NARRATIVE_SYSTEM_PROMPT = `You are an ERP incident triage engineer explaining, in 2-3 plain-English sentences, why an AI support system made the decisions it made for a ticket. Synthesize the severity classification, developer routing, duplicate-match result, and knowledge base matches already computed into one coherent explanation a support lead can read at a glance. Do not invent facts beyond what is given in the JSON.`;
+
+/**
+ * Asks Claude to synthesize the already-computed explainability fields into a coherent
+ * plain-English narrative. Returns null (caller falls back to explainDecisionFallback) if
+ * the LLM is unavailable or fails.
+ */
+export async function explainDecisionWithAI(explainability) {
+  const result = await completeJson({
+    system: NARRATIVE_SYSTEM_PROMPT,
+    prompt: JSON.stringify(explainability),
+    schema: NARRATIVE_SCHEMA,
+    maxTokens: 300
+  });
+
+  if (!result) return null;
+  return { narrative: result.narrative, narrative_ai_generated: true };
+}
+
+export function explainDecisionFallback(explainability) {
+  const parts = [];
+
+  parts.push(
+    `Classified as ${explainability.severity.value?.replace("_", " ") || "unscored"}${
+      explainability.severity.reasons[0] ? ` (${explainability.severity.reasons[0]})` : ""
+    }.`
+  );
+
+  if (explainability.developer_routing) {
+    parts.push(`Routed to ${explainability.developer_routing.developer} at a ${explainability.developer_routing.match_score}% skill/capacity match.`);
+  }
+
+  if (explainability.duplicate_match.similarity_percentage > 0) {
+    parts.push(
+      `${explainability.duplicate_match.is_duplicate ? "Flagged as a duplicate" : "Checked for duplicates"} with a top similarity of ${explainability.duplicate_match.similarity_percentage}%.`
+    );
+  }
+
+  if (explainability.knowledge_matches.length > 0) {
+    parts.push(`${explainability.knowledge_matches.length} related knowledge base article(s) surfaced.`);
+  }
+
+  return { narrative: parts.join(" "), narrative_ai_generated: false };
 }

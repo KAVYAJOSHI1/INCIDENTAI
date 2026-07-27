@@ -75,7 +75,7 @@ Preset scenario triggers for one-click product demos:
 ## 🔮 Phase 10: Production Readiness Roadmap (Next Steps)
 
 - [ ] **1. PostgreSQL & `pgvector` Persistence Layer** — Migrate in-memory data store (`server/db/inMemoryStore.js`) to a persistent PostgreSQL database with `pgvector` embeddings for semantic vector search.
-- [ ] **2. Full LLM Reasoning across Remaining Enterprise Services** — Wire Claude API into `explainabilityService.js`, `businessImpactService.js`, `executiveSummaryService.js`, and `patchSafetyService.js` to eliminate all static template fallbacks.
+- [x] **2. Full LLM Reasoning across Remaining Enterprise Services** — Wired Claude API into `explainabilityService.js` (decision narrative), `businessImpactService.js` (impact estimate), `executiveSummaryService.js` (briefing prose), and `patchPreviewService.js` (patch risk review), each with a deterministic fallback and `ai_generated` flag, matching the severity/duplicate/knowledge pattern.
 - [ ] **3. Authentication & Server-Side RBAC** — Replace client-side role toggle with real JWT/Session authentication, password hashing, and server-side RBAC authorization middleware.
 - [ ] **4. Containerization & Docker Orchestration** — Add `Dockerfile` and `docker-compose.yml` for unified single-command deployment of API server, Vite/Nginx frontend, and PostgreSQL + pgvector DB.
 - [ ] **5. Automated Testing Suite & API Schema Validation** — Implement Vitest / Supertest integration suites for backend routes, Zod input validation schemas, and React component tests.
