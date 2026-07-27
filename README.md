@@ -58,20 +58,22 @@ IncidentAI features a state-of-the-art enterprise design system crafted for high
 | UI polish | Done — fixed Tailwind CSS never being wired up (it was inert since day one), added loading skeletons and proper empty states across every panel, made the navbar and AI Insights tabs scroll on mobile instead of overflowing |
 | Build/deploy plumbing | Done — fixed `vite preview` missing the `/api` proxy (only `server.proxy` existed, not `preview.proxy`), which broke every API call under a production build |
 | Real AI reasoning | Done — severity scoring, root cause prediction, and the developer copilot chat now call the real Claude API (`@anthropic-ai/sdk`, `claude-opus-4-8`) via `server/services/llmService.js`. **Requires `ANTHROPIC_API_KEY`** (copy `.env.example` to `.env`) — without a key, or on any API failure, each one transparently falls back to its original deterministic rule-based logic, so the app never breaks either way. Check `ai_generated: true/false` on the response to see which path served a given result. The underlying reasoning text is no longer backend-only — it's surfaced in the UI (duplicate banner, RAG match list, Explainability tab, Knowledge Hub) alongside a CLAUDE/TF-IDF badge showing which engine produced each result. The same pattern now also covers the Enterprise AI Insights tabs: `explainabilityService` (decision narrative), `businessImpactService` (impact estimate), `executiveSummaryService` (briefing prose), and `patchPreviewService` (patch risk review) each try Claude first and fall back to their original deterministic logic, with results cached per-ticket for 60s (`server/utils/simpleCache.js`) so reopening the same ticket's insights panel doesn't re-hit the API. |
-| RAG duplicate detection & knowledge search | Done — retrieve-then-rerank: TF-IDF still does cheap first-pass candidate retrieval (`findDuplicateTickets` / `searchKnowledgeBase`), then Claude semantically judges/ranks that shortlist (`findDuplicateTicketsWithAI` / `searchKnowledgeBaseWithAI`), catching duplicates and relevant articles worded completely differently that lexical similarity alone would miss or under-score. Reranker calls are cached in-memory (`server/utils/simpleCache.js`, 60s for KB search, 30s for duplicate judging) so debounced search-as-you-type doesn't hammer the Claude API with near-identical queries. Same graceful fallback to pure TF-IDF without a key. Not real vector embeddings (no embeddings provider configured) — this is LLM-as-reranker over a lexical shortlist, not a semantic vector index. |
+| RAG duplicate detection & knowledge search | Done — retrieve-then-rerank, now three-tier: pgvector cosine-distance retrieval (`findDuplicateTicketsWithVector` / `searchKnowledgeBaseWithVector`) runs first when `VOYAGE_API_KEY` is configured, falling back to the original TF-IDF candidate retrieval (`findDuplicateTickets` / `searchKnowledgeBase`) when it isn't; either way, Claude then semantically judges/ranks that shortlist (`findDuplicateTicketsWithAI` / `searchKnowledgeBaseWithAI`), catching matches worded completely differently that lexical similarity alone would miss. Reranker calls are cached in-memory (`server/utils/simpleCache.js`, 60s for KB search, 30s for duplicate judging). Every layer degrades gracefully: no Voyage key → TF-IDF; no Claude key → the vector/TF-IDF ranking is served directly. |
+| Postgres + pgvector persistence | Done (code) — `server/db/store.js` is now fully Postgres-backed (`pg` connection pool, `server/db/postgres.js`) with a real schema (`server/db/schema.sql`: `developers`, `tickets`, `knowledge_base`, `pipeline_traces`, `vector(1024)` embedding columns + HNSW indexes), a migration runner (`npm run db:migrate`), and an idempotent seed script (`npm run db:seed`). `docker-compose.yml` spins up `pgvector/pgvector:pg16` for local dev. **Not yet live-verified in this environment** — Docker Desktop requires WSL2, which isn't installed on this machine, so this hasn't been run against a real database session. Code is syntax-checked and manually reviewed; run it yourself with `docker compose up -d && npm run db:seed && npm run server`. |
+| Real vector embeddings | Done — `server/services/embeddingService.js` calls Voyage AI (`voyage-3.5`, 1024-dim) to embed tickets/KB articles at write time and search queries at read time. **Requires `VOYAGE_API_KEY`** — without it, embedding columns stay `NULL` and duplicate/knowledge search silently use the TF-IDF path as before. |
 | MVP readiness | Ready |
 
 ### ⏳ Left for production readiness
 
 | Area | Gap |
 |---|---|
-| **Persistence** | Backend is in-memory, resets on restart. Needs Postgres + `pgvector` in place of the TF-IDF cosine similarity used today. |
-| **AI coverage** | Real Claude reasoning now covers severity, root cause, copilot chat, duplicate detection, knowledge search, decision explainability narrative, business impact estimation, executive summary prose, and patch preview risk review — every enterprise service has a Claude path with a deterministic fallback. |
+| **Persistence** | Code complete (Postgres + pgvector, see above) but not yet run against a live database in this environment — verify locally via `docker compose up -d && npm run db:seed`. |
+| **AI coverage** | Real Claude reasoning now covers severity, root cause, copilot chat, duplicate detection, knowledge search, decision explainability narrative, business impact estimation, executive summary prose, and patch preview risk review — every enterprise service has a Claude path with a deterministic fallback. Real Voyage AI embeddings now back duplicate/knowledge candidate retrieval when configured. |
 | **Auth & RBAC** | The role switcher is a client-side toggle only — no real accounts, sessions, or server-side permission checks. |
 | **API hardening** | Minimal input validation, no rate limiting, permissive `*` CORS. |
 | **Testing** | No automated tests anywhere (frontend or backend). |
-| **Ops** | No logging/monitoring, no containerization, no env-based config beyond `PORT`. |
-| **Deployment** | Kept as final step — needs hosting for API + static build of frontend behind HTTPS. |
+| **Ops** | No logging/monitoring, no full-stack containerization (only the DB is dockerized so far), no env-based config beyond `PORT`/DB/API keys. |
+| **Deployment** | Kept as final step — needs hosting for API + static build of frontend + managed Postgres behind HTTPS. |
 
 ---
 
@@ -212,13 +214,14 @@ Unified auto-refreshing dashboard tracking live incidents, developer capacity, A
 - `tesseract.js` — real in-browser OCR (Web Worker + WASM) for uploaded screenshots
 
 **Backend** (`server/`)
-- Plain Node.js `http` server — otherwise zero external dependencies, no framework
+- Plain Node.js `http` server — no web framework
 - `@anthropic-ai/sdk` (`claude-opus-4-8`) for real AI reasoning on severity scoring, root cause prediction, copilot chat, and RAG reranking (`server/services/llmService.js`) — requires `ANTHROPIC_API_KEY`, falls back to deterministic logic without it
-- In-memory data store (`server/db/`) seeded with sample developers, tickets, and knowledge base articles
-- Custom TF-IDF cosine similarity engine (`server/utils/textSimilarity.js`) for first-pass candidate retrieval, with Claude re-ranking the shortlist for duplicate detection and knowledge search — not real vector embeddings
+- **PostgreSQL + `pgvector`** (`server/db/`, via `pg`) — the data store is Postgres-backed (schema in `server/db/schema.sql`), run locally via the included `docker-compose.yml`
+- Voyage AI (`voyage-3.5`) real vector embeddings (`server/services/embeddingService.js`) for pgvector cosine-distance candidate retrieval — requires `VOYAGE_API_KEY`, falls back to TF-IDF without it
+- Custom TF-IDF cosine similarity engine (`server/utils/textSimilarity.js`) as the fallback candidate retrieval layer, with Claude re-ranking the shortlist for duplicate detection and knowledge search either way
 - Rule/keyword-based classifier for OCR text interpretation (module/error-code extraction)
 
-**Not yet integrated**: no database (Postgres/pgvector), no auth — see the gaps table below.
+**Not yet integrated**: no auth — see the gaps table below.
 
 ---
 
@@ -227,10 +230,11 @@ Unified auto-refreshing dashboard tracking live incidents, developer capacity, A
 ### Prerequisites
 - Node.js (v18.0.0 or higher)
 - npm (v9.0.0 or higher)
+- Docker (for local Postgres + pgvector — the backend requires a running Postgres instance)
 
 ### Installation & Running Locally
 
-The app is two processes: the backend API (`server/`) and the Vite frontend. Both need to be running.
+The app is three processes: Postgres (via Docker), the backend API (`server/`), and the Vite frontend.
 
 ```bash
 # 1. Clone the repository
@@ -240,19 +244,26 @@ cd INCIDENTAI
 # 2. Install dependencies
 npm install
 
-# 3. (Optional) Enable real Claude reasoning — copy .env.example to .env and add your key.
-# Without this step the backend runs fine, just with rule-based logic instead of live AI.
+# 3. Copy the env template. ANTHROPIC_API_KEY and VOYAGE_API_KEY are optional —
+# without them the backend falls back to deterministic logic and TF-IDF respectively.
 cp .env.example .env
 
-# 4. Start the backend API (terminal 1)
+# 4. Start Postgres + pgvector
+docker compose up -d
+
+# 5. Apply the schema and seed sample data (idempotent — safe to re-run)
+npm run db:migrate
+npm run db:seed
+
+# 6. Start the backend API (terminal 1)
 npm run server
 # -> IncidentAI backend listening on http://localhost:4000
 
-# 5. Start the Vite development server (terminal 2)
+# 7. Start the Vite development server (terminal 2)
 npm run dev
 ```
 
-Open your browser and navigate to **`http://localhost:3000/`**. The frontend proxies all `/api/*` requests to the backend (see `vite.config.js`), so both must be running for the app to load data.
+Open your browser and navigate to **`http://localhost:3000/`**. The frontend proxies all `/api/*` requests to the backend (see `vite.config.js`), so both must be running for the app to load data. If Postgres isn't reachable, `npm run server` will error on the first request rather than starting in a degraded in-memory mode — the backend now assumes a real database.
 
 ---
 

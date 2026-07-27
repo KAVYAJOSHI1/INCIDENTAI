@@ -7,7 +7,7 @@ export function registerCopilotRoutes(router) {
     if (!body?.ticket_id || !body?.message) {
       throw new ApiError(400, 'Request body must include "ticket_id" and "message"');
     }
-    const ticket = getTicketById(body.ticket_id);
+    const ticket = await getTicketById(body.ticket_id);
     if (!ticket) throw new ApiError(404, `Ticket ${body.ticket_id} not found`);
 
     const reply = (await handleCopilotChatWithAI(body.message, ticket)) ?? handleCopilotChat(body.message, ticket);

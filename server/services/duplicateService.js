@@ -9,6 +9,8 @@
 import { tokenize, computeIdf, tfidfVector, cosineSimilarity, extractErrorCode } from "../utils/textSimilarity.js";
 import { completeJson } from "./llmService.js";
 import { createTtlCache } from "../utils/simpleCache.js";
+import { embedQuery } from "./embeddingService.js";
+import { query as pgQuery } from "../db/postgres.js";
 
 // Short TTL: the shortlist depends on the live ticket list, which changes as new tickets are created.
 const duplicateJudgeCache = createTtlCache(30_000);
@@ -72,6 +74,48 @@ export async function findDuplicateTicketsWithAI(candidateText, tfidfResult) {
 
   duplicateJudgeCache.set(cacheKey, mapped);
   return mapped;
+}
+
+/**
+ * pgvector candidate retrieval: embeds the incoming text with Voyage AI and ranks
+ * existing tickets by cosine distance in Postgres. Returns null (caller falls back
+ * to findDuplicateTickets' in-memory TF-IDF) if no embedding could be produced —
+ * no VOYAGE_API_KEY, embedding call failure, or no ticket has an embedding yet.
+ */
+export async function findDuplicateTicketsWithVector(candidateText, { threshold = 0.85, relatedThreshold = 0.55 } = {}) {
+  const vector = await embedQuery(candidateText);
+  if (!vector) return null;
+
+  const { rows } = await pgQuery(
+    `SELECT id, ticket_number, title, structured_description, vague_user_input, ocr_findings,
+            1 - (embedding <=> $1::vector) AS similarity
+     FROM tickets
+     WHERE embedding IS NOT NULL
+     ORDER BY embedding <=> $1::vector
+     LIMIT 8`,
+    [`[${vector.join(",")}]`]
+  );
+
+  if (rows.length === 0) return null;
+
+  const scored = rows.map((row) => ({
+    ticket: {
+      id: row.id,
+      ticket_number: row.ticket_number,
+      title: row.title,
+      structured_description: row.structured_description,
+      vague_user_input: row.vague_user_input,
+      ocr_findings: row.ocr_findings
+    },
+    similarity_score: Math.round(row.similarity * 100) / 100,
+    similarity_percentage: Math.round(row.similarity * 100)
+  }));
+
+  const topMatch = scored[0];
+  const isDuplicate = !!topMatch && topMatch.similarity_score >= threshold;
+  const related = scored.filter((m) => m.similarity_score >= relatedThreshold && m.similarity_score < threshold).slice(0, 3);
+
+  return { is_duplicate: isDuplicate, top_match: topMatch, related, all_candidates: scored.slice(0, 5), ai_generated: false };
 }
 
 export function findDuplicateTickets(candidateText, existingTickets, { threshold = 0.85, relatedThreshold = 0.55 } = {}) {

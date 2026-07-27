@@ -5,8 +5,8 @@
 import { listTickets } from "../db/store.js";
 import { CLOSED_STATUSES, ERP_MODULES } from "../constants.js";
 
-export function buildWarRoomSnapshot() {
-  const tickets = listTickets();
+export async function buildWarRoomSnapshot() {
+  const tickets = await listTickets();
 
   const moduleStatus = ERP_MODULES.map((module) => {
     const openTickets = tickets.filter((t) => t.erp_module === module && !CLOSED_STATUSES.includes(t.status));

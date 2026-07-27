@@ -1,5 +1,6 @@
 /**
- * IncidentAI backend entry point. Zero external dependencies — swap in Express/Postgres/Gemini later as needed.
+ * IncidentAI backend entry point. Plain Node http server (no framework) backed by
+ * Postgres + pgvector (server/db/) with real Claude/Voyage AI reasoning where configured.
  */
 
 import http from "node:http";

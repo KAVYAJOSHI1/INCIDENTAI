@@ -8,12 +8,14 @@ import { CLOSED_STATUSES } from "../constants.js";
 
 const HOURLY_ENGINEERING_RATE = 145;
 
-export function buildMissionControlSnapshot() {
-  const tickets = listTickets();
-  const developers = listDevelopers();
-  const knowledgeBase = listKnowledgeBase();
-  const summary = computeMttrSummary();
-  const heatmap = computeModuleHeatmap();
+export async function buildMissionControlSnapshot() {
+  const [tickets, developers, knowledgeBase, summary, heatmap] = await Promise.all([
+    listTickets(),
+    listDevelopers(),
+    listKnowledgeBase(),
+    computeMttrSummary(),
+    computeModuleHeatmap()
+  ]);
 
   const ticketsWithTimings = tickets.filter((t) => t.pipeline_timings_ms?.total != null);
   const aiQueueLatencyMs = ticketsWithTimings.length

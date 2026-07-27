@@ -6,8 +6,8 @@ import crypto from "node:crypto";
 import { analyzeMultimodalInput } from "./ocrService.js";
 import { scoreSeverity, scoreSeverityWithAI } from "./severityService.js";
 import { predictRootCause, predictRootCauseWithAI } from "./rootCauseService.js";
-import { findDuplicateTickets, findDuplicateTicketsWithAI } from "./duplicateService.js";
-import { searchKnowledgeBase, searchKnowledgeBaseWithAI } from "./knowledgeService.js";
+import { findDuplicateTickets, findDuplicateTicketsWithAI, findDuplicateTicketsWithVector } from "./duplicateService.js";
+import { searchKnowledgeBase, searchKnowledgeBaseWithAI, searchKnowledgeBaseWithVector } from "./knowledgeService.js";
 import { recommendDeveloperForTicket } from "./loadBalancerService.js";
 import { listTickets, listKnowledgeBase, listDevelopers, addTicket, updateDeveloper, getTicketById, getDeveloperById, updateTicket } from "../db/store.js";
 import { CLOSED_STATUSES } from "../constants.js";
@@ -20,18 +20,18 @@ function generateTicketNumber() {
  * Applies a ticket PATCH while keeping developer active_tickets counts consistent:
  * reassigning a ticket moves capacity between developers, resolving/closing frees it up.
  */
-export function applyTicketUpdate(id, patch) {
-  const ticket = getTicketById(id);
+export async function applyTicketUpdate(id, patch) {
+  const ticket = await getTicketById(id);
   if (!ticket) return null;
 
   const nextPatch = { ...patch };
 
   if (patch.assigned_dev_id && patch.assigned_dev_id !== ticket.assigned_dev_id) {
-    const previousDev = getDeveloperById(ticket.assigned_dev_id);
-    const nextDev = getDeveloperById(patch.assigned_dev_id);
-    if (previousDev) updateDeveloper(previousDev.id, { active_tickets: Math.max(0, previousDev.active_tickets - 1) });
+    const previousDev = await getDeveloperById(ticket.assigned_dev_id);
+    const nextDev = await getDeveloperById(patch.assigned_dev_id);
+    if (previousDev) await updateDeveloper(previousDev.id, { active_tickets: Math.max(0, previousDev.active_tickets - 1) });
     if (nextDev) {
-      updateDeveloper(nextDev.id, { active_tickets: nextDev.active_tickets + 1 });
+      await updateDeveloper(nextDev.id, { active_tickets: nextDev.active_tickets + 1 });
       nextPatch.assigned_dev_name = patch.assigned_dev_name || nextDev.name;
     }
   }
@@ -41,8 +41,8 @@ export function applyTicketUpdate(id, patch) {
   if (wasOpen && willBeClosed) {
     nextPatch.resolved_at = patch.resolved_at || new Date().toISOString();
     const assignedDevId = nextPatch.assigned_dev_id || ticket.assigned_dev_id;
-    const dev = getDeveloperById(assignedDevId);
-    if (dev) updateDeveloper(dev.id, { active_tickets: Math.max(0, dev.active_tickets - 1) });
+    const dev = await getDeveloperById(assignedDevId);
+    if (dev) await updateDeveloper(dev.id, { active_tickets: Math.max(0, dev.active_tickets - 1) });
   }
 
   return updateTicket(id, nextPatch);
@@ -77,15 +77,21 @@ export async function runIncidentIngestPipeline(inputPayload) {
   const rootCause =
     (await predictRootCauseWithAI(ocrFindings.extracted_error_code, ocrFindings.erp_module, ocrFindings.detected_ui_component, inputPayload.text)) ??
     predictRootCause(ocrFindings.extracted_error_code, ocrFindings.erp_module, ocrFindings.detected_ui_component);
-  const tfidfDuplicateResult = findDuplicateTickets(inputPayload.text || title, listTickets());
-  const duplicateResult = (await findDuplicateTicketsWithAI(inputPayload.text || title, tfidfDuplicateResult)) ?? tfidfDuplicateResult;
+  const [existingTickets, knowledgeBaseArticles, developers] = await Promise.all([listTickets(), listKnowledgeBase(), listDevelopers()]);
 
-  // Broader, unfiltered shortlist feeds the AI re-ranker so it can catch matches TF-IDF alone would score too low to surface
-  const kbShortlist = searchKnowledgeBase(inputPayload.text || title, ocrFindings.erp_module, listKnowledgeBase(), { minScore: 0.05 });
-  const kbMatches =
-    (await searchKnowledgeBaseWithAI(inputPayload.text || title, ocrFindings.erp_module, kbShortlist)) ??
-    searchKnowledgeBase(inputPayload.text || title, ocrFindings.erp_module, listKnowledgeBase());
-  const routing = recommendDeveloperForTicket({ erp_module: ocrFindings.erp_module }, listDevelopers());
+  // pgvector cosine-distance retrieval when Voyage embeddings are configured, falling
+  // back to the in-memory TF-IDF candidate set otherwise.
+  const candidateDuplicateResult =
+    (await findDuplicateTicketsWithVector(inputPayload.text || title)) ?? findDuplicateTickets(inputPayload.text || title, existingTickets);
+  const duplicateResult = (await findDuplicateTicketsWithAI(inputPayload.text || title, candidateDuplicateResult)) ?? candidateDuplicateResult;
+
+  // Broader, unfiltered shortlist feeds the AI re-ranker so it can catch matches lexical/vector retrieval alone would score too low to surface
+  const kbShortlist =
+    (await searchKnowledgeBaseWithVector(inputPayload.text || title, ocrFindings.erp_module, { minScore: 0.05 })) ??
+    searchKnowledgeBase(inputPayload.text || title, ocrFindings.erp_module, knowledgeBaseArticles, { minScore: 0.05 });
+  const kbFallback = kbShortlist.filter((m) => m.score >= 0.25);
+  const kbMatches = (await searchKnowledgeBaseWithAI(inputPayload.text || title, ocrFindings.erp_module, kbShortlist)) ?? kbFallback;
+  const routing = recommendDeveloperForTicket({ erp_module: ocrFindings.erp_module }, developers);
 
   const ticket = {
     id: `INC-2026-${crypto.randomInt(1000, 9999)}`,
@@ -133,8 +139,8 @@ export async function runIncidentIngestPipeline(inputPayload) {
     pipeline_timings_ms: { ocr: ocrDurationMs, severity: severityDurationMs, total: Date.now() - t0 }
   };
 
-  addTicket(ticket);
-  updateDeveloper(routing.recommended.id, { active_tickets: routing.recommended.active_tickets + 1 });
+  const savedTicket = await addTicket(ticket);
+  await updateDeveloper(routing.recommended.id, { active_tickets: routing.recommended.active_tickets + 1 });
 
-  return ticket;
+  return savedTicket;
 }

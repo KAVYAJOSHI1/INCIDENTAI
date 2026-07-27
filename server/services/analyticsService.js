@@ -6,8 +6,8 @@ import { listTickets } from "../db/store.js";
 
 const MANUAL_BASELINE_HOURS = 8.2;
 
-export function computeMttrSummary() {
-  const tickets = listTickets();
+export async function computeMttrSummary() {
+  const tickets = await listTickets();
   const resolved = tickets.filter((t) => t.resolved_at);
   const avgHours = resolved.length
     ? resolved.reduce((sum, t) => sum + (new Date(t.resolved_at) - new Date(t.created_at)) / 3_600_000, 0) / resolved.length
@@ -23,8 +23,8 @@ export function computeMttrSummary() {
   };
 }
 
-export function computeModuleHeatmap() {
-  const tickets = listTickets();
+export async function computeModuleHeatmap() {
+  const tickets = await listTickets();
   const byModule = {};
   tickets.forEach((t) => {
     byModule[t.erp_module] ||= { erp_module: t.erp_module, total: 0, P0_CRITICAL: 0, P1_HIGH: 0, P2_MEDIUM: 0, P3_LOW: 0 };
@@ -34,8 +34,8 @@ export function computeModuleHeatmap() {
   return Object.values(byModule).sort((a, b) => b.total - a.total);
 }
 
-export function computeSeverityDistribution() {
-  const tickets = listTickets();
+export async function computeSeverityDistribution() {
+  const tickets = await listTickets();
   const counts = { P0_CRITICAL: 0, P1_HIGH: 0, P2_MEDIUM: 0, P3_LOW: 0 };
   tickets.forEach((t) => { counts[t.severity] = (counts[t.severity] || 0) + 1; });
   return Object.entries(counts).map(([severity, count]) => ({ severity, count }));

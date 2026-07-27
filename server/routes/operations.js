@@ -4,7 +4,7 @@ import { buildMissionControlSnapshot } from "../services/missionControlService.j
 import { sendJson } from "../utils/http.js";
 
 export function registerOperationsRoutes(router) {
-  router.get("/api/warroom", ({ res }) => sendJson(res, 200, { warroom: buildWarRoomSnapshot() }));
-  router.get("/api/digital-twin", ({ res }) => sendJson(res, 200, { twin: buildDigitalTwin() }));
-  router.get("/api/mission-control", ({ res }) => sendJson(res, 200, { missionControl: buildMissionControlSnapshot() }));
+  router.get("/api/warroom", async ({ res }) => sendJson(res, 200, { warroom: await buildWarRoomSnapshot() }));
+  router.get("/api/digital-twin", async ({ res }) => sendJson(res, 200, { twin: await buildDigitalTwin() }));
+  router.get("/api/mission-control", async ({ res }) => sendJson(res, 200, { missionControl: await buildMissionControlSnapshot() }));
 }

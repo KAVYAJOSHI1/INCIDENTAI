@@ -13,8 +13,8 @@ const TOPOLOGY_EDGES = [
   { source: "INVENTORY", target: "INVOICING" }
 ];
 
-export function buildDigitalTwin() {
-  const tickets = listTickets();
+export async function buildDigitalTwin() {
+  const tickets = await listTickets();
 
   const nodes = ERP_MODULES.map((module) => {
     const openTickets = tickets.filter((t) => t.erp_module === module && !CLOSED_STATUSES.includes(t.status));

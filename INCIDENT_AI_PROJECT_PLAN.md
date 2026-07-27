@@ -85,12 +85,13 @@ Follow this exact sequence for implementation:
 - [x] **Task 10.5**: `server/utils/simpleCache.js` now also caches the Task 10.1–10.4 LLM calls to keep repeated ticket-insight requests instant.
 
 ### 📍 Phase 11: PostgreSQL & `pgvector` Database Persistence Layer
-> **Goal:** Replace in-memory array database (`server/db/inMemoryStore.js`) with production-grade PostgreSQL storage.
-- [ ] **Task 11.1**: Design PostgreSQL SQL schemas for `tickets`, `users`, `developer_profiles`, `knowledge_articles`, `incidents`, and `audit_logs`.
-- [ ] **Task 11.2**: Enable `pgvector` extension and add vector column (`vector(1536)`) for ticket & knowledge base embeddings.
-- [ ] **Task 11.3**: Create database client (`server/db/postgres.js`) using `pg` connection pool to execute queries.
-- [ ] **Task 11.4**: Replace `inMemoryStore.js` methods with async PostgreSQL queries and transaction management.
-- [ ] **Task 11.5**: Create database migration and initial seed scripts (`server/db/seed.js`).
+> **Goal:** Replace in-memory array database (`server/db/store.js`) with production-grade PostgreSQL storage.
+- [x] **Task 11.1**: Designed PostgreSQL schema (`server/db/schema.sql`) for `developers`, `tickets`, `knowledge_base`, `pipeline_traces` — matches the app's actual data model rather than the originally-listed `users`/`developer_profiles`/`incidents`/`audit_logs` names, since there's no auth yet (Phase 12) and tickets already *are* incidents.
+- [x] **Task 11.2**: Enabled the `pgvector` extension with `vector(1024)` embedding columns on `tickets` and `knowledge_base` (1024, not the originally-listed 1536, to match Voyage AI's `voyage-3.5` default output dimension — see Task 11.4), plus HNSW cosine-distance indexes.
+- [x] **Task 11.3**: Created `server/db/postgres.js` (`pg` connection pool, `query()`/`withTransaction()` helpers) and `docker-compose.yml` for local Postgres+pgvector.
+- [x] **Task 11.4**: Replaced every `server/db/store.js` method with async Postgres queries (all 12 call sites across routes/services updated to `await`). Wired real Voyage AI embeddings (`server/services/embeddingService.js`) and pgvector cosine-distance candidate retrieval into `duplicateService.js` / `knowledgeService.js`, falling back to TF-IDF when no `VOYAGE_API_KEY` is configured — same graceful-degradation pattern as the Claude integrations.
+- [x] **Task 11.5**: Added `server/db/migrate.js` (applies `schema.sql`, idempotent) and `server/db/seed.js` (idempotent, skips if already seeded).
+- [ ] **Not yet done**: Live end-to-end verification against a running Postgres instance — blocked in this environment because Docker Desktop requires WSL2, which isn't installed on this machine. Code is syntax-checked and manually reviewed but not run against a real database. Run `docker compose up -d && npm run db:seed && npm run server` to verify once Docker/WSL2 is available.
 
 ### 📍 Phase 12: Authentication, Security & Server-Side RBAC
 > **Goal:** Replace client-side role toggle with real security, authentication, and permission enforcement.

@@ -10,6 +10,8 @@
 import { tokenize, computeIdf, tfidfVector, cosineSimilarity } from "../utils/textSimilarity.js";
 import { completeJson } from "./llmService.js";
 import { createTtlCache } from "../utils/simpleCache.js";
+import { embedQuery } from "./embeddingService.js";
+import { query as pgQuery } from "../db/postgres.js";
 
 // Search-as-you-type can fire several requests per second for near-identical queries;
 // cache successful reranks briefly so we don't burn API calls on every keystroke.
@@ -77,6 +79,44 @@ export async function searchKnowledgeBaseWithAI(queryText, erpModule, shortlist)
 
   rerankCache.set(cacheKey, mapped);
   return mapped;
+}
+
+/**
+ * pgvector candidate retrieval: embeds the query with Voyage AI and ranks knowledge
+ * base articles by cosine distance in Postgres. Returns null (caller falls back to
+ * searchKnowledgeBase's in-memory TF-IDF) if no embedding could be produced — no
+ * VOYAGE_API_KEY, embedding call failure, or no article has an embedding yet.
+ */
+export async function searchKnowledgeBaseWithVector(queryText, erpModule, { minScore = 0.25 } = {}) {
+  const vector = await embedQuery(queryText);
+  if (!vector) return null;
+
+  const vectorLiteral = `[${vector.join(",")}]`;
+  const { rows } = await pgQuery(
+    `SELECT id, title, erp_module, error_code, solution, confidence, tags,
+            1 - (embedding <=> $1::vector) AS similarity
+     FROM knowledge_base
+     WHERE embedding IS NOT NULL
+     ORDER BY embedding <=> $1::vector
+     LIMIT 8`,
+    [vectorLiteral]
+  );
+
+  if (rows.length === 0) return null;
+
+  return rows
+    .map((row) => {
+      let score = row.similarity;
+      if (erpModule && row.erp_module === erpModule) score = Math.min(0.99, score + 0.15);
+      return {
+        article: { id: row.id, title: row.title, erp_module: row.erp_module, error_code: row.error_code, solution: row.solution, confidence: Number(row.confidence), tags: row.tags },
+        score: Math.round(score * 100) / 100,
+        confidence_percentage: Math.round(score * Number(row.confidence) * 100),
+        ai_generated: false
+      };
+    })
+    .filter((m) => m.score >= minScore)
+    .sort((a, b) => b.score - a.score);
 }
 
 export function searchKnowledgeBase(queryText, erpModule, kbArticles, { minScore = 0.25 } = {}) {
