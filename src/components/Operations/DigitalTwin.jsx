@@ -5,9 +5,9 @@ import { Map, Sparkles } from 'lucide-react';
 import { fetchDigitalTwin } from '../../services/apiClient';
 
 const HEALTH_STYLE = {
-  RED: { background: '#4C0519', color: '#FECDD3', border: '2px solid #F43F5E' },
-  YELLOW: { background: '#451A03', color: '#FCD34D', border: '2px solid #F59E0B' },
-  GREEN: { background: '#022C22', color: '#6EE7B7', border: '2px solid #10B981' }
+  RED: { background: '#FFF1F2', color: '#9F1239', border: '2px solid #FDA4AF' },
+  YELLOW: { background: '#FFFBEB', color: '#92400E', border: '2px solid #FCD34D' },
+  GREEN: { background: '#ECFDF5', color: '#065F46', border: '2px solid #6EE7B7' }
 };
 
 const NODE_POSITIONS = {
@@ -41,29 +41,27 @@ export default function DigitalTwin() {
     source: e.source,
     target: e.target,
     animated: true,
-    style: { stroke: '#6366F1', strokeWidth: 2 }
+    style: { stroke: '#2563EB', strokeWidth: 2 }
   }));
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      <div className="glass-panel p-6 border-indigo-500/30">
+      <div className="surface p-6">
         <div className="flex items-center gap-2 mb-2">
-          <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-bold border border-indigo-500/30 flex items-center gap-1">
-            <Map className="w-3.5 h-3.5 text-indigo-400" /> Enterprise Feature 7: Digital Twin
-          </span>
+          <span className="badge-module"><Map className="w-3 h-3 inline mr-1" /> Digital Twin</span>
         </div>
-        <h2 className="text-xl font-extrabold text-white">ERP Digital Twin System Topology</h2>
-        <p className="text-slate-400 text-sm mt-1">Live interconnected module map with health status and failure prediction.</p>
+        <h2 className="text-xl font-extrabold text-heading">ERP Digital Twin System Topology</h2>
+        <p className="text-body-color text-sm mt-1">Live interconnected module map with health status and failure prediction.</p>
       </div>
 
-      <div className="glass-panel h-[520px] w-full rounded-2xl overflow-hidden border border-white/10 relative">
+      <div className="surface h-[520px] w-full overflow-hidden relative">
         {nodes.length > 0 ? (
           <ReactFlow nodes={nodes} edges={edges} fitView>
-            <Background color="#334155" gap={16} size={1} />
-            <Controls className="bg-slate-900 border border-white/10 text-white fill-white rounded-xl" />
+            <Background color="#CBD5E1" gap={16} size={1} />
+            <Controls className="!bg-white !border !border-slate-200 !text-slate-700 !rounded-xl" />
           </ReactFlow>
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-slate-500 text-sm gap-2">
+          <div className="w-full h-full flex items-center justify-center text-muted-color text-sm gap-2">
             <Sparkles className="w-4 h-4" /> Loading topology...
           </div>
         )}

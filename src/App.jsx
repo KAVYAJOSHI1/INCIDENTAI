@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import Navbar from './components/Common/Navbar';
+import Sidebar from './components/Common/Sidebar';
+import Header from './components/Common/Header';
 import SmartReporter from './components/Reporter/SmartReporter';
 import JiraTicketView from './components/Ticketing/JiraTicketView';
 import DeveloperLoadBalancer from './components/LoadBalancer/DeveloperLoadBalancer';
@@ -16,11 +17,14 @@ import { ShieldAlert, Loader2, Inbox, RefreshCw } from 'lucide-react';
 import EmptyState from './components/Common/EmptyState';
 import LoginScreen from './components/Auth/LoginScreen';
 import { useAuth } from './context/AuthContext';
+import { useTheme } from './hooks/useTheme';
 import { VIEWS_BY_ROLE } from './constants/roles';
 
 export default function App() {
   const { user, isLoading: isAuthLoading, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [currentView, setCurrentView] = useState('REPORTER');
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [tickets, setTickets] = useState([]);
   const [developers, setDevelopers] = useState([]);
   const [knowledgeBase, setKnowledgeBase] = useState([]);
@@ -155,8 +159,8 @@ export default function App() {
 
   if (isAuthLoading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-slate-400">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-400" />
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-muted-color app-bg">
+        <Loader2 className="w-8 h-8 animate-spin text-[var(--accent)]" />
         <p className="text-sm">Checking session...</p>
       </div>
     );
@@ -168,8 +172,8 @@ export default function App() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-slate-400">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-400" />
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-muted-color app-bg">
+        <Loader2 className="w-8 h-8 animate-spin text-[var(--accent)]" />
         <p className="text-sm">Connecting to IncidentAI backend...</p>
       </div>
     );
@@ -177,11 +181,11 @@ export default function App() {
 
   if (loadError) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-center px-6">
-        <ShieldAlert className="w-10 h-10 text-rose-400" />
-        <h2 className="text-lg font-bold text-white">Cannot reach the IncidentAI backend</h2>
-        <p className="text-sm text-slate-400 max-w-md">{loadError}</p>
-        <p className="text-xs text-slate-500">Make sure it's running with <code className="text-indigo-300">npm run server</code>.</p>
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-center px-6 app-bg">
+        <ShieldAlert className="w-10 h-10 text-rose-500" />
+        <h2 className="text-lg font-bold text-heading">Cannot reach the IncidentAI backend</h2>
+        <p className="text-sm text-muted-color max-w-md">{loadError}</p>
+        <p className="text-xs text-faint-color">Make sure it's running with <code className="text-accent-color">npm run server</code>.</p>
         <button onClick={() => loadInitialData()} className="btn-primary text-xs mt-1">
           <RefreshCw className="w-3.5 h-3.5" /> Retry
         </button>
@@ -190,140 +194,150 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col pb-12">
-      {/* Top Navbar */}
-      <Navbar
+    <div className="min-h-screen flex app-bg">
+      <Sidebar
         currentView={currentView}
-        setCurrentView={setCurrentView}
+        setCurrentView={(view) => { setCurrentView(view); setIsMobileNavOpen(false); }}
         allowedViews={allowedViews}
-        user={user}
-        onLogout={logout}
         activeIncidentsCount={tickets.filter((t) => t.status !== 'RESOLVED').length}
-        onTriggerPreset={handleTriggerPreset}
+        isMobileOpen={isMobileNavOpen}
+        onCloseMobile={() => setIsMobileNavOpen(false)}
       />
 
-      {/* Main View Content Container */}
-      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6">
-        {/* View 1: End User Reporter */}
-        {currentView === 'REPORTER' && (
-          <SmartReporter onSubmitIncident={handleSubmitIncident} />
-        )}
+      <div className="flex-1 min-w-0 flex flex-col">
+        <Header
+          user={user}
+          onLogout={logout}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          activeIncidentsCount={tickets.filter((t) => t.status !== 'RESOLVED').length}
+          onTriggerPreset={handleTriggerPreset}
+          onOpenMobileNav={() => setIsMobileNavOpen(true)}
+        />
 
-        {/* View 2: Support Triage Feed & Jira View */}
-        {currentView === 'TRIAGE' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Left Column: Tickets Queue Feed (4 cols) */}
-            <div className="lg:col-span-4 space-y-4">
-              <div className="glass-panel p-4 flex items-center justify-between">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                  <ShieldAlert className="w-4 h-4 text-indigo-400" /> Triage Feed Queue ({filteredTicketsList.length})
-                </h3>
+        {/* Main View Content Container */}
+        <main className="flex-1 w-full px-4 sm:px-6 py-6 pb-16">
+          {/* View 1: End User Reporter */}
+          {currentView === 'REPORTER' && (
+            <SmartReporter onSubmitIncident={handleSubmitIncident} />
+          )}
 
-                <select
-                  value={filterModule}
-                  onChange={(e) => setFilterModule(e.target.value)}
-                  className="bg-slate-900 border border-white/10 text-slate-300 text-[11px] rounded-lg px-2 py-1 focus:outline-none"
-                >
-                  <option value="ALL">All Modules</option>
-                  <option value="INVOICING">Invoicing</option>
-                  <option value="PAYROLL">Payroll</option>
-                  <option value="INVENTORY">Inventory</option>
-                  <option value="GENERAL_LEDGER">General Ledger</option>
-                </select>
+          {/* View 2: Support Triage Feed & Jira View */}
+          {currentView === 'TRIAGE' && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Left Column: Tickets Queue Feed (4 cols) */}
+              <div className="lg:col-span-4 space-y-4">
+                <div className="surface p-4 flex items-center justify-between">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-body-color flex items-center gap-1.5">
+                    <ShieldAlert className="w-4 h-4 text-[var(--accent)]" /> Triage Feed Queue ({filteredTicketsList.length})
+                  </h3>
+
+                  <select
+                    value={filterModule}
+                    onChange={(e) => setFilterModule(e.target.value)}
+                    className="input-field text-[11px] px-2 py-1"
+                  >
+                    <option value="ALL">All Modules</option>
+                    <option value="INVOICING">Invoicing</option>
+                    <option value="PAYROLL">Payroll</option>
+                    <option value="INVENTORY">Inventory</option>
+                    <option value="GENERAL_LEDGER">General Ledger</option>
+                  </select>
+                </div>
+
+                <div className="space-y-3 overflow-y-auto max-h-[680px] pr-1">
+                  {filteredTicketsList.length === 0 && (
+                    <EmptyState
+                      icon={Inbox}
+                      title={tickets.length === 0 ? 'No Incidents Yet' : 'No Matching Incidents'}
+                      description={tickets.length === 0 ? 'Submit one from the End-User Reporter to get started.' : `No tickets found for module "${filterModule}".`}
+                      compact
+                    />
+                  )}
+                  {filteredTicketsList.map((t) => {
+                    const isSelected = selectedTicket?.id === t.id;
+                    const isP0 = t.severity === 'P0_CRITICAL';
+
+                    return (
+                      <div
+                        key={t.id}
+                        onClick={() => setSelectedTicketId(t.id)}
+                        className={`surface surface-interactive p-4 ${
+                          isSelected
+                            ? 'is-selected'
+                            : isP0
+                            ? 'border-rose-300 dark:border-rose-500/40'
+                            : ''
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[11px] font-mono font-bold text-accent-color">{t.ticket_number}</span>
+                          <span className={t.severity === 'P0_CRITICAL' ? 'badge-p0' : t.severity === 'P1_HIGH' ? 'badge-p1' : 'badge-p2'}>
+                            {t.severity}
+                          </span>
+                        </div>
+                        <h4 className="text-xs font-bold text-heading line-clamp-2 leading-snug">{t.title}</h4>
+                        <div className="mt-2.5 flex items-center justify-between text-[11px] text-muted-color">
+                          <span>Dev: <strong className="text-body-color">{t.assigned_dev_name || 'Unassigned'}</strong></span>
+                          <span className="badge-module text-[9px]">{t.erp_module}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
-              <div className="space-y-3 overflow-y-auto max-h-[680px] pr-1">
-                {filteredTicketsList.length === 0 && (
-                  <EmptyState
-                    icon={Inbox}
-                    title={tickets.length === 0 ? 'No Incidents Yet' : 'No Matching Incidents'}
-                    description={tickets.length === 0 ? 'Submit one from the End-User Reporter to get started.' : `No tickets found for module "${filterModule}".`}
-                    compact
-                  />
-                )}
-                {filteredTicketsList.map((t) => {
-                  const isSelected = selectedTicket?.id === t.id;
-                  const isP0 = t.severity === 'P0_CRITICAL';
-
-                  return (
-                    <div
-                      key={t.id}
-                      onClick={() => setSelectedTicketId(t.id)}
-                      className={`glass-card-interactive p-4 border transition-all ${
-                        isSelected
-                          ? 'border-indigo-500 bg-indigo-950/30 shadow-lg shadow-indigo-500/10'
-                          : isP0
-                          ? 'border-rose-500/50 bg-rose-950/10'
-                          : 'border-white/10'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[11px] font-mono font-bold text-indigo-400">{t.ticket_number}</span>
-                        <span className={t.severity === 'P0_CRITICAL' ? 'badge-p0' : t.severity === 'P1_HIGH' ? 'badge-p1' : 'badge-p2'}>
-                          {t.severity}
-                        </span>
-                      </div>
-                      <h4 className="text-xs font-bold text-white line-clamp-2 leading-snug">{t.title}</h4>
-                      <div className="mt-2.5 flex items-center justify-between text-[11px] text-slate-400">
-                        <span>Dev: <strong className="text-slate-300">{t.assigned_dev_name || 'Unassigned'}</strong></span>
-                        <span className="badge-module text-[9px]">{t.erp_module}</span>
-                      </div>
-                    </div>
-                  );
-                })}
+              {/* Right Column: Selected Jira Ticket Detail (8 cols) */}
+              <div className="lg:col-span-8">
+                <JiraTicketView
+                  ticket={selectedTicket}
+                  onMergeDuplicate={handleMergeDuplicate}
+                  onAssignDeveloper={handleAssignDeveloper}
+                />
               </div>
             </div>
+          )}
 
-            {/* Right Column: Selected Jira Ticket Detail (8 cols) */}
-            <div className="lg:col-span-8">
-              <JiraTicketView
-                ticket={selectedTicket}
-                onMergeDuplicate={handleMergeDuplicate}
+          {/* View 3: Developer Workbench & Copilot */}
+          {currentView === 'DEVELOPER' && (
+            <DeveloperWorkbench
+              ticket={selectedTicket}
+              onResolveTicket={handleResolveTicket}
+            />
+          )}
+
+          {/* View 4: Executive Analytics & Workload Matrix */}
+          {currentView === 'ADMIN' && (
+            <div className="space-y-8">
+              <ExecutiveDashboard tickets={tickets} developers={developers} />
+              <DeveloperLoadBalancer
+                currentTicket={selectedTicket}
+                developers={developers}
                 onAssignDeveloper={handleAssignDeveloper}
+                onRebalanceLoad={handleRebalanceLoad}
+              />
+              <KnowledgeHub
+                knowledgeBase={knowledgeBase}
+                onAddArticle={handleAddKnowledgeArticle}
               />
             </div>
-          </div>
-        )}
+          )}
 
-        {/* View 3: Developer Workbench & Copilot */}
-        {currentView === 'DEVELOPER' && (
-          <DeveloperWorkbench
-            ticket={selectedTicket}
-            onResolveTicket={handleResolveTicket}
-          />
-        )}
+          {/* View 5: React Flow AI Execution Pipeline Visualizer */}
+          {currentView === 'PIPELINE' && (
+            <AIPipelineVisualizer ticket={selectedTicket} />
+          )}
 
-        {/* View 4: Executive Analytics & Workload Matrix */}
-        {currentView === 'ADMIN' && (
-          <div className="space-y-8">
-            <ExecutiveDashboard tickets={tickets} developers={developers} />
-            <DeveloperLoadBalancer
-              currentTicket={selectedTicket}
-              developers={developers}
-              onAssignDeveloper={handleAssignDeveloper}
-              onRebalanceLoad={handleRebalanceLoad}
-            />
-            <KnowledgeHub
-              knowledgeBase={knowledgeBase}
-              onAddArticle={handleAddKnowledgeArticle}
-            />
-          </div>
-        )}
+          {/* View 6: Enterprise War Room */}
+          {currentView === 'WARROOM' && <WarRoom />}
 
-        {/* View 5: React Flow AI Execution Pipeline Visualizer */}
-        {currentView === 'PIPELINE' && (
-          <AIPipelineVisualizer ticket={selectedTicket} />
-        )}
+          {/* View 7: ERP Digital Twin */}
+          {currentView === 'DIGITALTWIN' && <DigitalTwin />}
 
-        {/* View 6: Enterprise War Room */}
-        {currentView === 'WARROOM' && <WarRoom />}
-
-        {/* View 7: ERP Digital Twin */}
-        {currentView === 'DIGITALTWIN' && <DigitalTwin />}
-
-        {/* View 8: Mission Control Command Center */}
-        {currentView === 'MISSIONCONTROL' && <MissionControl />}
-      </main>
+          {/* View 8: Mission Control Command Center */}
+          {currentView === 'MISSIONCONTROL' && <MissionControl />}
+        </main>
+      </div>
     </div>
   );
 }

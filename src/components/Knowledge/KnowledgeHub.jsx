@@ -59,15 +59,13 @@ export default function KnowledgeHub({ knowledgeBase, onAddArticle }) {
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       {/* Banner */}
-      <div className="glass-panel p-6 border-cyan-500/30 flex flex-wrap items-center justify-between gap-4">
+      <div className="surface p-6 flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <span className="px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 text-xs font-bold border border-cyan-500/30 flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5 text-cyan-400" /> Module 5: RAG Vector Knowledge Base
-            </span>
+            <span className="badge-module"><Sparkles className="w-3 h-3 inline mr-1" /> RAG Vector Knowledge Base</span>
           </div>
-          <h2 className="text-xl font-extrabold text-white">ERP Resolution & Documentation Vector Hub</h2>
-          <p className="text-slate-400 text-sm mt-1">
+          <h2 className="text-xl font-extrabold text-heading">ERP Resolution &amp; Documentation Vector Hub</h2>
+          <p className="text-body-color text-sm mt-1">
             Indexed historical tickets, SOP runbooks, and verified resolution articles.
           </p>
         </div>
@@ -82,21 +80,21 @@ export default function KnowledgeHub({ knowledgeBase, onAddArticle }) {
 
       {/* Add Form Drawer */}
       {showAddForm && (
-        <form onSubmit={handleCreate} className="glass-panel p-5 space-y-4 border-cyan-500/40 bg-cyan-950/20">
-          <h3 className="text-sm font-bold text-white">Create Verified Knowledge Base Resolution</h3>
+        <form onSubmit={handleCreate} className="callout callout-cyan p-5 space-y-4">
+          <h3 className="text-sm font-bold text-heading">Create Verified Knowledge Base Resolution</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <input
               type="text"
               placeholder="Article Title"
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
-              className="bg-slate-900 border border-white/10 rounded-lg p-2 text-xs text-white"
+              className="input-field p-2 text-xs"
               required
             />
             <select
               value={newModule}
               onChange={(e) => setNewModule(e.target.value)}
-              className="bg-slate-900 border border-white/10 rounded-lg p-2 text-xs text-white"
+              className="input-field p-2 text-xs"
             >
               <option value="INVOICING">INVOICING</option>
               <option value="PAYROLL">PAYROLL</option>
@@ -108,14 +106,14 @@ export default function KnowledgeHub({ knowledgeBase, onAddArticle }) {
               placeholder="Error Code e.g. ERR_TAX_VAL_402"
               value={newErrorCode}
               onChange={(e) => setNewErrorCode(e.target.value)}
-              className="bg-slate-900 border border-white/10 rounded-lg p-2 text-xs text-white"
+              className="input-field p-2 text-xs"
             />
           </div>
           <textarea
             placeholder="Detailed resolution steps or SQL fix..."
             value={newSolution}
             onChange={(e) => setNewSolution(e.target.value)}
-            className="w-full h-24 bg-slate-900 border border-white/10 rounded-lg p-2 text-xs text-white resize-none"
+            className="input-field w-full h-24 p-2 text-xs resize-none"
             required
           />
           <button type="submit" className="btn-emerald text-xs">
@@ -127,26 +125,26 @@ export default function KnowledgeHub({ knowledgeBase, onAddArticle }) {
       {/* Search & Filter Controls */}
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex-1 relative min-w-[200px]">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+          <Search className="w-4 h-4 text-muted-color absolute left-3 top-3" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search RAG vector index for error codes, stack trace phrases, or solutions..."
-            className="w-full bg-slate-900/80 border border-white/10 rounded-xl pl-9 pr-9 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+            className="input-field w-full pl-9 pr-9 py-2.5 text-xs"
           />
           {isSearching && <Spinner className="w-3.5 h-3.5 absolute right-3 top-3" />}
         </div>
 
-        <div className="flex items-center gap-1.5 bg-slate-900 p-1 rounded-xl border border-white/10 text-xs">
+        <div className="flex items-center gap-1.5 surface-muted p-1 text-xs">
           {['ALL', 'INVOICING', 'PAYROLL', 'INVENTORY', 'GENERAL_LEDGER'].map((mod) => (
             <button
               key={mod}
               onClick={() => setSelectedModule(mod)}
-              className={`px-3 py-1 rounded-lg font-semibold transition-all ${
+              className={`px-3 py-1 rounded-lg font-semibold transition-colors ${
                 selectedModule === mod
-                  ? 'bg-cyan-500 text-slate-950 shadow-md'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-cyan-600 text-white'
+                  : 'text-muted-color hover:text-heading'
               }`}
             >
               {mod}
@@ -168,35 +166,35 @@ export default function KnowledgeHub({ knowledgeBase, onAddArticle }) {
         {filteredArticles.map((item, idx) => {
           const art = item.article;
           return (
-            <div key={idx} className="glass-panel p-5 space-y-3 border-white/10 hover:border-cyan-500/40 transition-all">
+            <div key={idx} className="surface surface-interactive p-5 space-y-3">
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <span className="badge-module text-[10px] mb-1 inline-block">{art.erp_module}</span>
-                  <h4 className="font-bold text-white text-sm">{art.title}</h4>
+                  <h4 className="font-bold text-heading text-sm">{art.title}</h4>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   {item.ai_generated !== undefined && (
-                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${item.ai_generated ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-slate-700/50 text-slate-400 border-white/10'}`}>
-                      {item.ai_generated ? 'CLAUDE' : 'TF-IDF'}
-                    </span>
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${item.ai_generated ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30' : 'text-muted-color'}`}>
+                    {item.ai_generated ? 'CLAUDE' : 'TF-IDF'}
+                  </span>
                   )}
-                  <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono text-[10px] font-bold">
+                  <span className="px-2 py-0.5 rounded bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-300 font-mono text-[10px] font-bold">
                     {item.confidence_percentage}% Vector Score
                   </span>
                 </div>
               </div>
 
-              <p className="text-xs text-slate-300 font-sans leading-relaxed bg-slate-900/60 p-3 rounded-lg border border-white/5">
+              <p className="text-xs text-body-color font-sans leading-relaxed surface-muted p-3">
                 {art.solution}
               </p>
 
               {item.why_relevant && (
-                <p className="text-[11px] text-cyan-200/70 italic">"{item.why_relevant}"</p>
+                <p className="text-[11px] text-cyan-700/80 dark:text-cyan-200/70 italic">"{item.why_relevant}"</p>
               )}
 
               <div className="flex items-center gap-1.5 flex-wrap pt-1">
                 {art.tags?.map((t, tIdx) => (
-                  <span key={tIdx} className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-white/5 font-mono">
+                  <span key={tIdx} className="text-[10px] px-2 py-0.5 rounded surface-muted text-muted-color font-mono">
                     #{t}
                   </span>
                 ))}

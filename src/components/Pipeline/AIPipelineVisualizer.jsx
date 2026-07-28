@@ -6,13 +6,13 @@ import { fetchPipelineTrace } from '../../services/apiClient';
 import { InlineLoading } from '../Common/Loading';
 
 const STAGE_STYLES = {
-  ingest: { background: '#1E1B4B', color: '#A5B4FC', border: '1px solid #6366F1' },
-  ocr: { background: '#0F172A', color: '#38BDF8', border: '1px solid #06B6D4' },
-  severity: { background: '#2E1065', color: '#DDD6FE', border: '1px solid #8B5CF6' },
-  duplicate: { background: '#022C22', color: '#6EE7B7', border: '1px solid #10B981' },
-  knowledge: { background: '#083344', color: '#67E8F9', border: '1px solid #0891B2' },
-  routing: { background: '#4C0519', color: '#FECDD3', border: '1px solid #F43F5E' },
-  ticket: { background: '#1C1917', color: '#FDE68A', border: '1px solid #EAB308' }
+  ingest: { background: '#EEF2FF', color: '#3730A3', border: '1px solid #C7D2FE' },
+  ocr: { background: '#ECFEFF', color: '#155E75', border: '1px solid #A5F3FC' },
+  severity: { background: '#F5F3FF', color: '#5B21B6', border: '1px solid #DDD6FE' },
+  duplicate: { background: '#ECFDF5', color: '#065F46', border: '1px solid #A7F3D0' },
+  knowledge: { background: '#ECFEFF', color: '#0E7490', border: '1px solid #A5F3FC' },
+  routing: { background: '#FFF1F2', color: '#9F1239', border: '1px solid #FECDD3' },
+  ticket: { background: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A' }
 };
 
 export default function AIPipelineVisualizer({ ticket }) {
@@ -46,39 +46,37 @@ export default function AIPipelineVisualizer({ ticket }) {
     source: edge.source,
     target: edge.target,
     animated: true,
-    style: { stroke: '#6366F1', strokeWidth: 2 }
+    style: { stroke: '#2563EB', strokeWidth: 2 }
   }));
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       {/* Banner */}
-      <div className="glass-panel p-6 border-indigo-500/30">
+      <div className="surface p-6">
         <div className="flex items-center gap-2 mb-2">
-          <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-bold border border-indigo-500/30 flex items-center gap-1">
-            <GitFork className="w-3.5 h-3.5 text-indigo-400" /> Interactive React Flow Visualizer
-          </span>
+          <span className="badge-module"><GitFork className="w-3 h-3 inline mr-1" /> Interactive React Flow Visualizer</span>
         </div>
-        <h2 className="text-xl font-extrabold text-white">Live AI Execution Pipeline Diagram</h2>
-        <p className="text-slate-400 text-sm mt-1">
+        <h2 className="text-xl font-extrabold text-heading">Live AI Execution Pipeline Diagram</h2>
+        <p className="text-body-color text-sm mt-1">
           {ticket
-            ? <>Actual backend execution trace for <span className="text-indigo-300 font-mono">{ticket.ticket_number}</span> — from multimodal ingestion through developer routing.</>
+            ? <>Actual backend execution trace for <span className="text-accent-color font-mono">{ticket.ticket_number}</span> — from multimodal ingestion through developer routing.</>
             : 'Select a ticket from the Support Triage Feed to see its real AI execution trace.'}
         </p>
       </div>
 
       {/* React Flow Graph Window */}
-      <div className="glass-panel h-[480px] w-full rounded-2xl overflow-hidden border border-white/10 relative">
+      <div className="surface h-[480px] w-full overflow-hidden relative">
         {nodes.length > 0 ? (
           <ReactFlow nodes={nodes} edges={edges} fitView>
-            <Background color="#334155" gap={16} size={1} />
-            <Controls className="bg-slate-900 border border-white/10 text-white fill-white rounded-xl" />
+            <Background color="#CBD5E1" gap={16} size={1} />
+            <Controls className="!bg-white !border !border-slate-200 !text-slate-700 !rounded-xl" />
           </ReactFlow>
         ) : isLoadingTrace ? (
           <div className="w-full h-full flex items-center justify-center">
             <InlineLoading label="Fetching real execution trace..." className="text-sm" />
           </div>
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-slate-500 text-sm gap-2">
+          <div className="w-full h-full flex items-center justify-center text-muted-color text-sm gap-2">
             <Sparkles className="w-4 h-4" /> {ticket ? 'No pipeline trace found for this ticket.' : 'No ticket selected — pick one from the Support Triage Feed.'}
           </div>
         )}

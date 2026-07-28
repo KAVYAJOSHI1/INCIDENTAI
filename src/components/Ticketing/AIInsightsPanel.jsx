@@ -21,8 +21,7 @@ const TABS = [
   { id: 'patch', label: 'Patch Preview', icon: ShieldAlert }
 ];
 
-const RISK_COLORS = { HIGH: 'text-rose-400 border-rose-500/40 bg-rose-950/30', MEDIUM: 'text-amber-400 border-amber-500/40 bg-amber-950/30', LOW: 'text-emerald-400 border-emerald-500/40 bg-emerald-950/30' };
-const HEALTH_COLORS = { RED: 'text-rose-400', YELLOW: 'text-amber-400', GREEN: 'text-emerald-400' };
+const RISK_CLASSES = { HIGH: 'callout callout-rose', MEDIUM: 'callout callout-amber', LOW: 'callout callout-emerald' };
 
 export default function AIInsightsPanel({ ticket }) {
   const [activeTab, setActiveTab] = useState('rootcause');
@@ -69,10 +68,10 @@ export default function AIInsightsPanel({ ticket }) {
   };
 
   return (
-    <div className="glass-panel p-5 space-y-4 border-indigo-500/30">
+    <div className="surface p-5 space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-        <h3 className="text-sm font-bold text-white flex items-center gap-2">
-          <Network className="w-4 h-4 text-indigo-400" /> Enterprise AI Insights
+        <h3 className="text-sm font-bold text-heading flex items-center gap-2">
+          <Network className="w-4 h-4 text-[var(--accent)]" /> Enterprise AI Insights
         </h3>
         <div className="flex items-center gap-1 overflow-x-auto pb-1 -mx-1 px-1 sm:mx-0 sm:px-0">
           {TABS.map((tab) => {
@@ -81,8 +80,8 @@ export default function AIInsightsPanel({ ticket }) {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`text-[10px] px-2.5 py-1.5 rounded-lg font-semibold flex items-center gap-1 transition-all shrink-0 ${
-                  activeTab === tab.id ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white border border-white/10'
+                className={`text-[10px] px-2.5 py-1.5 rounded-lg font-semibold flex items-center gap-1 transition-colors shrink-0 ${
+                  activeTab === tab.id ? 'bg-[var(--accent)] text-white' : 'surface-muted text-muted-color hover:text-heading'
                 }`}
               >
                 <Icon className="w-3 h-3" /> {tab.label}
@@ -100,20 +99,20 @@ export default function AIInsightsPanel({ ticket }) {
               <div className="flex items-center flex-wrap gap-2 text-xs font-mono">
                 {data.rootcause.nodes.map((node, idx) => (
                   <React.Fragment key={node.id}>
-                    {idx > 0 && <span className="text-slate-600">→</span>}
-                    <span className="px-2 py-1 rounded bg-slate-900 border border-white/10 text-indigo-300">{node.label}</span>
+                    {idx > 0 && <span className="text-faint-color">&rarr;</span>}
+                    <span className="px-2 py-1 rounded surface-muted text-accent-color">{node.label}</span>
                   </React.Fragment>
                 ))}
               </div>
-              <p className="text-xs text-slate-300"><strong className="text-slate-400">Suspected Trigger:</strong> {data.rootcause.suspected_trigger}</p>
+              <p className="text-xs text-body-color"><strong className="text-heading">Suspected Trigger:</strong> {data.rootcause.suspected_trigger}</p>
               <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="bg-slate-900/60 p-2.5 rounded-lg border border-white/5">
-                  <span className="text-slate-500 block text-[10px] font-semibold">CONFIDENCE SCORE</span>
-                  <span className="text-emerald-400 font-mono font-bold">{Math.round(data.rootcause.confidence_score * 100)}%</span>
+                <div className="surface-muted p-2.5">
+                  <span className="text-muted-color block text-[10px] font-semibold">CONFIDENCE SCORE</span>
+                  <span className="text-emerald-600 dark:text-emerald-400 font-mono font-bold">{Math.round(data.rootcause.confidence_score * 100)}%</span>
                 </div>
-                <div className="bg-slate-900/60 p-2.5 rounded-lg border border-white/5">
-                  <span className="text-slate-500 block text-[10px] font-semibold">HUMAN ERROR LIKELIHOOD</span>
-                  <span className="text-amber-400 font-mono font-bold">{Math.round(data.rootcause.human_error_likelihood * 100)}%</span>
+                <div className="surface-muted p-2.5">
+                  <span className="text-muted-color block text-[10px] font-semibold">HUMAN ERROR LIKELIHOOD</span>
+                  <span className="text-amber-600 dark:text-amber-400 font-mono font-bold">{Math.round(data.rootcause.human_error_likelihood * 100)}%</span>
                 </div>
               </div>
             </div>
@@ -124,60 +123,60 @@ export default function AIInsightsPanel({ ticket }) {
         {activeTab === 'explainability' && (
           data.explainability ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-              <div className="bg-slate-900/60 p-3 rounded-lg border border-white/5 space-y-1.5">
-                <span className="text-slate-400 font-bold flex items-center gap-1.5">
+              <div className="surface-muted p-3 space-y-1.5">
+                <span className="text-body-color font-bold flex items-center gap-1.5">
                   Severity: {data.explainability.severity.value?.replace('_', ' ')}
                   <AiBadge aiGenerated={data.explainability.severity.ai_generated} />
                 </span>
                 {data.explainability.severity.reasons.length > 0 ? (
-                  <ul className="list-disc list-inside text-slate-400 space-y-0.5">
+                  <ul className="list-disc list-inside text-muted-color space-y-0.5">
                     {data.explainability.severity.reasons.map((r, i) => <li key={i}>{r}</li>)}
                   </ul>
-                ) : <p className="text-slate-500">No scoring breakdown recorded for this ticket.</p>}
+                ) : <p className="text-muted-color">No scoring breakdown recorded for this ticket.</p>}
               </div>
-              <div className="bg-slate-900/60 p-3 rounded-lg border border-white/5 space-y-1.5">
-                <span className="text-slate-400 font-bold block">Developer Routing</span>
+              <div className="surface-muted p-3 space-y-1.5">
+                <span className="text-body-color font-bold block">Developer Routing</span>
                 {data.explainability.developer_routing ? (
                   <>
-                    <p className="text-indigo-300 font-semibold">{data.explainability.developer_routing.developer} — {data.explainability.developer_routing.match_score}% match</p>
-                    <p className="text-slate-400">{data.explainability.developer_routing.reasoning}</p>
+                    <p className="text-accent-color font-semibold">{data.explainability.developer_routing.developer} — {data.explainability.developer_routing.match_score}% match</p>
+                    <p className="text-muted-color">{data.explainability.developer_routing.reasoning}</p>
                   </>
-                ) : <p className="text-slate-500">No live routing computed for this ticket.</p>}
+                ) : <p className="text-muted-color">No live routing computed for this ticket.</p>}
               </div>
-              <div className="bg-slate-900/60 p-3 rounded-lg border border-white/5 space-y-1.5">
-                <span className="text-slate-400 font-bold flex items-center gap-1.5">
+              <div className="surface-muted p-3 space-y-1.5">
+                <span className="text-body-color font-bold flex items-center gap-1.5">
                   Duplicate Match: {data.explainability.duplicate_match.similarity_percentage}%
                   <AiBadge aiGenerated={data.explainability.duplicate_match.ai_generated} />
                 </span>
                 {data.explainability.duplicate_match.factors.length > 0 ? (
-                  <ul className="list-disc list-inside text-slate-400 space-y-0.5">
+                  <ul className="list-disc list-inside text-muted-color space-y-0.5">
                     {data.explainability.duplicate_match.factors.map((f, i) => <li key={i}>{f}</li>)}
                   </ul>
-                ) : <p className="text-slate-500">No meaningful duplicate signal.</p>}
+                ) : <p className="text-muted-color">No meaningful duplicate signal.</p>}
               </div>
-              <div className="bg-slate-900/60 p-3 rounded-lg border border-white/5 space-y-1.5">
-                <span className="text-slate-400 font-bold block">RAG Knowledge Matches</span>
+              <div className="surface-muted p-3 space-y-1.5">
+                <span className="text-body-color font-bold block">RAG Knowledge Matches</span>
                 {data.explainability.knowledge_matches?.length > 0 ? (
                   <ul className="space-y-1.5">
                     {data.explainability.knowledge_matches.map((m, i) => (
-                      <li key={i} className="text-slate-400">
+                      <li key={i} className="text-muted-color">
                         <span className="flex items-center gap-1.5">
-                          <span className="text-cyan-300 font-semibold">{m.confidence_percentage}%</span> {m.title}
+                          <span className="text-cyan-700 dark:text-cyan-300 font-semibold">{m.confidence_percentage}%</span> {m.title}
                           <AiBadge aiGenerated={m.ai_generated} />
                         </span>
-                        {m.why_relevant && <span className="block text-slate-500 italic mt-0.5">"{m.why_relevant}"</span>}
+                        {m.why_relevant && <span className="block text-faint-color italic mt-0.5">"{m.why_relevant}"</span>}
                       </li>
                     ))}
                   </ul>
-                ) : <p className="text-slate-500">No relevant knowledge base articles found.</p>}
+                ) : <p className="text-muted-color">No relevant knowledge base articles found.</p>}
               </div>
               {data.explainability.narrative && (
-                <div className="md:col-span-2 lg:col-span-4 bg-slate-900/60 p-3 rounded-lg border border-white/5 space-y-1.5">
-                  <span className="text-slate-400 font-bold flex items-center gap-1.5">
+                <div className="md:col-span-2 lg:col-span-4 surface-muted p-3 space-y-1.5">
+                  <span className="text-body-color font-bold flex items-center gap-1.5">
                     Overall Reasoning
                     <AiBadge aiGenerated={data.explainability.narrative_ai_generated} />
                   </span>
-                  <p className="text-slate-300 leading-relaxed">{data.explainability.narrative}</p>
+                  <p className="text-body-color leading-relaxed">{data.explainability.narrative}</p>
                 </div>
               )}
             </div>
@@ -191,20 +190,20 @@ export default function AIInsightsPanel({ ticket }) {
               <div className="col-span-2 md:col-span-4 flex items-center justify-end">
                 <AiBadge aiGenerated={data.impact.ai_generated} />
               </div>
-              <Metric label="Revenue Loss / Hour" value={`$${data.impact.revenue_loss_per_hour.toLocaleString()}`} color="text-rose-400" />
-              <Metric label="Affected Users" value={data.impact.affected_users.toLocaleString()} color="text-indigo-300" />
-              <Metric label="Compliance Risk" value={data.impact.compliance_risk} color={data.impact.compliance_risk === 'HIGH' ? 'text-rose-400' : data.impact.compliance_risk === 'MEDIUM' ? 'text-amber-400' : 'text-emerald-400'} />
-              <Metric label="SLA Breach Probability" value={`${data.impact.sla_breach_probability}%`} color="text-amber-400" />
-              <div className="col-span-2 md:col-span-4 bg-slate-900/60 p-2.5 rounded-lg border border-white/5">
-                <span className="text-slate-500 block text-[10px] font-semibold mb-1">IMPACTED DEPARTMENTS</span>
+              <Metric label="Revenue Loss / Hour" value={`$${data.impact.revenue_loss_per_hour.toLocaleString()}`} color="text-rose-600 dark:text-rose-400" />
+              <Metric label="Affected Users" value={data.impact.affected_users.toLocaleString()} color="text-accent-color" />
+              <Metric label="Compliance Risk" value={data.impact.compliance_risk} color={data.impact.compliance_risk === 'HIGH' ? 'text-rose-600 dark:text-rose-400' : data.impact.compliance_risk === 'MEDIUM' ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'} />
+              <Metric label="SLA Breach Probability" value={`${data.impact.sla_breach_probability}%`} color="text-amber-600 dark:text-amber-400" />
+              <div className="col-span-2 md:col-span-4 surface-muted p-2.5">
+                <span className="text-muted-color block text-[10px] font-semibold mb-1">IMPACTED DEPARTMENTS</span>
                 <div className="flex gap-1.5 flex-wrap">
                   {data.impact.impacted_departments.map((d) => <span key={d} className="badge-module text-[10px]">{d}</span>)}
                 </div>
               </div>
               {data.impact.reasoning && (
-                <div className="col-span-2 md:col-span-4 bg-slate-900/60 p-2.5 rounded-lg border border-white/5">
-                  <span className="text-slate-500 block text-[10px] font-semibold mb-1">AI REASONING</span>
-                  <p className="text-slate-300">{data.impact.reasoning}</p>
+                <div className="col-span-2 md:col-span-4 surface-muted p-2.5">
+                  <span className="text-muted-color block text-[10px] font-semibold mb-1">AI REASONING</span>
+                  <p className="text-body-color">{data.impact.reasoning}</p>
                 </div>
               )}
             </div>
@@ -217,10 +216,10 @@ export default function AIInsightsPanel({ ticket }) {
             <div className="space-y-2">
               {data.timeline.steps.map((step, idx) => (
                 <div key={step.id} className="flex items-center gap-3 text-xs">
-                  <div className={`w-2 h-2 rounded-full shrink-0 ${step.status === 'complete' ? 'bg-emerald-500' : 'bg-slate-600'}`} />
-                  <span className="text-slate-300 font-semibold w-48 shrink-0">{step.label}</span>
-                  <span className="text-slate-500 font-mono">{step.timestamp ? new Date(step.timestamp).toLocaleTimeString() : 'pending'}</span>
-                  {step.duration_ms != null && <span className="text-slate-600 font-mono">+{step.duration_ms}ms</span>}
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${step.status === 'complete' ? 'bg-emerald-500' : 'bg-[var(--border-strong)]'}`} />
+                  <span className="text-body-color font-semibold w-48 shrink-0">{step.label}</span>
+                  <span className="text-muted-color font-mono">{step.timestamp ? new Date(step.timestamp).toLocaleTimeString() : 'pending'}</span>
+                  {step.duration_ms != null && <span className="text-faint-color font-mono">+{step.duration_ms}ms</span>}
                 </div>
               ))}
             </div>
@@ -232,20 +231,20 @@ export default function AIInsightsPanel({ ticket }) {
           data.executive ? (
             <div className="space-y-3 text-xs">
               <div className="flex items-start justify-between gap-3">
-                <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
+                <h4 className="text-sm font-bold text-heading flex items-center gap-1.5">
                   {data.executive.headline}
                   <AiBadge aiGenerated={data.executive.ai_generated} />
                 </h4>
-                <button onClick={handleCopySummary} className="shrink-0 text-[11px] text-slate-400 hover:text-white flex items-center gap-1 bg-slate-800 px-2 py-1 rounded">
-                  {copied ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />} {copied ? 'Copied' : 'Copy'}
+                <button onClick={handleCopySummary} className="shrink-0 text-[11px] text-muted-color hover:text-heading flex items-center gap-1 surface-muted px-2 py-1">
+                  {copied ? <CheckCircle2 className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />} {copied ? 'Copied' : 'Copy'}
                 </button>
               </div>
-              <p className="text-slate-300 leading-relaxed">{data.executive.business_summary}</p>
-              <p className="text-slate-400"><strong className="text-slate-300">Financial Exposure:</strong> {data.executive.financial_exposure}</p>
-              <p className="text-slate-400"><strong className="text-slate-300">Resolution ETA:</strong> {data.executive.resolution_eta}</p>
+              <p className="text-body-color leading-relaxed">{data.executive.business_summary}</p>
+              <p className="text-muted-color"><strong className="text-body-color">Financial Exposure:</strong> {data.executive.financial_exposure}</p>
+              <p className="text-muted-color"><strong className="text-body-color">Resolution ETA:</strong> {data.executive.resolution_eta}</p>
               <div>
-                <span className="text-slate-300 font-bold block mb-1">Recommended Actions:</span>
-                <ul className="list-disc list-inside text-slate-400 space-y-0.5">
+                <span className="text-body-color font-bold block mb-1">Recommended Actions:</span>
+                <ul className="list-disc list-inside text-muted-color space-y-0.5">
                   {data.executive.recommended_actions.map((a, i) => <li key={i}>{a}</li>)}
                 </ul>
               </div>
@@ -258,11 +257,11 @@ export default function AIInsightsPanel({ ticket }) {
           data.replay ? (
             <ol className="space-y-2">
               {data.replay.steps.map((step, idx) => (
-                <li key={step.id} className="flex items-start gap-3 text-xs bg-slate-900/60 p-2.5 rounded-lg border border-white/5">
-                  <span className="w-5 h-5 rounded-full bg-indigo-600/30 text-indigo-300 font-bold flex items-center justify-center shrink-0 text-[10px]">{idx + 1}</span>
+                <li key={step.id} className="flex items-start gap-3 text-xs surface-muted p-2.5">
+                  <span className="w-5 h-5 rounded-full bg-[var(--accent-soft-bg)] text-accent-color font-bold flex items-center justify-center shrink-0 text-[10px]">{idx + 1}</span>
                   <div>
-                    <span className="text-slate-300 font-semibold">{step.label}</span>
-                    <p className="text-slate-400 font-mono mt-0.5 break-words">{step.detail}</p>
+                    <span className="text-body-color font-semibold">{step.label}</span>
+                    <p className="text-muted-color font-mono mt-0.5 break-words">{step.detail}</p>
                   </div>
                 </li>
               ))}
@@ -275,25 +274,25 @@ export default function AIInsightsPanel({ ticket }) {
           data.patch ? (
             <div className="space-y-3 text-xs">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className={`px-2.5 py-1 rounded-lg font-bold border ${RISK_COLORS[data.patch.risk_level]}`}>{data.patch.risk_level} RISK ({data.patch.risk_score})</span>
+                <span className={`px-2.5 py-1 rounded-lg font-bold ${RISK_CLASSES[data.patch.risk_level]}`}>{data.patch.risk_level} RISK ({data.patch.risk_score})</span>
                 <span className="badge-module">Est. Success: {data.patch.estimated_success_percentage}%</span>
                 <AiBadge aiGenerated={data.patch.ai_generated} />
               </div>
               <div>
-                <span className="text-slate-400 font-bold block mb-1">Affected Tables:</span>
+                <span className="text-body-color font-bold block mb-1">Affected Tables:</span>
                 <div className="flex gap-1.5 flex-wrap font-mono">
-                  {data.patch.affected_tables.map((t) => <span key={t} className="px-2 py-0.5 rounded bg-slate-900 border border-white/10 text-cyan-300">{t}</span>)}
+                  {data.patch.affected_tables.map((t) => <span key={t} className="px-2 py-0.5 rounded surface-muted text-cyan-700 dark:text-cyan-300">{t}</span>)}
                 </div>
               </div>
-              <p className="text-slate-400"><strong className="text-slate-300">Rollback Plan:</strong> {data.patch.rollback_plan}</p>
+              <p className="text-muted-color"><strong className="text-body-color">Rollback Plan:</strong> {data.patch.rollback_plan}</p>
               {data.patch.side_effect_warnings.length > 0 && (
-                <ul className="list-disc list-inside text-amber-400 space-y-0.5">
+                <ul className="list-disc list-inside text-amber-600 dark:text-amber-400 space-y-0.5">
                   {data.patch.side_effect_warnings.map((w, i) => <li key={i}>{w}</li>)}
                 </ul>
               )}
               <div>
-                <span className="text-slate-300 font-bold block mb-1">Execution Steps:</span>
-                <ol className="list-decimal list-inside text-slate-400 space-y-0.5">
+                <span className="text-body-color font-bold block mb-1">Execution Steps:</span>
+                <ol className="list-decimal list-inside text-muted-color space-y-0.5">
                   {data.patch.execution_steps.map((s, i) => <li key={i}>{s}</li>)}
                 </ol>
               </div>
@@ -307,8 +306,8 @@ export default function AIInsightsPanel({ ticket }) {
 
 function Metric({ label, value, color }) {
   return (
-    <div className="bg-slate-900/60 p-2.5 rounded-lg border border-white/5">
-      <span className="text-slate-500 block text-[10px] font-semibold">{label.toUpperCase()}</span>
+    <div className="surface-muted p-2.5">
+      <span className="text-muted-color block text-[10px] font-semibold">{label.toUpperCase()}</span>
       <span className={`font-mono font-bold ${color}`}>{value}</span>
     </div>
   );
@@ -333,14 +332,14 @@ function AiBadge({ aiGenerated }) {
   return aiGenerated ? (
     <span
       title="Generated by a live Claude API call"
-      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[9px] font-bold border border-emerald-500/30"
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300 text-[9px] font-bold border border-emerald-200 dark:border-emerald-500/30"
     >
       <Sparkles className="w-2.5 h-2.5" /> CLAUDE
     </span>
   ) : (
     <span
       title="Rule-based fallback (no Claude API call, or ANTHROPIC_API_KEY not configured)"
-      className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400 text-[9px] font-bold border border-white/10"
+      className="inline-flex items-center px-1.5 py-0.5 rounded surface-muted text-muted-color text-[9px] font-bold"
     >
       RULE-BASED
     </span>

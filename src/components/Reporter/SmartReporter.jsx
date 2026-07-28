@@ -132,17 +132,16 @@ export default function SmartReporter({ onSubmitIncident }) {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Banner */}
-      <div className="glass-panel p-6 border-indigo-500/30 relative overflow-hidden">
-        <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="surface p-6">
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-bold border border-indigo-500/30 flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5 text-indigo-400" /> Module 1 & 2: OCR Vision Reporter
+              <span className="badge-module">
+                <Sparkles className="w-3 h-3 inline mr-1" /> OCR Vision Reporter
               </span>
             </div>
-            <h2 className="text-xl font-bold text-white">Smart ERP Incident Diagnostic Reporter</h2>
-            <p className="text-slate-400 text-sm mt-1">
+            <h2 className="text-xl font-bold text-heading">Smart ERP Incident Diagnostic Reporter</h2>
+            <p className="text-body-color text-sm mt-1">
               Upload an ERP error screenshot for real Tesseract.js pixel-level text extraction, or describe the issue / voice it in. AI auto-extracts error codes and triages the issue.
             </p>
           </div>
@@ -151,7 +150,7 @@ export default function SmartReporter({ onSubmitIncident }) {
 
       {/* Preset Quick Fill */}
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs text-slate-400 font-semibold">Quick Sample Reports:</span>
+        <span className="text-xs text-muted-color font-semibold">Quick Sample Reports:</span>
         {sampleInputs.map((sample, idx) => (
           <button
             key={idx}
@@ -161,9 +160,9 @@ export default function SmartReporter({ onSubmitIncident }) {
               setSelectedFile(null);
               handleSimulatedScan(sample.text);
             }}
-            className="text-xs px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-white/10 transition-all font-medium flex items-center gap-1"
+            className="btn-secondary text-xs py-1.5"
           >
-            <FileText className="w-3.5 h-3.5 text-indigo-400" /> {sample.label}
+            <FileText className="w-3.5 h-3.5 text-[var(--accent)]" /> {sample.label}
           </button>
         ))}
       </div>
@@ -172,46 +171,42 @@ export default function SmartReporter({ onSubmitIncident }) {
         {/* Upload & Input Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Left: Drag & Drop Zone */}
-          <div className="glass-panel p-5 flex flex-col justify-between border-dashed border-2 border-indigo-500/30 hover:border-indigo-500/60 transition-all">
+          <div className="surface p-5 flex flex-col justify-between" style={{ borderStyle: 'dashed' }}>
             <div>
               <div className="flex items-center justify-between mb-3">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                  <ImageIcon className="w-4 h-4 text-indigo-400" /> Upload ERP Screenshot / Log
+                <label className="text-xs font-bold uppercase tracking-wider text-body-color flex items-center gap-1.5">
+                  <ImageIcon className="w-4 h-4 text-[var(--accent)]" /> Upload ERP Screenshot / Log
                 </label>
                 {selectedFile && (
-                  <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1">
+                  <span className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
                     <CheckCircle2 className="w-3.5 h-3.5" /> File Loaded
                   </span>
                 )}
               </div>
 
               <div className="py-8 text-center flex flex-col items-center justify-center cursor-pointer">
-                <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 flex items-center justify-center mb-3 text-indigo-400 group-hover:scale-110 transition-transform">
+                <div className="w-14 h-14 rounded-2xl bg-[var(--accent-soft-bg)] flex items-center justify-center mb-3 text-[var(--accent)]">
                   <Upload className="w-7 h-7" />
                 </div>
-                <p className="text-sm font-semibold text-slate-200">Drag ERP screenshot or trace log here</p>
-                <p className="text-xs text-slate-400 mt-1">Images run through real Tesseract.js OCR. Also supports PDF, .LOG stack traces.</p>
+                <p className="text-sm font-semibold text-heading">Drag ERP screenshot or trace log here</p>
+                <p className="text-xs text-muted-color mt-1">Images run through real Tesseract.js OCR. Also supports PDF, .LOG stack traces.</p>
 
                 <input
                   type="file"
                   onChange={(e) => handleFileSelected(e.target.files[0])}
-                  className="mt-3 text-xs text-slate-400 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer"
+                  className="mt-3 text-xs text-muted-color file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-[var(--accent)] file:text-white hover:file:bg-[var(--accent-hover)] cursor-pointer"
                 />
               </div>
             </div>
 
             {/* Voice Recording Button */}
-            <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between">
-              <span className="text-xs text-slate-400 font-medium">Have a vague complaint? Voice it:</span>
+            <div className="mt-4 pt-4 border-t flex items-center justify-between" style={{ borderColor: 'var(--border-default)' }}>
+              <span className="text-xs text-muted-color font-medium">Have a vague complaint? Voice it:</span>
               <button
                 type="button"
                 onClick={handleVoiceInput}
                 disabled={isRecording}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                  isRecording
-                    ? 'bg-rose-500 text-white animate-pulse'
-                    : 'bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30'
-                }`}
+                className={isRecording ? 'px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 bg-rose-500 text-white animate-pulse' : 'btn-secondary text-xs py-1.5'}
               >
                 <Mic className="w-4 h-4" /> {isRecording ? 'Listening...' : 'Voice Record'}
               </button>
@@ -219,9 +214,9 @@ export default function SmartReporter({ onSubmitIncident }) {
           </div>
 
           {/* Right: Problem Description */}
-          <div className="glass-panel p-5 flex flex-col justify-between">
+          <div className="surface p-5 flex flex-col justify-between">
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-2">
+              <label className="block text-xs font-bold uppercase tracking-wider text-body-color mb-2">
                 Non-Technical Problem Summary
               </label>
               <textarea
@@ -233,12 +228,12 @@ export default function SmartReporter({ onSubmitIncident }) {
                   }
                 }}
                 placeholder="Describe what happened e.g. 'The post invoice button gave a red error pop-up when billing customer Acme Corp...'"
-                className="w-full h-40 bg-slate-900/80 border border-white/10 rounded-xl p-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all resize-none font-sans"
+                className="input-field w-full h-40 p-3 text-sm resize-none font-sans"
               />
             </div>
 
             <div className="mt-4 flex items-center justify-between">
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-muted-color">
                 {isRealOcrRunning
                   ? `Tesseract.js scanning image pixels... ${realOcrProgress}%`
                   : isScanning
@@ -259,11 +254,11 @@ export default function SmartReporter({ onSubmitIncident }) {
 
       {/* Multimodal OCR & Vision Diagnostics Box */}
       {ocrResult && (
-        <div className="glass-panel p-5 border-indigo-500/40 bg-indigo-950/20 space-y-4">
+        <div className="callout callout-blue p-5 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Scan className="w-5 h-5 text-indigo-400 animate-pulse" />
-              <h3 className="text-sm font-bold text-white">
+              <Scan className="w-5 h-5 text-[var(--accent)]" />
+              <h3 className="text-sm font-bold text-heading">
                 {imagePreviewUrl ? 'Tesseract.js Real OCR + AI Vision Classification' : 'Multimodal Vision & OCR AI Findings'}
               </h3>
             </div>
@@ -271,26 +266,26 @@ export default function SmartReporter({ onSubmitIncident }) {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-            <div className="bg-slate-900/80 p-3 rounded-lg border border-white/10">
-              <span className="text-slate-400 block font-semibold mb-1">Extracted Error Symbol:</span>
-              <code className="text-rose-400 font-bold text-sm">{ocrResult.extracted_error_code}</code>
+            <div className="surface-muted p-3">
+              <span className="text-muted-color block font-semibold mb-1">Extracted Error Symbol:</span>
+              <code className="text-rose-600 dark:text-rose-400 font-bold text-sm">{ocrResult.extracted_error_code}</code>
             </div>
 
-            <div className="bg-slate-900/80 p-3 rounded-lg border border-white/10">
-              <span className="text-slate-400 block font-semibold mb-1">Detected Component:</span>
-              <span className="text-indigo-300 font-mono">&lt;{ocrResult.detected_ui_component}/&gt;</span>
+            <div className="surface-muted p-3">
+              <span className="text-muted-color block font-semibold mb-1">Detected Component:</span>
+              <span className="text-accent-color font-mono">&lt;{ocrResult.detected_ui_component}/&gt;</span>
             </div>
 
-            <div className="bg-slate-900/80 p-3 rounded-lg border border-white/10">
-              <span className="text-slate-400 block font-semibold mb-1">Vision Coordinates:</span>
-              <span className="text-emerald-400 font-mono">
+            <div className="surface-muted p-3">
+              <span className="text-muted-color block font-semibold mb-1">Vision Coordinates:</span>
+              <span className="text-emerald-600 dark:text-emerald-400 font-mono">
                 {realBoundingBoxPercent ? `Real pixel bbox (Tesseract)` : `BBox Top: ${ocrResult.bounding_box.top}`}
               </span>
             </div>
           </div>
 
           {/* Real uploaded image + real OCR bounding box, or the synthetic canvas fallback */}
-          <div className="relative w-full h-56 bg-slate-950 rounded-xl overflow-hidden border border-white/10 flex items-center justify-center p-4">
+          <div className="relative w-full h-56 surface-muted overflow-hidden flex items-center justify-center p-4">
             {imagePreviewUrl ? (
               <>
                 <img
@@ -300,20 +295,20 @@ export default function SmartReporter({ onSubmitIncident }) {
                   className="absolute inset-0 w-full h-full object-contain"
                 />
                 {isRealOcrRunning && (
-                  <div className="absolute inset-0 bg-slate-950/70 flex flex-col items-center justify-center gap-2 text-indigo-300 text-xs font-mono">
+                  <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-2 text-white text-xs font-mono">
                     <Loader2 className="w-6 h-6 animate-spin" /> Scanning pixels with Tesseract.js... {realOcrProgress}%
                   </div>
                 )}
                 {realBoundingBoxPercent && (
                   <div
                     style={realBoundingBoxPercent}
-                    className="absolute border-2 border-rose-500 bg-rose-500/10 rounded shadow-lg shadow-rose-500/30 animate-pulse"
+                    className="absolute border-2 border-rose-500 bg-rose-500/10 rounded"
                   />
                 )}
               </>
             ) : (
               <>
-                <div className="text-slate-600 text-xs font-mono select-none">
+                <div className="text-muted-color text-xs font-mono select-none">
                   [SIMULATED ERP WORKSPACE CANVAS: {ocrResult.erp_module}_FORM_VIEW]
                 </div>
                 <div
@@ -324,10 +319,10 @@ export default function SmartReporter({ onSubmitIncident }) {
                     width: ocrResult.bounding_box.width,
                     height: ocrResult.bounding_box.height,
                   }}
-                  className="border-2 border-rose-500 bg-rose-500/10 rounded-lg flex items-center justify-between px-3 py-1 shadow-lg shadow-rose-500/20 animate-pulse"
+                  className="border-2 border-rose-500 bg-rose-500/10 rounded-lg flex items-center justify-between px-3 py-1"
                 >
-                  <span className="text-[10px] font-bold text-rose-300 font-mono">
-                    🚨 VISION OCR DETECTED: {ocrResult.extracted_error_code}
+                  <span className="text-[10px] font-bold text-rose-600 dark:text-rose-300 font-mono">
+                    VISION OCR DETECTED: {ocrResult.extracted_error_code}
                   </span>
                   <span className="text-[9px] bg-rose-600 text-white font-bold px-1.5 py-0.5 rounded">
                     CRITICAL BOUNDING BOX
@@ -339,20 +334,20 @@ export default function SmartReporter({ onSubmitIncident }) {
 
           {/* Raw Tesseract.js Extracted Text */}
           {realOcrRawText && (
-            <div className="bg-slate-950 p-3 rounded-lg border border-white/10">
-              <span className="text-slate-400 block font-semibold mb-1 text-xs">Raw Tesseract.js Extracted Text:</span>
-              <pre className="text-[11px] text-slate-300 font-mono whitespace-pre-wrap max-h-24 overflow-y-auto">{realOcrRawText}</pre>
+            <div className="surface-muted p-3">
+              <span className="text-muted-color block font-semibold mb-1 text-xs">Raw Tesseract.js Extracted Text:</span>
+              <pre className="text-[11px] text-body-color font-mono whitespace-pre-wrap max-h-24 overflow-y-auto">{realOcrRawText}</pre>
             </div>
           )}
 
           {/* Instant Self-Fix Advisor Card */}
           {ocrResult.suggested_self_fix && (
-            <div className="p-4 rounded-xl bg-emerald-950/30 border border-emerald-500/40 flex items-start gap-3">
-              <ShieldCheck className="w-6 h-6 text-emerald-400 shrink-0 mt-0.5" />
+            <div className="callout callout-emerald p-4 flex items-start gap-3">
+              <ShieldCheck className="w-6 h-6 shrink-0 mt-0.5" />
               <div>
-                <h4 className="text-sm font-bold text-emerald-300">{ocrResult.suggested_self_fix.title}</h4>
-                <p className="text-xs text-slate-300 mt-1">{ocrResult.suggested_self_fix.description}</p>
-                <ol className="list-decimal list-inside text-xs text-slate-400 mt-2 space-y-1">
+                <h4 className="text-sm font-bold">{ocrResult.suggested_self_fix.title}</h4>
+                <p className="text-xs mt-1 opacity-90">{ocrResult.suggested_self_fix.description}</p>
+                <ol className="list-decimal list-inside text-xs mt-2 space-y-1 opacity-80">
                   {ocrResult.suggested_self_fix.steps.map((step, sIdx) => (
                     <li key={sIdx}>{step}</li>
                   ))}

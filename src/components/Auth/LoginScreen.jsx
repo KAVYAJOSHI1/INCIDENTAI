@@ -31,30 +31,30 @@ export default function LoginScreen() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="glass-panel w-full max-w-md p-8 space-y-6 border-indigo-500/30">
+    <div className="min-h-screen flex items-center justify-center px-4 app-bg">
+      <div className="surface w-full max-w-md p-8 space-y-6">
         <div className="flex flex-col items-center gap-3 text-center">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
-            <ShieldAlert className="w-7 h-7 text-white" />
+          <div className="w-11 h-11 rounded-xl bg-[var(--accent)] flex items-center justify-center">
+            <ShieldAlert className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="font-extrabold text-xl text-white tracking-wide">IncidentAI</h1>
-            <p className="text-xs text-slate-400 font-medium">AI-Powered ERP Support Engineer</p>
+            <h1 className="font-bold text-xl text-heading tracking-tight">IncidentAI</h1>
+            <p className="text-xs text-muted-color font-medium">AI-Powered ERP Support Engineer</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-white/10 text-xs">
+        <div className="flex items-center gap-1 surface-muted p-1 text-xs">
           <button
             type="button"
             onClick={() => setMode('login')}
-            className={`flex-1 py-1.5 rounded-lg font-semibold transition-all ${mode === 'login' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+            className={`flex-1 py-1.5 rounded-lg font-semibold transition-colors ${mode === 'login' ? 'bg-[var(--accent)] text-white' : 'text-muted-color hover:text-heading'}`}
           >
             Log In
           </button>
           <button
             type="button"
             onClick={() => setMode('register')}
-            className={`flex-1 py-1.5 rounded-lg font-semibold transition-all ${mode === 'register' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+            className={`flex-1 py-1.5 rounded-lg font-semibold transition-colors ${mode === 'register' ? 'bg-[var(--accent)] text-white' : 'text-muted-color hover:text-heading'}`}
           >
             Create Account
           </button>
@@ -67,7 +67,7 @@ export default function LoginScreen() {
               placeholder="Full name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full bg-slate-900 border border-white/10 rounded-lg p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+              className="input-field w-full p-2.5 text-xs"
               required
             />
           )}
@@ -76,7 +76,7 @@ export default function LoginScreen() {
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full bg-slate-900 border border-white/10 rounded-lg p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+            className="input-field w-full p-2.5 text-xs"
             required
           />
           <input
@@ -84,7 +84,7 @@ export default function LoginScreen() {
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full bg-slate-900 border border-white/10 rounded-lg p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+            className="input-field w-full p-2.5 text-xs"
             minLength={8}
             required
           />
@@ -92,7 +92,7 @@ export default function LoginScreen() {
             <select
               value={role}
               onChange={(e) => setRole(e.target.value)}
-              className="w-full bg-slate-900 border border-white/10 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+              className="input-field w-full p-2.5 text-xs"
             >
               {ROLES.map((r) => (
                 <option key={r} value={r}>{ROLE_LABELS[r]}</option>
@@ -100,16 +100,16 @@ export default function LoginScreen() {
             </select>
           )}
 
-          {error && <p className="text-xs text-rose-400 bg-rose-950/30 border border-rose-500/30 rounded-lg p-2">{error}</p>}
+          {error && <p className="text-xs callout callout-rose p-2">{error}</p>}
 
-          <button type="submit" disabled={isSubmitting} className="btn-primary text-xs w-full justify-center disabled:opacity-60">
+          <button type="submit" disabled={isSubmitting} className="btn-primary text-xs w-full justify-center">
             {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : mode === 'login' ? <LogIn className="w-3.5 h-3.5" /> : <UserPlus className="w-3.5 h-3.5" />}
             {mode === 'login' ? 'Log In' : 'Create Account'}
           </button>
         </form>
 
         {mode === 'register' && (
-          <p className="text-[11px] text-slate-500 text-center leading-relaxed">
+          <p className="text-[11px] text-faint-color text-center leading-relaxed">
             Demo project — role is self-selected at signup rather than assigned by an admin.
             End User can only submit incidents; Support Triage, Developer, and Executive get the full internal console.
           </p>
