@@ -1,85 +1,147 @@
 import React from 'react';
-import { ShieldAlert, UserCheck, Code2, BarChart3, GitFork, Radio, Map, Gauge, X } from 'lucide-react';
+import {
+  ShieldAlert, UserCheck, Code2, BarChart3, GitFork,
+  Radio, Map, Gauge, X, Zap
+} from 'lucide-react';
 
-const NAV_ITEMS = [
-  { id: 'REPORTER', label: 'End-User Reporter', icon: UserCheck },
-  { id: 'TRIAGE', label: 'Support Triage Feed', icon: ShieldAlert },
-  { id: 'DEVELOPER', label: 'Developer Workbench', icon: Code2 },
-  { id: 'ADMIN', label: 'Executive Analytics', icon: BarChart3 },
-  { id: 'PIPELINE', label: 'AI Pipeline Flow', icon: GitFork },
-  { id: 'WARROOM', label: 'War Room', icon: Radio },
-  { id: 'DIGITALTWIN', label: 'Digital Twin', icon: Map },
-  { id: 'MISSIONCONTROL', label: 'Mission Control', icon: Gauge }
+const NAV_SECTIONS = [
+  {
+    label: 'Incident Management',
+    items: [
+      { id: 'REPORTER',  label: 'Submit Incident',       icon: UserCheck  },
+      { id: 'TRIAGE',    label: 'Triage Feed',            icon: ShieldAlert },
+      { id: 'DEVELOPER', label: 'Developer Workbench',    icon: Code2      },
+    ]
+  },
+  {
+    label: 'Analytics & AI',
+    items: [
+      { id: 'ADMIN',    label: 'Executive Dashboard',    icon: BarChart3   },
+      { id: 'PIPELINE', label: 'AI Pipeline',            icon: GitFork     },
+    ]
+  },
+  {
+    label: 'Operations',
+    items: [
+      { id: 'WARROOM',       label: 'War Room',          icon: Radio  },
+      { id: 'DIGITALTWIN',   label: 'Digital Twin',      icon: Map    },
+      { id: 'MISSIONCONTROL',label: 'Mission Control',   icon: Gauge  },
+    ]
+  }
 ];
 
-function SidebarContent({ items, currentView, setCurrentView, activeIncidentsCount, onCloseMobile }) {
+function SidebarContent({ allowedItems, currentView, setCurrentView, activeIncidentsCount, onCloseMobile }) {
   return (
     <>
-      <div className="flex items-center gap-3 px-5 h-16 border-b shrink-0" style={{ borderColor: 'var(--border-default)' }}>
-        <div className="w-8 h-8 rounded-lg bg-[var(--accent)] flex items-center justify-center shrink-0">
-          <ShieldAlert className="w-5 h-5 text-white" />
+      {/* Logo / Brand */}
+      <div
+        className="flex items-center gap-3 px-4 shrink-0"
+        style={{ height: 'var(--header-height)', borderBottom: '1px solid var(--border)' }}
+      >
+        <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+          style={{ background: 'var(--accent)' }}>
+          <Zap className="w-4 h-4 text-white" />
         </div>
         <div className="min-w-0 flex-1">
-          <h1 className="font-bold text-sm text-heading leading-tight truncate">IncidentAI</h1>
-          <p className="text-[11px] text-muted-color leading-tight truncate">Websys Enterprise</p>
+          <p className="text-sm font-semibold text-heading leading-none">IncidentAI</p>
+          <p className="text-xs text-muted-color mt-0.5">ERP Support Engine</p>
         </div>
         {onCloseMobile && (
-          <button onClick={onCloseMobile} className="md:hidden w-7 h-7 rounded-lg flex items-center justify-center text-muted-color hover:bg-[var(--bg-muted)] shrink-0">
+          <button
+            onClick={onCloseMobile}
+            className="btn-icon md:hidden"
+          >
             <X className="w-4 h-4" />
           </button>
         )}
       </div>
 
-      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
-        <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-color">Workspace</p>
-        {items.map((item) => {
-          const Icon = item.icon;
-          const isActive = currentView === item.id;
+      {/* Navigation */}
+      <nav className="flex-1 overflow-y-auto py-4 px-3" style={{ paddingLeft: '12px', paddingRight: '12px' }}>
+        {NAV_SECTIONS.map((section, sIdx) => {
+          const visible = section.items.filter(i => !allowedItems || allowedItems.includes(i.id));
+          if (visible.length === 0) return null;
+
           return (
-            <button
-              key={item.id}
-              onClick={() => setCurrentView(item.id)}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-[var(--accent-soft-bg)] text-[var(--accent-soft-text)]'
-                  : 'text-body-color hover:bg-[var(--bg-muted)]'
-              }`}
-            >
-              <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-[var(--accent-soft-text)]' : 'text-muted-color'}`} />
-              <span className="truncate flex-1 text-left">{item.label}</span>
-              {item.id === 'TRIAGE' && activeIncidentsCount > 0 && (
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300 shrink-0">
-                  {activeIncidentsCount}
-                </span>
-              )}
-            </button>
+            <div key={section.label} className={sIdx > 0 ? 'mt-5' : ''}>
+              <span className="nav-section-label">{section.label}</span>
+              <div className="space-y-0.5 pl-3 border-l" style={{ borderColor: 'var(--border)' }}>
+                {visible.map(item => {
+                  const Icon = item.icon;
+                  const isActive = currentView === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setCurrentView(item.id)}
+                      className={`nav-item ${isActive ? 'active' : ''}`}
+                    >
+                      <Icon className="w-4 h-4 shrink-0" />
+                      <span className="flex-1 text-left truncate">{item.label}</span>
+                      {item.id === 'TRIAGE' && activeIncidentsCount > 0 && (
+                        <span
+                          className="text-[10px] font-bold px-1.5 rounded-full shrink-0"
+                          style={{
+                            background: 'var(--red-bg)',
+                            color: 'var(--red-text)',
+                            border: '1px solid var(--red-border)'
+                          }}
+                        >
+                          {activeIncidentsCount}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           );
         })}
       </nav>
 
-      <div className="px-5 py-4 border-t text-[11px] text-faint-color shrink-0" style={{ borderColor: 'var(--border-default)' }}>
-        AI-Powered ERP Support Engineer
+      {/* Footer */}
+      <div
+        className="px-4 py-3 shrink-0"
+        style={{ borderTop: '1px solid var(--border)' }}
+      >
+        <div className="flex items-center gap-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-green-500 live-dot shrink-0" />
+          <span className="text-xs text-muted-color">All systems operational</span>
+        </div>
       </div>
     </>
   );
 }
 
-export default function Sidebar({ currentView, setCurrentView, allowedViews, activeIncidentsCount, isMobileOpen, onCloseMobile }) {
-  const items = NAV_ITEMS.filter((v) => !allowedViews || allowedViews.includes(v.id));
+export default function Sidebar({
+  currentView, setCurrentView, allowedViews,
+  activeIncidentsCount, isMobileOpen, onCloseMobile
+}) {
+  const allowedIds = allowedViews || NAV_SECTIONS.flatMap(s => s.items.map(i => i.id));
 
   return (
     <>
-      {/* Desktop sidebar */}
-      <aside className="sidebar-shell hidden md:flex md:w-64 lg:w-72 shrink-0 flex-col h-screen sticky top-0">
-        <SidebarContent items={items} currentView={currentView} setCurrentView={setCurrentView} activeIncidentsCount={activeIncidentsCount} />
+      {/* Desktop */}
+      <aside className="sidebar-shell hidden md:flex flex-col h-screen sticky top-0">
+        <SidebarContent
+          allowedItems={allowedIds}
+          currentView={currentView}
+          setCurrentView={setCurrentView}
+          activeIncidentsCount={activeIncidentsCount}
+        />
       </aside>
 
       {/* Mobile drawer */}
       {isMobileOpen && (
         <div className="fixed inset-0 z-50 md:hidden">
-          <div className="absolute inset-0 bg-black/40" onClick={onCloseMobile} />
-          <aside className="sidebar-shell relative flex flex-col h-full w-72 max-w-[80vw] shadow-popover">
-            <SidebarContent items={items} currentView={currentView} setCurrentView={setCurrentView} activeIncidentsCount={activeIncidentsCount} onCloseMobile={onCloseMobile} />
+          <div className="absolute inset-0 bg-black/50" onClick={onCloseMobile} />
+          <aside className="sidebar-shell relative flex flex-col h-full" style={{ width: '260px', maxWidth: '80vw', boxShadow: 'var(--shadow-popover)' }}>
+            <SidebarContent
+              allowedItems={allowedIds}
+              currentView={currentView}
+              setCurrentView={setCurrentView}
+              activeIncidentsCount={activeIncidentsCount}
+              onCloseMobile={onCloseMobile}
+            />
           </aside>
         </div>
       )}

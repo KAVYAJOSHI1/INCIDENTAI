@@ -65,7 +65,6 @@ export default function App() {
 
   const allowedViews = user ? VIEWS_BY_ROLE[user.role] : [];
 
-  // Submit New Multimodal Incident — runs the full AI pipeline on the backend
   const handleSubmitIncident = async (inputPayload) => {
     try {
       const newTicket = await api.ingestIncident(inputPayload);
@@ -79,7 +78,6 @@ export default function App() {
     }
   };
 
-  // Trigger a quick-fill sample incident
   const handleTriggerPreset = (moduleName) => {
     let text = "The billing button turned red when posting invoice for Customer #904 with ERR_TAX_VAL_402.";
     if (moduleName === 'PAYROLL') {
@@ -87,11 +85,9 @@ export default function App() {
     } else if (moduleName === 'INVENTORY') {
       text = "Negative quantity violation ERR_STOCK_NEG when transferring SKU SK-902 in warehouse bin B4.";
     }
-
     handleSubmitIncident({ text, reporter: "Sample Scenario" });
   };
 
-  // Merge Duplicate Ticket
   const handleMergeDuplicate = async (sourceTicketId, targetTicketId) => {
     try {
       const updated = await api.patchTicket(sourceTicketId, { status: 'RESOLVED_DUPLICATE_MERGED' });
@@ -102,7 +98,6 @@ export default function App() {
     }
   };
 
-  // Re-assign Developer
   const handleAssignDeveloper = async (ticketId, devId) => {
     try {
       const updated = await api.patchTicket(ticketId, { assigned_dev_id: devId, status: 'ASSIGNED' });
@@ -114,7 +109,6 @@ export default function App() {
     }
   };
 
-  // Auto Re-balance Team Load — reassigns lower-priority tickets away from devs overloaded by a P0
   const handleRebalanceLoad = async () => {
     try {
       const { reassignments, count } = await api.rebalanceLoad();
@@ -131,7 +125,6 @@ export default function App() {
     }
   };
 
-  // Resolve Ticket
   const handleResolveTicket = async (ticketId) => {
     try {
       const updated = await api.patchTicket(ticketId, { status: 'RESOLVED' });
@@ -160,20 +153,18 @@ export default function App() {
   if (isAuthLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-muted-color app-bg">
-        <Loader2 className="w-8 h-8 animate-spin text-[var(--accent)]" />
+        <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--accent)' }} />
         <p className="text-sm">Checking session...</p>
       </div>
     );
   }
 
-  if (!user) {
-    return <LoginScreen />;
-  }
+  if (!user) return <LoginScreen />;
 
   if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-muted-color app-bg">
-        <Loader2 className="w-8 h-8 animate-spin text-[var(--accent)]" />
+        <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--accent)' }} />
         <p className="text-sm">Connecting to IncidentAI backend...</p>
       </div>
     );
@@ -185,13 +176,18 @@ export default function App() {
         <ShieldAlert className="w-10 h-10 text-rose-500" />
         <h2 className="text-lg font-bold text-heading">Cannot reach the IncidentAI backend</h2>
         <p className="text-sm text-muted-color max-w-md">{loadError}</p>
-        <p className="text-xs text-faint-color">Make sure it's running with <code className="text-accent-color">npm run server</code>.</p>
+        <p className="text-xs text-faint-color">
+          Make sure it is running with <code className="text-accent-color">npm run server</code>.
+        </p>
         <button onClick={() => loadInitialData()} className="btn-primary text-xs mt-1">
           <RefreshCw className="w-3.5 h-3.5" /> Retry
         </button>
       </div>
     );
   }
+
+  /* ─────────── TRIAGE: full-height split-panel ─────────── */
+  const isTriage = currentView === 'TRIAGE';
 
   return (
     <div className="min-h-screen flex app-bg">
@@ -204,7 +200,7 @@ export default function App() {
         onCloseMobile={() => setIsMobileNavOpen(false)}
       />
 
-      <div className="flex-1 min-w-0 flex flex-col">
+      <div className="flex-1 min-w-0 flex flex-col" style={{ minHeight: '100vh' }}>
         <Header
           user={user}
           onLogout={logout}
@@ -215,128 +211,204 @@ export default function App() {
           onOpenMobileNav={() => setIsMobileNavOpen(true)}
         />
 
-        {/* Main View Content Container */}
-        <main className="flex-1 w-full px-4 sm:px-6 py-6 pb-16">
-          {/* View 1: End User Reporter */}
-          {currentView === 'REPORTER' && (
-            <SmartReporter onSubmitIncident={handleSubmitIncident} />
-          )}
-
-          {/* View 2: Support Triage Feed & Jira View */}
-          {currentView === 'TRIAGE' && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              {/* Left Column: Tickets Queue Feed (4 cols) */}
-              <div className="lg:col-span-4 space-y-4">
-                <div className="surface p-4 flex items-center justify-between">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-body-color flex items-center gap-1.5">
-                    <ShieldAlert className="w-4 h-4 text-[var(--accent)]" /> Triage Feed Queue ({filteredTicketsList.length})
-                  </h3>
-
-                  <select
-                    value={filterModule}
-                    onChange={(e) => setFilterModule(e.target.value)}
-                    className="input-field text-[11px] px-2 py-1"
+        {/* ── TRIAGE: edge-to-edge split panel, no outer padding ── */}
+        {isTriage && (
+          <div
+            className="flex flex-1 overflow-hidden"
+            style={{ height: 'calc(100vh - var(--header-height))' }}
+          >
+            {/* LEFT — ticket queue */}
+            <div
+              className="flex flex-col shrink-0 overflow-hidden"
+              style={{
+                width: '300px',
+                background: 'var(--bg-surface)',
+                borderRight: '1px solid var(--border)',
+              }}
+            >
+              {/* Queue header */}
+              <div
+                className="flex items-center justify-between px-4 py-3 shrink-0"
+                style={{ borderBottom: '1px solid var(--border)' }}
+              >
+                <div className="flex items-center gap-2">
+                  <ShieldAlert className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
+                  <span className="text-xs font-semibold text-heading">Incidents</span>
+                  <span
+                    className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                    style={{
+                      background: filteredTicketsList.length > 0 ? 'var(--red-bg)' : 'var(--bg-muted)',
+                      color:      filteredTicketsList.length > 0 ? 'var(--red-text)' : 'var(--text-muted)',
+                      border:     filteredTicketsList.length > 0 ? '1px solid var(--red-border)' : '1px solid var(--border)',
+                    }}
                   >
-                    <option value="ALL">All Modules</option>
-                    <option value="INVOICING">Invoicing</option>
-                    <option value="PAYROLL">Payroll</option>
-                    <option value="INVENTORY">Inventory</option>
-                    <option value="GENERAL_LEDGER">General Ledger</option>
-                  </select>
+                    {filteredTicketsList.length}
+                  </span>
                 </div>
-
-                <div className="space-y-3 overflow-y-auto max-h-[680px] pr-1">
-                  {filteredTicketsList.length === 0 && (
-                    <EmptyState
-                      icon={Inbox}
-                      title={tickets.length === 0 ? 'No Incidents Yet' : 'No Matching Incidents'}
-                      description={tickets.length === 0 ? 'Submit one from the End-User Reporter to get started.' : `No tickets found for module "${filterModule}".`}
-                      compact
-                    />
-                  )}
-                  {filteredTicketsList.map((t) => {
-                    const isSelected = selectedTicket?.id === t.id;
-                    const isP0 = t.severity === 'P0_CRITICAL';
-
-                    return (
-                      <div
-                        key={t.id}
-                        onClick={() => setSelectedTicketId(t.id)}
-                        className={`surface surface-interactive p-4 ${
-                          isSelected
-                            ? 'is-selected'
-                            : isP0
-                            ? 'border-rose-300 dark:border-rose-500/40'
-                            : ''
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-[11px] font-mono font-bold text-accent-color">{t.ticket_number}</span>
-                          <span className={t.severity === 'P0_CRITICAL' ? 'badge-p0' : t.severity === 'P1_HIGH' ? 'badge-p1' : 'badge-p2'}>
-                            {t.severity}
-                          </span>
-                        </div>
-                        <h4 className="text-xs font-bold text-heading line-clamp-2 leading-snug">{t.title}</h4>
-                        <div className="mt-2.5 flex items-center justify-between text-[11px] text-muted-color">
-                          <span>Dev: <strong className="text-body-color">{t.assigned_dev_name || 'Unassigned'}</strong></span>
-                          <span className="badge-module text-[9px]">{t.erp_module}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                <select
+                  value={filterModule}
+                  onChange={(e) => setFilterModule(e.target.value)}
+                  className="input-field"
+                  style={{ height: '28px', fontSize: '11px', padding: '0 6px', width: 'auto' }}
+                >
+                  <option value="ALL">All</option>
+                  <option value="INVOICING">Invoicing</option>
+                  <option value="PAYROLL">Payroll</option>
+                  <option value="INVENTORY">Inventory</option>
+                  <option value="GENERAL_LEDGER">General Ledger</option>
+                </select>
               </div>
 
-              {/* Right Column: Selected Jira Ticket Detail (8 cols) */}
-              <div className="lg:col-span-8">
-                <JiraTicketView
-                  ticket={selectedTicket}
-                  onMergeDuplicate={handleMergeDuplicate}
+              {/* Scrollable ticket list */}
+              <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+                {filteredTicketsList.length === 0 && (
+                  <EmptyState
+                    icon={Inbox}
+                    title={tickets.length === 0 ? 'No Incidents Yet' : 'No Matches'}
+                    description={
+                      tickets.length === 0
+                        ? 'Submit one from the Reporter to get started.'
+                        : `No tickets for module "${filterModule}".`
+                    }
+                    compact
+                  />
+                )}
+
+                {filteredTicketsList.map((t) => {
+                  const isSelected = selectedTicket?.id === t.id;
+                  const isP0 = t.severity === 'P0_CRITICAL';
+                  const isP1 = t.severity === 'P1_HIGH';
+                  const sevDot = isP0 ? 'var(--red)' : isP1 ? 'var(--amber)' : 'var(--accent)';
+
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => setSelectedTicketId(t.id)}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        border: isSelected ? '1px solid var(--accent-subtle-bd)' : '1px solid transparent',
+                        background: isSelected ? 'var(--accent-subtle-bg)' : 'transparent',
+                        cursor: 'pointer',
+                        transition: 'background 0.1s, border-color 0.1s',
+                      }}
+                      onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = 'var(--bg-muted)'; }}
+                      onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
+                    >
+                      {/* Row 1: ticket # + severity pill */}
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span
+                            className="w-1.5 h-1.5 rounded-full shrink-0"
+                            style={{ background: sevDot }}
+                          />
+                          <code
+                            className="text-[11px] font-mono font-bold truncate"
+                            style={{ color: 'var(--accent-subtle-text)' }}
+                          >
+                            {t.ticket_number}
+                          </code>
+                        </div>
+                        <span
+                          className={isP0 ? 'badge-p0' : isP1 ? 'badge-p1' : t.severity === 'P2_MEDIUM' ? 'badge-p2' : 'badge-p3'}
+                          style={{ fontSize: '10px', padding: '1px 6px', flexShrink: 0 }}
+                        >
+                          {t.severity?.split('_')[0]}
+                        </span>
+                      </div>
+
+                      {/* Row 2: title */}
+                      <p
+                        className="text-xs font-medium leading-snug line-clamp-2"
+                        style={{
+                          color: isSelected ? 'var(--text-heading)' : 'var(--text-body)',
+                          marginBottom: '6px',
+                        }}
+                      >
+                        {t.title}
+                      </p>
+
+                      {/* Row 3: dev name + module */}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] truncate" style={{ color: 'var(--text-muted)' }}>
+                          {t.assigned_dev_name || 'Unassigned'}
+                        </span>
+                        <span className="badge-module shrink-0" style={{ fontSize: '9px', padding: '1px 5px' }}>
+                          {t.erp_module?.replace('_', ' ')}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* RIGHT — ticket detail (fills rest, independently scrollable) */}
+            <div
+              className="flex-1 min-w-0 overflow-y-auto p-6"
+              style={{ background: 'var(--bg-page)' }}
+            >
+              <JiraTicketView
+                ticket={selectedTicket}
+                onMergeDuplicate={handleMergeDuplicate}
+                onAssignDeveloper={handleAssignDeveloper}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ── All other views: standard padded container ── */}
+        {!isTriage && (
+          <main className="flex-1 px-6 py-6 pb-16 overflow-y-auto">
+
+            {/* View 1: End User Reporter */}
+            {currentView === 'REPORTER' && (
+              <SmartReporter onSubmitIncident={handleSubmitIncident} />
+            )}
+
+            {/* View 3: Developer Workbench & Copilot */}
+            {currentView === 'DEVELOPER' && (
+              <DeveloperWorkbench
+                ticket={selectedTicket}
+                onResolveTicket={handleResolveTicket}
+              />
+            )}
+
+            {/* View 4: Executive Analytics & Workload Matrix */}
+            {currentView === 'ADMIN' && (
+              <div className="space-y-8">
+                <ExecutiveDashboard tickets={tickets} developers={developers} />
+                <DeveloperLoadBalancer
+                  currentTicket={selectedTicket}
+                  developers={developers}
                   onAssignDeveloper={handleAssignDeveloper}
+                  onRebalanceLoad={handleRebalanceLoad}
+                />
+                <KnowledgeHub
+                  knowledgeBase={knowledgeBase}
+                  onAddArticle={handleAddKnowledgeArticle}
                 />
               </div>
-            </div>
-          )}
+            )}
 
-          {/* View 3: Developer Workbench & Copilot */}
-          {currentView === 'DEVELOPER' && (
-            <DeveloperWorkbench
-              ticket={selectedTicket}
-              onResolveTicket={handleResolveTicket}
-            />
-          )}
+            {/* View 5: React Flow AI Execution Pipeline Visualizer */}
+            {currentView === 'PIPELINE' && (
+              <AIPipelineVisualizer ticket={selectedTicket} />
+            )}
 
-          {/* View 4: Executive Analytics & Workload Matrix */}
-          {currentView === 'ADMIN' && (
-            <div className="space-y-8">
-              <ExecutiveDashboard tickets={tickets} developers={developers} />
-              <DeveloperLoadBalancer
-                currentTicket={selectedTicket}
-                developers={developers}
-                onAssignDeveloper={handleAssignDeveloper}
-                onRebalanceLoad={handleRebalanceLoad}
-              />
-              <KnowledgeHub
-                knowledgeBase={knowledgeBase}
-                onAddArticle={handleAddKnowledgeArticle}
-              />
-            </div>
-          )}
+            {/* View 6: Enterprise War Room */}
+            {currentView === 'WARROOM' && <WarRoom />}
 
-          {/* View 5: React Flow AI Execution Pipeline Visualizer */}
-          {currentView === 'PIPELINE' && (
-            <AIPipelineVisualizer ticket={selectedTicket} />
-          )}
+            {/* View 7: ERP Digital Twin */}
+            {currentView === 'DIGITALTWIN' && <DigitalTwin />}
 
-          {/* View 6: Enterprise War Room */}
-          {currentView === 'WARROOM' && <WarRoom />}
-
-          {/* View 7: ERP Digital Twin */}
-          {currentView === 'DIGITALTWIN' && <DigitalTwin />}
-
-          {/* View 8: Mission Control Command Center */}
-          {currentView === 'MISSIONCONTROL' && <MissionControl />}
-        </main>
+            {/* View 8: Mission Control Command Center */}
+            {currentView === 'MISSIONCONTROL' && <MissionControl />}
+          </main>
+        )}
       </div>
     </div>
   );

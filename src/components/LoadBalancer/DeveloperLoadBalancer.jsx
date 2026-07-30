@@ -1,178 +1,181 @@
 import React, { useEffect, useState } from 'react';
-import { UserCheck, Sparkles, CheckCircle2, AlertTriangle, ShieldCheck, Zap, Activity, Award } from 'lucide-react';
+import { UserCheck, CheckCircle2, AlertTriangle, Activity } from 'lucide-react';
 import { routeDeveloper } from '../../services/apiClient';
 import { InlineLoading } from '../Common/Loading';
+import PageHeader from '../Common/PageHeader';
 
 export default function DeveloperLoadBalancer({ currentTicket, developers, onAssignDeveloper, onRebalanceLoad }) {
-  const [liveRouting, setLiveRouting] = useState(null);
-  const [isRoutingLoading, setIsRoutingLoading] = useState(false);
+  const [liveRouting, setLiveRouting]     = useState(null);
+  const [isRoutingLoading, setIsLoading]  = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     if (currentTicket && !currentTicket.developer_routing) {
-      setIsRoutingLoading(true);
+      setIsLoading(true);
       routeDeveloper(currentTicket.erp_module)
-        .then((routing) => { if (!cancelled) setLiveRouting(routing); })
+        .then(r  => { if (!cancelled) setLiveRouting(r); })
         .catch(() => { if (!cancelled) setLiveRouting(null); })
-        .finally(() => { if (!cancelled) setIsRoutingLoading(false); });
+        .finally(()=> { if (!cancelled) setIsLoading(false); });
     } else {
       setLiveRouting(null);
-      setIsRoutingLoading(false);
+      setIsLoading(false);
     }
     return () => { cancelled = true; };
   }, [currentTicket?.id, currentTicket?.erp_module]);
 
-  const routing = currentTicket?.developer_routing || liveRouting;
-  const recommendedDev = routing ? routing.recommended : null;
+  const routing      = currentTicket?.developer_routing || liveRouting;
+  const recommended  = routing?.recommended || null;
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      {/* Banner */}
-      <div className="surface p-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="badge-module"><Sparkles className="w-3 h-3 inline mr-1" /> Developer Recommendation AI</span>
-            </div>
-            <h2 className="text-xl font-extrabold text-heading">Dynamic Developer Load Balancing &amp; Routing</h2>
-            <p className="text-body-color text-sm mt-1">
-              AI balances developer skill matrix, active workload capacity, and historical MTTR to route tickets.
-            </p>
-          </div>
-
-          <button
-            onClick={onRebalanceLoad}
-            className="btn-primary text-xs"
-          >
-            <Activity className="w-4 h-4" /> Trigger Auto Re-Balance
+      <PageHeader
+        badge="Developer Routing AI"
+        title="Team Workload & Developer Assignment"
+        description="AI-weighted routing using skill matrix, active workload, and historical MTTR."
+        action={
+          <button onClick={onRebalanceLoad} className="btn-primary">
+            <Activity className="w-3.5 h-3.5" />
+            Auto Re-Balance
           </button>
-        </div>
-      </div>
+        }
+      />
 
-      {/* AI Routing Recommendation Box for Active Ticket */}
-      {currentTicket && isRoutingLoading && !recommendedDev && (
-        <div className="surface-muted p-5">
-          <InlineLoading label="Computing optimal developer routing..." />
+      {/* AI Routing Recommendation */}
+      {currentTicket && isRoutingLoading && !recommended && (
+        <div className="surface p-5">
+          <InlineLoading label="Computing optimal developer routing…" />
         </div>
       )}
 
-      {currentTicket && recommendedDev && (
-        <div className="callout callout-blue p-5 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
+      {currentTicket && recommended && (
+        <div className="callout callout-blue space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
               <img
-                src={recommendedDev.avatar}
-                alt={recommendedDev.name}
-                className="w-12 h-12 rounded-xl bg-white p-1 border-2 border-[var(--accent)]"
+                src={recommended.avatar}
+                alt={recommended.name}
+                className="w-11 h-11 rounded-lg"
+                style={{ border: '2px solid var(--accent)', background: 'var(--bg-surface)', padding: '2px' }}
               />
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold uppercase tracking-wider">AI Optimal Match</span>
-                  <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300 text-[11px] font-bold">
-                    {recommendedDev.match_score}% Match Score
+                <div className="flex items-center gap-2 mb-0.5">
+                  <p className="text-xs font-semibold uppercase tracking-wide">AI Optimal Match</p>
+                  <span
+                    className="text-[11px] font-bold px-2 py-0.5 rounded"
+                    style={{ background: 'var(--green-bg)', color: 'var(--green-text)', border: '1px solid var(--green-border)' }}
+                  >
+                    {recommended.match_score}% Match
                   </span>
                 </div>
-                <h3 className="text-base font-bold text-heading">{recommendedDev.name} — <span className="text-body-color font-normal">{recommendedDev.role}</span></h3>
+                <p className="text-sm font-semibold text-heading">
+                  {recommended.name}
+                  <span className="font-normal text-muted-color ml-1">— {recommended.role}</span>
+                </p>
               </div>
             </div>
-
             <button
-              onClick={() => onAssignDeveloper(currentTicket.id, recommendedDev.id)}
-              className="btn-emerald text-xs"
+              onClick={() => onAssignDeveloper(currentTicket.id, recommended.id)}
+              className="btn-emerald shrink-0"
             >
-              <CheckCircle2 className="w-4 h-4" /> Confirm Assignment to {recommendedDev.name.split(' ')[0]}
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Confirm Assignment
             </button>
           </div>
 
-          <div className="surface p-3.5 text-xs space-y-1">
-            <span className="font-bold text-purple-600 dark:text-purple-400 block">AI Routing Rationale:</span>
-            <p className="text-body-color font-sans">{recommendedDev.reasoning}</p>
-          </div>
+          {recommended.reasoning && (
+            <div className="surface-muted p-4 rounded-lg">
+              <p className="text-xs font-semibold text-muted-color uppercase tracking-wide mb-1">AI Rationale</p>
+              <p className="text-sm text-body-color leading-relaxed">{recommended.reasoning}</p>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Developer Capacity Grid */}
+      {/* Developer Grid */}
       <div>
-        <h3 className="text-sm font-bold uppercase tracking-wider text-body-color mb-4 flex items-center gap-2">
-          <UserCheck className="w-4 h-4 text-[var(--accent)]" /> Engineering Team Workload &amp; Skill Matrix
-        </h3>
+        <p className="text-xs font-semibold text-muted-color uppercase tracking-wide mb-4 flex items-center gap-2">
+          <UserCheck className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
+          Engineering Team — Workload & Skill Matrix
+        </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {developers.map((dev) => {
-            const isRecommended = recommendedDev && recommendedDev.id === dev.id;
-            const capacityRatio = (dev.active_tickets / dev.max_capacity) * 100;
-            const isOverloaded = capacityRatio >= 80;
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {developers.map(dev => {
+            const isRecommended = recommended?.id === dev.id;
+            const ratio         = dev.max_capacity > 0 ? (dev.active_tickets / dev.max_capacity) * 100 : 0;
+            const isOverloaded  = ratio >= 80;
 
             return (
               <div
                 key={dev.id}
                 className={`surface p-5 space-y-4 ${isRecommended ? 'is-selected' : ''}`}
               >
-                <div className="flex items-start justify-between">
+                {/* Dev header */}
+                <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <img
                       src={dev.avatar}
                       alt={dev.name}
-                      className="w-11 h-11 rounded-xl surface-muted p-1"
+                      className="w-10 h-10 rounded-lg"
+                      style={{ background: 'var(--bg-muted)', padding: '2px' }}
                     />
                     <div>
                       <div className="flex items-center gap-2">
-                        <h4 className="font-bold text-heading text-sm">{dev.name}</h4>
+                        <p className="text-sm font-semibold text-heading">{dev.name}</p>
                         {dev.on_call && (
-                          <span className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 px-1.5 py-0.2 rounded font-semibold border border-emerald-200 dark:border-emerald-500/30">
-                            ON CALL
-                          </span>
+                          <span className="badge-green" style={{ fontSize: '10px', padding: '1px 6px' }}>ON CALL</span>
                         )}
                       </div>
                       <p className="text-xs text-muted-color">{dev.role}</p>
                     </div>
                   </div>
-
                   {isRecommended && (
-                    <span className="px-2.5 py-1 rounded-full bg-[var(--accent-soft-bg)] text-accent-color text-[10px] font-extrabold">
+                    <span
+                      className="text-[10px] font-bold px-2 py-0.5 rounded shrink-0"
+                      style={{ background: 'var(--accent-subtle-bg)', color: 'var(--accent-subtle-text)', border: '1px solid var(--accent-subtle-bd)' }}
+                    >
                       RECOMMENDED
                     </span>
                   )}
                 </div>
 
-                {/* Skills Tags */}
+                {/* Skills */}
                 <div className="flex flex-wrap gap-1.5">
-                  {dev.skills.map((skill, sIdx) => (
-                    <span key={sIdx} className="text-[11px] px-2 py-0.5 rounded surface-muted text-body-color font-mono">
-                      {skill}
-                    </span>
+                  {dev.skills.map((skill, i) => (
+                    <span key={i} className="tag">{skill}</span>
                   ))}
                 </div>
 
-                {/* Workload Progress Bar */}
-                <div className="space-y-1.5 pt-2 border-t" style={{ borderColor: 'var(--border-default)' }}>
+                {/* Workload bar */}
+                <div className="space-y-2 pt-3" style={{ borderTop: '1px solid var(--border)' }}>
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-color font-medium">Active Ticket Queue:</span>
-                    <span className={`font-mono font-bold ${isOverloaded ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                      {dev.active_tickets} / {dev.max_capacity} ({Math.round(capacityRatio)}% Capacity)
+                    <span className="text-muted-color font-medium">Active Queue</span>
+                    <span
+                      className="font-mono font-semibold"
+                      style={{ color: isOverloaded ? 'var(--amber)' : 'var(--green)' }}
+                    >
+                      {dev.active_tickets} / {dev.max_capacity} ({Math.round(ratio)}%)
                     </span>
                   </div>
-
-                  <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: 'var(--bg-muted)' }}>
+                  <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-muted)' }}>
                     <div
-                      style={{ width: `${capacityRatio}%` }}
-                      className={`h-full rounded-full transition-all duration-500 ${
-                        isOverloaded ? 'bg-amber-500' : 'bg-emerald-500'
-                      }`}
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${Math.min(ratio, 100)}%`,
+                        background: isOverloaded ? 'var(--amber)' : 'var(--green)'
+                      }}
                     />
                   </div>
                 </div>
 
-                {/* Stats Row */}
-                <div className="grid grid-cols-2 gap-2 text-xs pt-1">
-                  <div className="surface-muted p-2">
-                    <span className="text-muted-color text-[10px] block font-semibold">HISTORICAL MTTR</span>
-                    <span className="text-accent-color font-mono font-bold">{dev.historical_mttr_hours} hrs/ticket</span>
+                {/* Stats */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="surface-muted p-3 rounded-lg">
+                    <p className="text-[10px] font-semibold text-muted-color uppercase mb-1">Hist. MTTR</p>
+                    <p className="text-sm font-mono font-bold text-heading">{dev.historical_mttr_hours}h</p>
                   </div>
-
-                  <div className="surface-muted p-2">
-                    <span className="text-muted-color text-[10px] block font-semibold">AI ACCURACY</span>
-                    <span className="text-emerald-600 dark:text-emerald-400 font-mono font-bold">{dev.performance_score}%</span>
+                  <div className="surface-muted p-3 rounded-lg">
+                    <p className="text-[10px] font-semibold text-muted-color uppercase mb-1">AI Accuracy</p>
+                    <p className="text-sm font-mono font-bold" style={{ color: 'var(--green)' }}>{dev.performance_score}%</p>
                   </div>
                 </div>
               </div>
