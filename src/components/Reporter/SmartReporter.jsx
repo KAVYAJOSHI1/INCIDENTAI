@@ -5,6 +5,21 @@ import { analyzeOcrPreview } from '../../services/apiClient';
 
 const ERROR_CODE_PATTERN = /ERR[_-]?[A-Z0-9_]{3,}/i;
 
+// Tesseract.js v5+ disables every output except `text` by default — word-level bounding
+// boxes require the lower-level createWorker() API with `blocks: true` requested explicitly;
+// the one-shot Tesseract.recognize() helper has no way to ask for them.
+function flattenWords(blocks) {
+  const words = [];
+  for (const block of blocks || []) {
+    for (const paragraph of block.paragraphs || []) {
+      for (const line of paragraph.lines || []) {
+        words.push(...(line.words || []));
+      }
+    }
+  }
+  return words;
+}
+
 export default function SmartReporter({ onSubmitIncident }) {
   const [inputText, setInputText] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
@@ -66,15 +81,22 @@ export default function SmartReporter({ onSubmitIncident }) {
 
     let extractedText = '';
     try {
-      const { data } = await Tesseract.recognize(file, 'eng', {
+      const worker = await Tesseract.createWorker('eng', 1, {
         logger: (m) => {
           if (m.status === 'recognizing text') setRealOcrProgress(Math.round(m.progress * 100));
         }
       });
+      let data;
+      try {
+        ({ data } = await worker.recognize(file, {}, { text: true, blocks: true }));
+      } finally {
+        await worker.terminate();
+      }
+
       extractedText = (data.text || '').trim();
       setRealOcrRawText(extractedText);
 
-      const errorCodeWord = data.words?.find((w) => ERROR_CODE_PATTERN.test(w.text));
+      const errorCodeWord = flattenWords(data.blocks).find((w) => ERROR_CODE_PATTERN.test(w.text));
       if (errorCodeWord?.bbox) setRealWordBoxPx(errorCodeWord.bbox);
     } catch (err) {
       console.error('Tesseract OCR failed:', err);

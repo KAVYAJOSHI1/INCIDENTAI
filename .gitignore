@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Tesseract.js downloads its trained language model to the cwd at runtime by default
+*.traineddata
+
 # Secrets
 .env
 .env.*

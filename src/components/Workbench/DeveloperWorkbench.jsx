@@ -1,19 +1,36 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Code2, Play, CheckCircle2, Terminal, Sparkles, Send, Copy, Cpu } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { streamCopilotChat } from '../../services/apiClient';
 import { Spinner } from '../Common/Loading';
 
+// Module-scoped (not useRef) so conversation history survives both switching tickets
+// and navigating away from the Developer view and back — a useRef would reset the
+// moment DeveloperWorkbench unmounts, which happens every time currentView changes.
+const chatHistoryByTicketId = new Map();
+
+function greetingMessage(ticket) {
+  return {
+    sender: 'AI_COPILOT',
+    message: `Hello! I've indexed all stack trace logs, OCR output, and knowledge base entries for **${ticket.ticket_number}**. What would you like to know?`
+  };
+}
+
 export default function DeveloperWorkbench({ ticket, onResolveTicket }) {
-  const [chatMessages, setChatMessages] = useState([
-    {
-      sender: 'AI_COPILOT',
-      message: `Hello! I've indexed all stack trace logs, OCR output, and knowledge base entries for **${ticket?.ticket_number || 'INC-0001'}**. What would you like to know?`
-    }
-  ]);
+  const [chatMessages, setChatMessages] = useState([]);
   const [inputQuery, setInputQuery]         = useState('');
   const [isPatchExecuted, setIsPatchExecuted] = useState(false);
   const [isCopilotTyping, setIsCopilotTyping] = useState(false);
+  const [isStreamingReply, setIsStreamingReply] = useState(false);
+
+  useEffect(() => {
+    if (!ticket) return;
+    setChatMessages(chatHistoryByTicketId.get(ticket.id) || [greetingMessage(ticket)]);
+  }, [ticket?.id]);
+
+  useEffect(() => {
+    if (ticket && chatMessages.length > 0) chatHistoryByTicketId.set(ticket.id, chatMessages);
+  }, [ticket?.id, chatMessages]);
 
   if (!ticket) {
     return (
@@ -41,10 +58,11 @@ export default function DeveloperWorkbench({ ticket, onResolveTicket }) {
     setChatMessages(prev => [...prev, userMsg, { sender: 'AI_COPILOT', message: '' }]);
     setInputQuery('');
     setIsCopilotTyping(true);
+    setIsStreamingReply(true);
 
     try {
       let firstChunk = true;
-      await streamCopilotChat(ticket.id, query, history, (chunk) => {
+      const { ai_generated } = await streamCopilotChat(ticket.id, query, history, (chunk) => {
         if (firstChunk) { setIsCopilotTyping(false); firstChunk = false; }
         setChatMessages(prev => {
           const next = [...prev];
@@ -52,6 +70,11 @@ export default function DeveloperWorkbench({ ticket, onResolveTicket }) {
           next[next.length - 1] = { ...last, message: last.message + chunk };
           return next;
         });
+      });
+      setChatMessages(prev => {
+        const next = [...prev];
+        next[next.length - 1] = { ...next[next.length - 1], ai_generated };
+        return next;
       });
     } catch (err) {
       setChatMessages(prev => {
@@ -61,6 +84,7 @@ export default function DeveloperWorkbench({ ticket, onResolveTicket }) {
       });
     } finally {
       setIsCopilotTyping(false);
+      setIsStreamingReply(false);
     }
   };
 
@@ -210,17 +234,41 @@ export default function DeveloperWorkbench({ ticket, onResolveTicket }) {
 
           {/* Chat log */}
           <div className="flex-1 overflow-y-auto px-4 py-2 space-y-3" style={{ minHeight: 0 }}>
-            {chatMessages.filter(msg => msg.message !== '').map((msg, i) => (
-              <div
-                key={i}
-                className={`p-3 text-xs leading-relaxed ${msg.sender === 'USER' ? 'bubble-user ml-8' : 'bubble-ai mr-4'}`}
-              >
-                <span className="block text-[10px] font-bold uppercase mb-1 opacity-60">
-                  {msg.sender === 'USER' ? 'Developer' : 'AI Copilot'}
-                </span>
-                <div className="whitespace-pre-line">{msg.message}</div>
-              </div>
-            ))}
+            {(() => {
+              const visible = chatMessages.filter(msg => msg.message !== '');
+              return visible.map((msg, i) => {
+                const isLast = i === visible.length - 1;
+                const isCursorBubble = isLast && isStreamingReply && msg.sender === 'AI_COPILOT';
+                return (
+                  <div
+                    key={i}
+                    className={`p-3 text-xs leading-relaxed ${msg.sender === 'USER' ? 'bubble-user ml-8' : 'bubble-ai mr-4'}`}
+                  >
+                    <span className="flex items-center gap-1.5 mb-1">
+                      <span className="text-[10px] font-bold uppercase opacity-60">
+                        {msg.sender === 'USER' ? 'Developer' : 'AI Copilot'}
+                      </span>
+                      {msg.sender === 'AI_COPILOT' && msg.ai_generated !== undefined && (
+                        <span
+                          className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+                          style={
+                            msg.ai_generated
+                              ? { background: 'var(--accent-subtle-bg)', color: 'var(--accent-subtle-text)' }
+                              : { background: 'var(--bg-muted)', color: 'var(--text-muted)' }
+                          }
+                        >
+                          {msg.ai_generated ? '⚡ AI' : '📋 Fallback'}
+                        </span>
+                      )}
+                    </span>
+                    <div className="whitespace-pre-line">
+                      {msg.message}
+                      {isCursorBubble && <span className="animate-pulse">▍</span>}
+                    </div>
+                  </div>
+                );
+              });
+            })()}
             {isCopilotTyping && (
               <div className="bubble-ai mr-4 p-3 flex items-center gap-2 text-xs">
                 <Spinner className="w-3.5 h-3.5" />

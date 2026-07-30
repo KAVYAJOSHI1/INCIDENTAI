@@ -88,8 +88,9 @@ export const copilotChat = (ticketId, message) =>
 
 /**
  * Streams a Copilot reply token-by-token via SSE. `onChunk(text)` fires for each delta;
- * resolves with the full reply text once the stream ends. Uses fetch (not EventSource)
- * so the Bearer auth header can be sent.
+ * resolves with `{ text, ai_generated }` once the stream ends — `ai_generated` distinguishes
+ * a real LLM reply from the rule-based fallback. Uses fetch (not EventSource) so the Bearer
+ * auth header can be sent.
  */
 export async function streamCopilotChat(ticketId, message, history, onChunk) {
   const headers = { "Content-Type": "application/json" };
@@ -120,14 +121,15 @@ export async function streamCopilotChat(ticketId, message, history, onChunk) {
     buffer = parts.pop();
     for (const part of parts) {
       if (!part.startsWith("data: ")) continue;
-      const payload = part.slice(6);
-      if (payload === "[DONE]") return full;
-      const { chunk } = JSON.parse(payload);
-      full += chunk;
-      onChunk(chunk);
+      const payload = JSON.parse(part.slice(6));
+      if (payload.done) return { text: full, ai_generated: Boolean(payload.ai_generated) };
+      if (payload.chunk) {
+        full += payload.chunk;
+        onChunk(payload.chunk);
+      }
     }
   }
-  return full;
+  return { text: full, ai_generated: false };
 }
 
 // Enterprise 10-feature roadmap — ticket-scoped insights

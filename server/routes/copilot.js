@@ -46,12 +46,14 @@ export function registerCopilotRoutes(router) {
         (chunk) => send({ chunk })
       );
 
+      let aiGenerated = streamed !== null;
       if (streamed === null) {
         const fallback = handleCopilotChat(input.message, ticket);
         send({ chunk: fallback.message });
+        aiGenerated = false;
       }
 
-      res.write("data: [DONE]\n\n");
+      send({ done: true, ai_generated: aiGenerated });
       res.end();
     })
   );
