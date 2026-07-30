@@ -51,15 +51,25 @@ export async function applyTicketUpdate(id, patch) {
 export async function runIncidentIngestPipeline(inputPayload) {
   const t0 = Date.now();
 
-  const ocrFindings = analyzeMultimodalInput(inputPayload);
+  // Prefer the reporter's own description; fall back to the real pixel-level Tesseract.js
+  // OCR text when they only uploaded a screenshot and typed nothing. Without this, a
+  // screenshot-only submission had no text signal at all for classification.
+  const sourceText = (inputPayload.text || inputPayload.ocrRawText || "").trim();
+
+  const ocrFindings = analyzeMultimodalInput({ ...inputPayload, text: sourceText });
+  if (inputPayload.ocrRawText) {
+    // Surface the real extracted text (not just the synthetic signature summary) so the
+    // Developer Workbench shows what Tesseract actually read off the screenshot.
+    ocrFindings.raw_text = inputPayload.ocrRawText;
+    ocrFindings.ocr_extracted_text = `[Tesseract.js Real OCR]\n${inputPayload.ocrRawText}\n\n${ocrFindings.ocr_extracted_text}`;
+  }
   const ocrDurationMs = Date.now() - t0;
 
   const severityResult =
-    (await scoreSeverityWithAI(inputPayload.text || "", ocrFindings.erp_module)) ??
-    scoreSeverity(inputPayload.text || "", ocrFindings.erp_module);
+    (await scoreSeverityWithAI(sourceText, ocrFindings.erp_module)) ?? scoreSeverity(sourceText, ocrFindings.erp_module);
   const severityDurationMs = Date.now() - t0 - ocrDurationMs;
 
-  const title = `[${ocrFindings.erp_module}] ${ocrFindings.extracted_error_code}: ${(inputPayload.text || "Unexpected ERP Exception").slice(0, 60)}`;
+  const title = `[${ocrFindings.erp_module}] ${ocrFindings.extracted_error_code}: ${(sourceText || "Unexpected ERP Exception").slice(0, 60)}`;
   const structuredDescription =
     `AI Diagnostics parsed issue in module ${ocrFindings.erp_module}. Encountered error code ${ocrFindings.extracted_error_code} ` +
     `on UI component <${ocrFindings.detected_ui_component}/>. ${severityResult.reasons[0] || ""}`.trim();
@@ -67,7 +77,7 @@ export async function runIncidentIngestPipeline(inputPayload) {
   const reproductionSteps = [
     `Open ERP Workspace -> ${ocrFindings.erp_module} Module`,
     `Execute primary transaction action (${ocrFindings.detected_ui_component})`,
-    `Submit form payload with input data "${(inputPayload.text || "").slice(0, 40)}"`,
+    `Submit form payload with input data "${sourceText.slice(0, 40)}"`,
     `Observe exception pop-up ${ocrFindings.extracted_error_code}`
   ];
 
@@ -75,22 +85,22 @@ export async function runIncidentIngestPipeline(inputPayload) {
   const actualBehavior = `System triggers ${ocrFindings.extracted_error_code} exception pop-up and aborts the transaction thread.`;
 
   const rootCause =
-    (await predictRootCauseWithAI(ocrFindings.extracted_error_code, ocrFindings.erp_module, ocrFindings.detected_ui_component, inputPayload.text)) ??
+    (await predictRootCauseWithAI(ocrFindings.extracted_error_code, ocrFindings.erp_module, ocrFindings.detected_ui_component, sourceText)) ??
     predictRootCause(ocrFindings.extracted_error_code, ocrFindings.erp_module, ocrFindings.detected_ui_component);
   const [existingTickets, knowledgeBaseArticles, developers] = await Promise.all([listTickets(), listKnowledgeBase(), listDevelopers()]);
 
   // pgvector cosine-distance retrieval when Voyage embeddings are configured, falling
   // back to the in-memory TF-IDF candidate set otherwise.
   const candidateDuplicateResult =
-    (await findDuplicateTicketsWithVector(inputPayload.text || title)) ?? findDuplicateTickets(inputPayload.text || title, existingTickets);
-  const duplicateResult = (await findDuplicateTicketsWithAI(inputPayload.text || title, candidateDuplicateResult)) ?? candidateDuplicateResult;
+    (await findDuplicateTicketsWithVector(sourceText || title)) ?? findDuplicateTickets(sourceText || title, existingTickets);
+  const duplicateResult = (await findDuplicateTicketsWithAI(sourceText || title, candidateDuplicateResult)) ?? candidateDuplicateResult;
 
   // Broader, unfiltered shortlist feeds the AI re-ranker so it can catch matches lexical/vector retrieval alone would score too low to surface
   const kbShortlist =
-    (await searchKnowledgeBaseWithVector(inputPayload.text || title, ocrFindings.erp_module, { minScore: 0.05 })) ??
-    searchKnowledgeBase(inputPayload.text || title, ocrFindings.erp_module, knowledgeBaseArticles, { minScore: 0.05 });
+    (await searchKnowledgeBaseWithVector(sourceText || title, ocrFindings.erp_module, { minScore: 0.05 })) ??
+    searchKnowledgeBase(sourceText || title, ocrFindings.erp_module, knowledgeBaseArticles, { minScore: 0.05 });
   const kbFallback = kbShortlist.filter((m) => m.score >= 0.25);
-  const kbMatches = (await searchKnowledgeBaseWithAI(inputPayload.text || title, ocrFindings.erp_module, kbShortlist)) ?? kbFallback;
+  const kbMatches = (await searchKnowledgeBaseWithAI(sourceText || title, ocrFindings.erp_module, kbShortlist)) ?? kbFallback;
   const routing = recommendDeveloperForTicket({ erp_module: ocrFindings.erp_module }, developers);
 
   const ticket = {
@@ -103,7 +113,7 @@ export async function runIncidentIngestPipeline(inputPayload) {
     erp_module: ocrFindings.erp_module,
     severity: severityResult.severity,
     status: "TRIAGED",
-    vague_user_input: inputPayload.text || "",
+    vague_user_input: inputPayload.text || sourceText,
     structured_description: structuredDescription,
     reproduction_steps: reproductionSteps,
     expected_behavior: expectedBehavior,

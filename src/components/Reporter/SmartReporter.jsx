@@ -113,9 +113,8 @@ export default function SmartReporter({ onSubmitIncident }) {
     e.preventDefault();
     if (!inputText && !selectedFile) return;
     onSubmitIncident({
-      text: inputText,
-      file: selectedFile,
-      ocrFindings: ocrResult,
+      text: inputText.trim() || undefined,
+      fileName: selectedFile?.name,
       ocrRawText: realOcrRawText || undefined
     });
   };

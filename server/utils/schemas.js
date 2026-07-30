@@ -7,11 +7,14 @@ import { ERP_MODULES } from "../constants.js";
 
 export const incidentInputSchema = z
   .object({
-    text: z.string().trim().min(1).optional(),
+    text: z.string().trim().optional(),
     fileName: z.string().trim().min(1).optional(),
+    ocrRawText: z.string().trim().optional(),
     reporter: z.string().trim().min(1).optional()
   })
-  .refine((v) => v.text || v.fileName, { message: 'Request body must include "text" or "fileName"' });
+  .refine((v) => v.text || v.fileName || v.ocrRawText, {
+    message: 'Request body must include "text", "fileName", or "ocrRawText"'
+  });
 
 export const copilotChatSchema = z.object({
   ticket_id: z.string().trim().min(1, "ticket_id is required"),
