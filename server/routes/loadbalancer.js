@@ -1,5 +1,9 @@
 import { listDevelopers, listTickets } from "../db/store.js";
-import { recommendDeveloperForTicket, rebalanceWorkload } from "../services/loadBalancerService.js";
+import {
+  recommendDeveloperForTicket,
+  recommendDeveloperWithAI,
+  rebalanceWorkload
+} from "../services/loadBalancerService.js";
 import { requireRole } from "../middleware/authMiddleware.js";
 import { validateBody } from "../utils/validate.js";
 import { loadBalancerRouteSchema } from "../utils/schemas.js";
@@ -11,7 +15,9 @@ export function registerLoadBalancerRoutes(router) {
     "/api/loadbalancer/route",
     requireRole(STAFF_ROLES, async ({ res, body }) => {
       const input = validateBody(loadBalancerRouteSchema, body);
-      const routing = recommendDeveloperForTicket({ erp_module: input.erp_module }, await listDevelopers());
+      const ticket = { erp_module: input.erp_module };
+      const developers = await listDevelopers();
+      const routing = (await recommendDeveloperWithAI(ticket, developers)) ?? recommendDeveloperForTicket(ticket, developers);
       sendJson(res, 200, { routing });
     })
   );

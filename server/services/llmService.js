@@ -8,7 +8,7 @@
 import "../utils/loadEnv.js";
 import Anthropic from "@anthropic-ai/sdk";
 
-const MODEL = "claude-opus-4-8";
+const MODEL = "claude-opus-5";
 
 let client = null;
 
@@ -77,6 +77,34 @@ export async function completeText({ system, messages, maxTokens = 1024, effort 
     return extractText(message);
   } catch (err) {
     console.warn(`[llmService] completeText failed, falling back to rule-based logic: ${err.message}`);
+    return null;
+  }
+}
+
+/**
+ * Streaming conversational completion. Invokes `onChunk(text)` as tokens arrive, then
+ * returns the full reply text — or null on any failure (before or after streaming began).
+ */
+export async function streamText({ system, messages, maxTokens = 768, effort = "low", onChunk }) {
+  if (!isLlmConfigured()) return null;
+
+  try {
+    const stream = getClient().messages.stream({
+      model: MODEL,
+      max_tokens: maxTokens,
+      system,
+      output_config: { effort },
+      messages
+    });
+
+    stream.on("text", (delta) => onChunk(delta));
+
+    const final = await stream.finalMessage();
+    if (final.stop_reason === "refusal") return null;
+
+    return extractText(final);
+  } catch (err) {
+    console.warn(`[llmService] streamText failed, falling back to rule-based logic: ${err.message}`);
     return null;
   }
 }

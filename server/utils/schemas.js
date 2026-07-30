@@ -15,7 +15,16 @@ export const incidentInputSchema = z
 
 export const copilotChatSchema = z.object({
   ticket_id: z.string().trim().min(1, "ticket_id is required"),
-  message: z.string().trim().min(1, "message is required")
+  message: z.string().trim().min(1, "message is required"),
+  history: z
+    .array(
+      z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string()
+      })
+    )
+    .max(20)
+    .optional()
 });
 
 export const ticketPatchSchema = z

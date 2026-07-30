@@ -86,6 +86,50 @@ export const fetchPipelineTrace = (ticketId) => request(`/analytics/pipeline/${t
 export const copilotChat = (ticketId, message) =>
   request("/copilot/chat", { method: "POST", body: JSON.stringify({ ticket_id: ticketId, message }) }).then((d) => d.reply);
 
+/**
+ * Streams a Copilot reply token-by-token via SSE. `onChunk(text)` fires for each delta;
+ * resolves with the full reply text once the stream ends. Uses fetch (not EventSource)
+ * so the Bearer auth header can be sent.
+ */
+export async function streamCopilotChat(ticketId, message, history, onChunk) {
+  const headers = { "Content-Type": "application/json" };
+  if (authToken) headers.Authorization = `Bearer ${authToken}`;
+
+  const res = await fetch(`${API_BASE}/copilot/stream`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ ticket_id: ticketId, message, history })
+  });
+
+  if (res.status === 401) {
+    setAuthToken(null);
+    onUnauthorized?.();
+  }
+  if (!res.ok || !res.body) throw new Error(`Request failed with status ${res.status}`);
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let full = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split("\n\n");
+    buffer = parts.pop();
+    for (const part of parts) {
+      if (!part.startsWith("data: ")) continue;
+      const payload = part.slice(6);
+      if (payload === "[DONE]") return full;
+      const { chunk } = JSON.parse(payload);
+      full += chunk;
+      onChunk(chunk);
+    }
+  }
+  return full;
+}
+
 // Enterprise 10-feature roadmap — ticket-scoped insights
 export const fetchRootCauseTree = (ticketId) => request(`/tickets/${ticketId}/root-cause-tree`).then((d) => d.tree);
 export const fetchExplainability = (ticketId) => request(`/tickets/${ticketId}/explainability`).then((d) => d.explainability);

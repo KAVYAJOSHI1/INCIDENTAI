@@ -66,6 +66,14 @@ export default function DeveloperLoadBalancer({ currentTicket, developers, onAss
                   >
                     {recommended.match_score}% Match
                   </span>
+                  {recommended.ai_generated && (
+                    <span
+                      className="text-[10px] font-bold px-2 py-0.5 rounded font-mono"
+                      style={{ background: 'var(--accent-subtle-bg)', color: 'var(--accent-subtle-text)', border: '1px solid var(--accent-subtle-bd)' }}
+                    >
+                      AI REASONED
+                    </span>
+                  )}
                 </div>
                 <p className="text-sm font-semibold text-heading">
                   {recommended.name}

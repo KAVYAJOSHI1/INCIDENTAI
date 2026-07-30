@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Code2, Play, CheckCircle2, Terminal, Sparkles, Send, Copy, Cpu } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { copilotChat } from '../../services/apiClient';
+import { streamCopilotChat } from '../../services/apiClient';
 import { Spinner } from '../Common/Loading';
 
 export default function DeveloperWorkbench({ ticket, onResolveTicket }) {
@@ -30,14 +30,35 @@ export default function DeveloperWorkbench({ ticket, onResolveTicket }) {
     if (!inputQuery.trim()) return;
     const userMsg = { sender: 'USER', message: inputQuery };
     const query = inputQuery;
-    setChatMessages(prev => [...prev, userMsg]);
+
+    // Multi-turn memory: carry the last few turns as conversation history (skip the
+    // static greeting bubble), capped so the request stays small.
+    const history = chatMessages
+      .slice(1)
+      .slice(-10)
+      .map(m => ({ role: m.sender === 'USER' ? 'user' : 'assistant', content: m.message }));
+
+    setChatMessages(prev => [...prev, userMsg, { sender: 'AI_COPILOT', message: '' }]);
     setInputQuery('');
     setIsCopilotTyping(true);
+
     try {
-      const reply = await copilotChat(ticket.id, query);
-      setChatMessages(prev => [...prev, reply]);
+      let firstChunk = true;
+      await streamCopilotChat(ticket.id, query, history, (chunk) => {
+        if (firstChunk) { setIsCopilotTyping(false); firstChunk = false; }
+        setChatMessages(prev => {
+          const next = [...prev];
+          const last = next[next.length - 1];
+          next[next.length - 1] = { ...last, message: last.message + chunk };
+          return next;
+        });
+      });
     } catch (err) {
-      setChatMessages(prev => [...prev, { sender: 'AI_COPILOT', message: `Error: ${err.message}` }]);
+      setChatMessages(prev => {
+        const next = [...prev];
+        next[next.length - 1] = { sender: 'AI_COPILOT', message: `Error: ${err.message}` };
+        return next;
+      });
     } finally {
       setIsCopilotTyping(false);
     }
@@ -189,7 +210,7 @@ export default function DeveloperWorkbench({ ticket, onResolveTicket }) {
 
           {/* Chat log */}
           <div className="flex-1 overflow-y-auto px-4 py-2 space-y-3" style={{ minHeight: 0 }}>
-            {chatMessages.map((msg, i) => (
+            {chatMessages.filter(msg => msg.message !== '').map((msg, i) => (
               <div
                 key={i}
                 className={`p-3 text-xs leading-relaxed ${msg.sender === 'USER' ? 'bubble-user ml-8' : 'bubble-ai mr-4'}`}

@@ -3,6 +3,8 @@
  * Match Score = SkillMatch x (1 - ActiveLoad/MaxCapacity) x SpeedFactor x OnCallBonus
  */
 
+import { completeJson } from "./llmService.js";
+
 const MODULE_SKILLS_MAP = {
   INVOICING: ["SAP ABAP", "Accounting Logic", "Invoicing", "Tax Engine"],
   PAYROLL: ["Payroll Engine", "Python", "Tax Engine", "HR Logic"],
@@ -50,6 +52,58 @@ export function recommendDeveloperForTicket(ticket, developersList) {
   scored.sort((a, b) => b.match_score - a.match_score);
 
   return { recommended: scored[0], alternatives: scored.slice(1) };
+}
+
+const RECOMMENDATION_SCHEMA = {
+  type: "object",
+  properties: {
+    recommended_dev_id: { type: "string" },
+    reasoning: { type: "string" }
+  },
+  required: ["recommended_dev_id", "reasoning"],
+  additionalProperties: false
+};
+
+/**
+ * Claude reranks the top math-scored candidates, weighing nuance the raw formula can't
+ * (skill depth vs breadth, burnout risk, on-call fit). Falls back to null (caller uses
+ * the pure recommendDeveloperForTicket result) if the LLM is unavailable or fails.
+ */
+export async function recommendDeveloperWithAI(ticket, developersList) {
+  const { recommended, alternatives } = recommendDeveloperForTicket(ticket, developersList);
+  const candidates = [recommended, ...alternatives.slice(0, 2)];
+
+  const result = await completeJson({
+    system:
+      "You are an ERP incident routing assistant. Given a ticket and a shortlist of candidate developers with their skills, workload, and MTTR, pick the single best assignment and explain why in 1-2 sentences, considering nuance the raw scoring formula can't (e.g. skill depth vs breadth, recent burnout risk, on-call fit).",
+    prompt: JSON.stringify({
+      ticket_module: ticket.erp_module,
+      candidates: candidates.map((d) => ({
+        id: d.id,
+        name: d.name,
+        skills: d.skills,
+        skill_overlap: d.skill_overlap,
+        active_tickets: d.active_tickets,
+        max_capacity: d.max_capacity,
+        historical_mttr_hours: d.historical_mttr_hours,
+        on_call: d.on_call,
+        match_score: d.match_score
+      }))
+    }),
+    schema: RECOMMENDATION_SCHEMA,
+    maxTokens: 300
+  });
+
+  if (!result) return null;
+
+  const chosen = candidates.find((d) => d.id === result.recommended_dev_id);
+  if (!chosen) return null;
+
+  const rest = [recommended, ...alternatives].filter((d) => d.id !== chosen.id);
+  return {
+    recommended: { ...chosen, reasoning: result.reasoning, ai_generated: true },
+    alternatives: rest
+  };
 }
 
 export function rebalanceWorkload(ticketsList, developersList) {

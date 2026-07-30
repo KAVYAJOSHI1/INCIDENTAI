@@ -4,7 +4,7 @@
  * canned replies (handleCopilotChat) when no API key is configured or the call fails.
  */
 
-import { completeText } from "./llmService.js";
+import { completeText, streamText } from "./llmService.js";
 
 function buildTicketContext(ticket) {
   return `Ticket ${ticket.ticket_number}: ${ticket.title}
@@ -24,15 +24,29 @@ Developer Routing Reasoning: ${ticket.developer_routing?.recommended?.reasoning 
 
 const COPILOT_SYSTEM_PROMPT = `You are IncidentAI Copilot, embedded in a developer's workbench for an ERP support ticket. Answer the developer's question using only the ticket context provided — root cause, stack trace, suggested patch, routing rationale, and business context. Be concise and technical; you're talking to an engineer, not an end user. Format SQL/code in markdown fences. If asked for a postmortem, structure it as bullet points. If the question isn't answerable from the ticket context, say so plainly rather than inventing details.`;
 
-export async function handleCopilotChatWithAI(message, ticket) {
+export async function handleCopilotChatWithAI(message, ticket, history = []) {
   const reply = await completeText({
     system: `${COPILOT_SYSTEM_PROMPT}\n\n--- Ticket Context ---\n${buildTicketContext(ticket)}`,
-    messages: [{ role: "user", content: message }],
+    messages: [...history, { role: "user", content: message }],
     maxTokens: 768
   });
 
   if (!reply) return null;
   return { sender: "AI_COPILOT", message: reply, ai_generated: true };
+}
+
+/**
+ * Streaming variant of handleCopilotChatWithAI — invokes `onChunk(text)` as tokens
+ * arrive. Returns the full reply text, or null on failure (caller falls back to
+ * handleCopilotChat and sends that as a single chunk).
+ */
+export async function handleCopilotChatStreamWithAI(message, ticket, history = [], onChunk) {
+  return streamText({
+    system: `${COPILOT_SYSTEM_PROMPT}\n\n--- Ticket Context ---\n${buildTicketContext(ticket)}`,
+    messages: [...history, { role: "user", content: message }],
+    maxTokens: 768,
+    onChunk
+  });
 }
 
 export function handleCopilotChat(message, ticket) {
