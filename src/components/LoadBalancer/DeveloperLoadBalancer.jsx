@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { UserCheck, CheckCircle2, AlertTriangle, Activity } from 'lucide-react';
+import { UserCheck, CheckCircle2, AlertTriangle, Activity, ArrowRight } from 'lucide-react';
 import { routeDeveloper } from '../../services/apiClient';
 import { InlineLoading } from '../Common/Loading';
 import PageHeader from '../Common/PageHeader';
@@ -7,6 +7,11 @@ import PageHeader from '../Common/PageHeader';
 export default function DeveloperLoadBalancer({ currentTicket, developers, onAssignDeveloper, onRebalanceLoad }) {
   const [liveRouting, setLiveRouting]     = useState(null);
   const [isRoutingLoading, setIsLoading]  = useState(false);
+
+  const [isRebalancing, setIsRebalancing] = useState(false);
+  const [rebalanceResult, setRebalanceResult] = useState(null);
+  const [rebalanceError, setRebalanceError] = useState(null);
+  const [revealedCount, setRevealedCount] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -23,6 +28,35 @@ export default function DeveloperLoadBalancer({ currentTicket, developers, onAss
     return () => { cancelled = true; };
   }, [currentTicket?.id, currentTicket?.erp_module]);
 
+  // Reveal each reassignment one at a time instead of dumping the whole list at once —
+  // makes a P0 rebalance actually read as a live event rather than a static table.
+  useEffect(() => {
+    const total = rebalanceResult?.reassignments?.length || 0;
+    if (total === 0) return undefined;
+    setRevealedCount(0);
+    let i = 0;
+    const interval = setInterval(() => {
+      i += 1;
+      setRevealedCount(i);
+      if (i >= total) clearInterval(interval);
+    }, 350);
+    return () => clearInterval(interval);
+  }, [rebalanceResult]);
+
+  const handleSimulateRebalance = async () => {
+    setIsRebalancing(true);
+    setRebalanceError(null);
+    setRebalanceResult(null);
+    try {
+      const result = await onRebalanceLoad();
+      setRebalanceResult(result);
+    } catch (err) {
+      setRebalanceError(err.message);
+    } finally {
+      setIsRebalancing(false);
+    }
+  };
+
   const routing      = currentTicket?.developer_routing || liveRouting;
   const recommended  = routing?.recommended || null;
 
@@ -33,12 +67,58 @@ export default function DeveloperLoadBalancer({ currentTicket, developers, onAss
         title="Team Workload & Developer Assignment"
         description="AI-weighted routing using skill matrix, active workload, and historical MTTR."
         action={
-          <button onClick={onRebalanceLoad} className="btn-primary">
+          <button onClick={handleSimulateRebalance} disabled={isRebalancing} className="btn-primary">
             <Activity className="w-3.5 h-3.5" />
-            Auto Re-Balance
+            {isRebalancing ? 'Simulating…' : 'Simulate P0 Outage Rebalance'}
           </button>
         }
       />
+
+      {/* P0 Rebalance Simulation */}
+      {(isRebalancing || rebalanceResult || rebalanceError) && (
+        <div className="surface p-5 space-y-3">
+          <p className="text-xs font-semibold text-muted-color uppercase tracking-wide flex items-center gap-1.5">
+            <Activity className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
+            P0 Outage Rebalance Simulation
+          </p>
+
+          {isRebalancing && <InlineLoading label="Scanning for developers overloaded by an active P0 incident…" />}
+
+          {rebalanceError && (
+            <div className="callout callout-rose text-xs">Failed to simulate rebalance: {rebalanceError}</div>
+          )}
+
+          {rebalanceResult && rebalanceResult.count === 0 && (
+            <p className="text-xs text-muted-color">No re-balancing needed — no developer is currently overloaded by a P0 incident.</p>
+          )}
+
+          {rebalanceResult && rebalanceResult.count > 0 && (
+            <div className="space-y-2">
+              {rebalanceResult.reassignments.map((r, i) => (
+                <div
+                  key={r.ticket_id}
+                  className="surface-muted p-3 rounded-lg flex flex-wrap items-center gap-2 text-xs transition-all duration-500 ease-out"
+                  style={{
+                    opacity: i < revealedCount ? 1 : 0,
+                    transform: i < revealedCount ? 'translateX(0)' : 'translateX(-12px)'
+                  }}
+                >
+                  <code
+                    className="font-mono font-bold px-2 py-0.5 rounded"
+                    style={{ background: 'var(--accent-subtle-bg)', color: 'var(--accent-subtle-text)' }}
+                  >
+                    {r.ticket_number}
+                  </code>
+                  <span className="text-body-color font-semibold">{r.from_dev_name}</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-muted-color shrink-0" />
+                  <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{r.to_dev_name}</span>
+                  <span className="text-muted-color basis-full">{r.reason}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* AI Routing Recommendation */}
       {currentTicket && isRoutingLoading && !recommended && (

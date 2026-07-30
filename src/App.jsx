@@ -109,20 +109,15 @@ export default function App() {
     }
   };
 
+  // Returns { reassignments, count } so DeveloperLoadBalancer can animate the result
+  // in-panel instead of a blocking browser alert(); throws on failure so the caller
+  // can surface that itself.
   const handleRebalanceLoad = async () => {
-    try {
-      const { reassignments, count } = await api.rebalanceLoad();
-      const [refreshedTickets, refreshedDevelopers] = await Promise.all([api.fetchTickets(), api.fetchDevelopers()]);
-      setTickets(refreshedTickets);
-      setDevelopers(refreshedDevelopers);
-      alert(
-        count > 0
-          ? `Re-balanced ${count} ticket(s):\n${reassignments.map((r) => `${r.ticket_number}: ${r.from_dev_name} -> ${r.to_dev_name}`).join('\n')}`
-          : 'No re-balancing needed — no developer is currently overloaded by a P0 incident.'
-      );
-    } catch (err) {
-      alert(`Failed to re-balance load: ${err.message}`);
-    }
+    const { reassignments, count } = await api.rebalanceLoad();
+    const [refreshedTickets, refreshedDevelopers] = await Promise.all([api.fetchTickets(), api.fetchDevelopers()]);
+    setTickets(refreshedTickets);
+    setDevelopers(refreshedDevelopers);
+    return { reassignments, count };
   };
 
   const handleResolveTicket = async (ticketId) => {

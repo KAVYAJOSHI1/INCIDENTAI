@@ -138,11 +138,12 @@ data: {"done": true, "ai_generated": true}
 
 - JSON schema enforces no hallucinated numbers — LLM uses provided figures exactly
 - Generates recommended leadership actions per ticket
+- **1-click Markdown export** (`AIInsightsPanel.jsx`) — headline, business summary, financial exposure, resolution ETA, recommended actions, and business impact detail, downloaded as `<ticket_number>-executive-summary.md`
 
 ---
 
 ### 10. Dynamic Developer Load Balancing + AI Reasoning
-**File:** `server/services/loadBalancerService.js` · **Status: ✅ Live**
+**File:** `server/services/loadBalancerService.js`, `src/components/LoadBalancer/DeveloperLoadBalancer.jsx` · **Status: ✅ Live**
 
 ```
 Match Score = SkillMatch(0.45) × CapacityScore(0.35) × SpeedFactor(0.20) × OnCallBonus
@@ -151,6 +152,7 @@ Match Score = SkillMatch(0.45) × CapacityScore(0.35) × SpeedFactor(0.20) × On
 - `recommendDeveloperForTicket()` — deterministic math formula (always available)
 - `recommendDeveloperWithAI()` — LLM reranks top 3 math candidates with nuanced reasoning
 - P0 escalation triggers automatic workload rebalancing — offloads P2/P3 from overloaded devs
+- **"Simulate P0 Outage Rebalance"** animates each reassignment into view (staggered fade/slide-in) instead of a blocking `alert()` dump
 
 ---
 
@@ -194,29 +196,14 @@ Match Score = SkillMatch(0.45) × CapacityScore(0.35) × SpeedFactor(0.20) × On
 
 ## 📋 Things To Do (Pending Changes & Upcoming Polish)
 
-> Ordered by category. Core AI engine & streaming backend are 100% shipped — remaining items enhance UI polish and demo readiness.
+> Ordered by category. Core AI engine & streaming backend are 100% shipped — remaining items are operational housekeeping.
 
-### 🎨 Frontend UX & Visual Indicators
-#### [ ] Blinking Cursor in Copilot Streaming Bubble
-- **Why:** Visual feedback while LLM tokens are actively streaming.
-- **What:** Append an animated blinking cursor (`|`) to the active AI chat bubble while `isCopilotTyping` is true.
-
-#### [ ] `⚡ Real AI` vs `📋 Rule Engine` Badges
-- **Why:** Make it clear to judges when a response is powered by real Groq LLM vs fallback rules.
-- **What:** Display pill badges on Copilot responses, Load Balancer decisions, and Executive Summaries indicating whether `ai_generated` is true or false.
-
-#### [ ] Persist Copilot History Per Ticket
-- **Why:** Chat history clears when navigating between tickets in the workbench.
-- **What:** Cache `chatMessages` by `ticket.id` so switching tickets preserves conversation history.
-
-### 🚀 Enterprise Features & Demo Enhancements
-#### [ ] Interactive P0 Load Balancer Rebalance Simulation
-- **Why:** Show dynamic workload re-allocation during critical outages.
-- **What:** Add an interactive "Simulate P0 Outage Rebalance" action in the Load Balancer dashboard to visually animate ticket re-assignments.
-
-#### [ ] Executive AI Briefing Export (PDF / Markdown)
-- **Why:** Leadership needs exportable post-mortems and financial impact reports.
-- **What:** Add a 1-click export button to save Executive Summaries and Business Impact figures to PDF or Markdown.
+### ✅ Already Shipped (this list previously duplicated them as pending — corrected)
+- **Blinking cursor in Copilot streaming bubble** — `DeveloperWorkbench.jsx` renders `▍` with `animate-pulse` on the active AI bubble while `isStreamingReply` is true (see feature 5 above)
+- **`⚡ AI` / `📋 Fallback` badges** — live on Copilot replies, Load Balancer decisions (`AI REASONED` badge), and every tab of the Enterprise AI Insights panel (root cause, explainability, business impact, executive summary, patch preview) via the shared `AiBadge` component. The badge label was corrected from a hardcoded `CLAUDE` to provider-neutral `AI`, since it now also lights up for Groq-generated responses.
+- **Per-ticket Copilot history persistence** — module-level `chatHistoryByTicketId` cache in `DeveloperWorkbench.jsx` (see feature 5 above)
+- **Interactive P0 Load Balancer Rebalance Simulation** — the "Auto Re-Balance" button (now "Simulate P0 Outage Rebalance") no longer shows a blocking `alert()`; `DeveloperLoadBalancer.jsx` renders each reassignment as a card that reveals with a staggered fade/slide-in (350ms apart), showing ticket, from-dev → to-dev, and the reasoning
+- **Executive AI Briefing Export (Markdown)** — `AIInsightsPanel.jsx`'s Executive Summary tab has an "Export .md" button alongside the existing Copy button, downloading the headline, business summary, financial exposure, resolution ETA, recommended actions, and business impact detail as a `.md` file. (PDF export was also requested; Markdown was chosen as the no-new-dependency option — PDF would need a client-side rendering library.)
 
 ### 🔒 Operational Housekeeping
 #### [ ] Voyage AI Embeddings via Groq-compatible Embedding Model
@@ -224,8 +211,9 @@ Match Score = SkillMatch(0.45) × CapacityScore(0.35) × SpeedFactor(0.20) × On
 - **What:** Add Groq embedding support or swap to a free embedding provider (e.g. `nomic-embed-text` via Ollama, or OpenRouter).
 
 #### [ ] Regenerate Exposed Groq API Key
-- **Why:** Key was shared in chat — treat as potentially compromised.
+- **Why:** Key was shared in chat (twice now) — treat as potentially compromised.
 - **What:** Go to [console.groq.com](https://console.groq.com) → API Keys → Delete old key → Create new → update `.env`.
+- **Note:** Account action only a human with console.groq.com access can take.
 
 
 ---
