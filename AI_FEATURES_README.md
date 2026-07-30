@@ -192,20 +192,41 @@ Match Score = SkillMatch(0.45) × CapacityScore(0.35) × SpeedFactor(0.20) × On
 
 ---
 
-## 📋 Things To Do (Pending Changes)
+## 📋 Things To Do (Pending Changes & Upcoming Polish)
 
-> Ordered by priority. Everything from the previous P1/P2 list has shipped — remaining items are lower-priority polish plus one action only a human can take.
+> Ordered by category. Core AI engine & streaming backend are 100% shipped — remaining items enhance UI polish and demo readiness.
 
-### 🟢 P3 — Polish (Nice to Have)
+### 🎨 Frontend UX & Visual Indicators
+#### [ ] Blinking Cursor in Copilot Streaming Bubble
+- **Why:** Visual feedback while LLM tokens are actively streaming.
+- **What:** Append an animated blinking cursor (`|`) to the active AI chat bubble while `isCopilotTyping` is true.
 
+#### [ ] `⚡ Real AI` vs `📋 Rule Engine` Badges
+- **Why:** Make it clear to judges when a response is powered by real Groq LLM vs fallback rules.
+- **What:** Display pill badges on Copilot responses, Load Balancer decisions, and Executive Summaries indicating whether `ai_generated` is true or false.
+
+#### [ ] Persist Copilot History Per Ticket
+- **Why:** Chat history clears when navigating between tickets in the workbench.
+- **What:** Cache `chatMessages` by `ticket.id` so switching tickets preserves conversation history.
+
+### 🚀 Enterprise Features & Demo Enhancements
+#### [ ] Interactive P0 Load Balancer Rebalance Simulation
+- **Why:** Show dynamic workload re-allocation during critical outages.
+- **What:** Add an interactive "Simulate P0 Outage Rebalance" action in the Load Balancer dashboard to visually animate ticket re-assignments.
+
+#### [ ] Executive AI Briefing Export (PDF / Markdown)
+- **Why:** Leadership needs exportable post-mortems and financial impact reports.
+- **What:** Add a 1-click export button to save Executive Summaries and Business Impact figures to PDF or Markdown.
+
+### 🔒 Operational Housekeeping
 #### [ ] Voyage AI Embeddings via Groq-compatible Embedding Model
-- **Why:** `VOYAGE_API_KEY` is not set — pgvector semantic search falls back to TF-IDF
-- **What:** Add Groq embedding support or swap to a free embedding provider (e.g. `nomic-embed-text` via Ollama, or OpenRouter)
+- **Why:** `VOYAGE_API_KEY` is not set — pgvector semantic search falls back to TF-IDF.
+- **What:** Add Groq embedding support or swap to a free embedding provider (e.g. `nomic-embed-text` via Ollama, or OpenRouter).
 
 #### [ ] Regenerate Exposed Groq API Key
-- **Why:** The key was shared in a chat session — treat it as potentially compromised
-- **What:** Go to [console.groq.com](https://console.groq.com) → API Keys → Delete old key → Create new → update `.env`
-- **Note:** This is an account action only a human with console.groq.com access can take — not something an agent can do on your behalf
+- **Why:** Key was shared in chat — treat as potentially compromised.
+- **What:** Go to [console.groq.com](https://console.groq.com) → API Keys → Delete old key → Create new → update `.env`.
+
 
 ---
 
