@@ -148,7 +148,14 @@ export async function analyzeMultimodalInputFromImage(imageBase64) {
   // Tesseract.js v5+ disables every output except `text` by default — the convenience
   // Tesseract.recognize() helper has no way to request `blocks` (word-level bbox data),
   // so word/line detail requires the lower-level createWorker() API.
-  const worker = await Tesseract.createWorker("eng");
+  //
+  // `errorHandler` is required, not optional: on a decode failure (corrupt bytes, an
+  // unsupported format) Tesseract.js's internal message handler rejects the pending
+  // promise AND — if no errorHandler is configured — separately throws inside its own
+  // event listener, which Node re-raises as an uncaught exception that crashes the whole
+  // process. Supplying a no-op errorHandler suppresses that second throw; the rejected
+  // promise below is what actually surfaces the failure to the caller.
+  const worker = await Tesseract.createWorker("eng", 1, { errorHandler: () => {} });
   let data;
   try {
     ({ data } = await worker.recognize(buffer, {}, { text: true, blocks: true }));

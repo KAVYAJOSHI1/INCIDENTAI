@@ -56,12 +56,19 @@ export async function runIncidentIngestPipeline(inputPayload) {
   // screenshot-only submission had no text signal at all for classification.
   const sourceText = (inputPayload.text || inputPayload.ocrRawText || "").trim();
 
-  let ocrFindings;
+  let ocrFindings = null;
   if (inputPayload.imageBase64) {
-    // Real server-side OCR on the actual screenshot — independent classification plus a
-    // genuine word-level bounding box, not the text-only keyword matcher below.
-    ocrFindings = await analyzeMultimodalInputFromImage(inputPayload.imageBase64);
-  } else {
+    try {
+      // Real server-side OCR on the actual screenshot — independent classification plus a
+      // genuine word-level bounding box, not the text-only keyword matcher below.
+      ocrFindings = await analyzeMultimodalInputFromImage(inputPayload.imageBase64);
+    } catch (err) {
+      // Corrupt bytes / unsupported format — don't fail the whole ticket over an
+      // unreadable image, fall through to the text-only classifier below.
+      console.warn(`[ticketService] Server-side image OCR failed, falling back to text classification: ${err?.message || err}`);
+    }
+  }
+  if (!ocrFindings) {
     ocrFindings = analyzeMultimodalInput({ ...inputPayload, text: sourceText });
     if (inputPayload.ocrRawText) {
       // Surface the real extracted text (not just the synthetic signature summary) so the

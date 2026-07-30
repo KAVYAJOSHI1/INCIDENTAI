@@ -15,7 +15,8 @@ export function registerOcrRoutes(router) {
         try {
           ocr = await analyzeMultimodalInputFromImage(input.imageBase64);
         } catch (err) {
-          throw new ApiError(400, `Could not read image: ${err.message}`);
+          // Tesseract.js can reject with a plain string rather than an Error instance.
+          throw new ApiError(400, `Could not read image: ${err?.message || err}`);
         }
       } else {
         ocr = analyzeMultimodalInput(input);

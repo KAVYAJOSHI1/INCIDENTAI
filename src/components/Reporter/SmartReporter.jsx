@@ -116,7 +116,12 @@ export default function SmartReporter({ onSubmitIncident }) {
       const worker = await Tesseract.createWorker('eng', 1, {
         logger: (m) => {
           if (m.status === 'recognizing text') setRealOcrProgress(Math.round(m.progress * 100));
-        }
+        },
+        // Without this, a decode failure (corrupt file, unsupported format) throws inside
+        // Tesseract's own internal message handler in addition to rejecting the recognize()
+        // promise — an unhandled error the try/catch below can't reach. No-op it and let the
+        // rejected promise (caught below) be the single source of truth for the failure.
+        errorHandler: () => {}
       });
       let data;
       try {
