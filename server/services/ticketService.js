@@ -3,7 +3,7 @@
  */
 
 import crypto from "node:crypto";
-import { analyzeMultimodalInput } from "./ocrService.js";
+import { analyzeMultimodalInput, analyzeMultimodalInputFromImage } from "./ocrService.js";
 import { scoreSeverity, scoreSeverityWithAI } from "./severityService.js";
 import { predictRootCause, predictRootCauseWithAI } from "./rootCauseService.js";
 import { findDuplicateTickets, findDuplicateTicketsWithAI, findDuplicateTicketsWithVector } from "./duplicateService.js";
@@ -56,12 +56,19 @@ export async function runIncidentIngestPipeline(inputPayload) {
   // screenshot-only submission had no text signal at all for classification.
   const sourceText = (inputPayload.text || inputPayload.ocrRawText || "").trim();
 
-  const ocrFindings = analyzeMultimodalInput({ ...inputPayload, text: sourceText });
-  if (inputPayload.ocrRawText) {
-    // Surface the real extracted text (not just the synthetic signature summary) so the
-    // Developer Workbench shows what Tesseract actually read off the screenshot.
-    ocrFindings.raw_text = inputPayload.ocrRawText;
-    ocrFindings.ocr_extracted_text = `[Tesseract.js Real OCR]\n${inputPayload.ocrRawText}\n\n${ocrFindings.ocr_extracted_text}`;
+  let ocrFindings;
+  if (inputPayload.imageBase64) {
+    // Real server-side OCR on the actual screenshot — independent classification plus a
+    // genuine word-level bounding box, not the text-only keyword matcher below.
+    ocrFindings = await analyzeMultimodalInputFromImage(inputPayload.imageBase64);
+  } else {
+    ocrFindings = analyzeMultimodalInput({ ...inputPayload, text: sourceText });
+    if (inputPayload.ocrRawText) {
+      // Surface the real extracted text (not just the synthetic signature summary) so the
+      // Developer Workbench shows what Tesseract actually read off the screenshot.
+      ocrFindings.raw_text = inputPayload.ocrRawText;
+      ocrFindings.ocr_extracted_text = `[Tesseract.js Real OCR]\n${inputPayload.ocrRawText}\n\n${ocrFindings.ocr_extracted_text}`;
+    }
   }
   const ocrDurationMs = Date.now() - t0;
 

@@ -20,6 +20,20 @@ function flattenWords(blocks) {
   return words;
 }
 
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result); // "data:image/png;base64,..."
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// Keep well under the backend's 2MB JSON body cap (server/utils/http.js) — base64 already
+// adds ~33% overhead over the raw file size, and this string travels twice (OCR preview +
+// incident submission).
+const MAX_INLINE_IMAGE_BASE64 = 1_800_000;
+
 export default function SmartReporter({ onSubmitIncident }) {
   const [inputText, setInputText] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
@@ -34,6 +48,7 @@ export default function SmartReporter({ onSubmitIncident }) {
   const [realOcrProgress, setRealOcrProgress] = useState(0);
   const [realOcrRawText, setRealOcrRawText] = useState('');
   const [realWordBoxPx, setRealWordBoxPx] = useState(null);
+  const [imageBase64, setImageBase64] = useState(null);
   const imagePreviewUrlRef = useRef(null);
 
   useEffect(() => () => {
@@ -61,6 +76,22 @@ export default function SmartReporter({ onSubmitIncident }) {
     }
   };
 
+  // Sends the actual image bytes to the backend so real server-side Tesseract OCR drives
+  // error-code classification and the bounding box — not the text-only keyword matcher.
+  const runServerImageOcr = async (base64) => {
+    setIsScanning(true);
+    setOcrResult(null);
+
+    try {
+      const result = await analyzeOcrPreview({ imageBase64: base64 });
+      setOcrResult(result);
+    } catch (err) {
+      console.error('Server-side image OCR preview failed:', err);
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
   const resetRealOcrState = () => {
     if (imagePreviewUrlRef.current) URL.revokeObjectURL(imagePreviewUrlRef.current);
     imagePreviewUrlRef.current = null;
@@ -68,6 +99,7 @@ export default function SmartReporter({ onSubmitIncident }) {
     setImageNaturalSize(null);
     setRealOcrRawText('');
     setRealWordBoxPx(null);
+    setImageBase64(null);
   };
 
   const runRealImageOcr = async (file) => {
@@ -104,9 +136,23 @@ export default function SmartReporter({ onSubmitIncident }) {
       setIsRealOcrRunning(false);
     }
 
-    const effectiveText = inputText.trim() || extractedText;
     if (!inputText.trim() && extractedText) setInputText(extractedText);
-    await handleSimulatedScan(effectiveText || file.name);
+
+    // Hand the raw image to the backend so independent server-side Tesseract drives
+    // classification and the ticket's real bounding box — not just the extracted text.
+    try {
+      const base64 = await fileToBase64(file);
+      if (base64.length > MAX_INLINE_IMAGE_BASE64) {
+        console.warn('Image too large to send to the server for OCR; falling back to text-based classification.');
+        await handleSimulatedScan(inputText.trim() || extractedText || file.name);
+        return;
+      }
+      setImageBase64(base64);
+      await runServerImageOcr(base64);
+    } catch (err) {
+      console.error('Failed to prepare image for server-side OCR:', err);
+      await handleSimulatedScan(inputText.trim() || extractedText || file.name);
+    }
   };
 
   const handleFileSelected = (file) => {
@@ -137,6 +183,7 @@ export default function SmartReporter({ onSubmitIncident }) {
     onSubmitIncident({
       text: inputText.trim() || undefined,
       fileName: selectedFile?.name,
+      imageBase64: imageBase64 || undefined,
       ocrRawText: realOcrRawText || undefined
     });
   };

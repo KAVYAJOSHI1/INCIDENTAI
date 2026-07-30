@@ -155,16 +155,18 @@ Match Score = SkillMatch(0.45) × CapacityScore(0.35) × SpeedFactor(0.20) × On
 ---
 
 ### 11. Multimodal OCR & Vision Diagnostics
-**Files:** `server/services/ocrService.js`, `src/components/Reporter/SmartReporter.jsx` · **Status: ✅ Live**
+**Files:** `server/services/ocrService.js`, `server/services/ticketService.js`, `src/components/Reporter/SmartReporter.jsx` · **Status: ✅ Live**
 
 | Path | Method |
 |---|---|
-| **Client-side (upload UI)** | Real Tesseract.js OCR runs in-browser on the uploaded screenshot via `createWorker` + `blocks: true` output, extracting genuine pixel-level text and a real word-level bounding box for the error code |
-| **Server-side (API)** | `POST /api/ocr/analyze` accepts `imageBase64`; runs the same real Tesseract.js OCR server-side (also via `createWorker`) for non-browser clients, decoding PNG/JPEG header bytes to convert the pixel bbox into the same percentage format the UI renders |
-| **Classifier (either path)** | Real extracted text is passed through the shared keyword-signature classifier to produce `error_code`, `erp_module`, `detected_ui_component`, `confidence` |
+| **Client-side (upload UI)** | Real Tesseract.js OCR runs in-browser on the uploaded screenshot via `createWorker` + `blocks: true` output, driving the progress bar, the raw-text panel, and the auto-filled description |
+| **Server-side (API + ticket creation)** | `SmartReporter.jsx` converts the uploaded file to base64 and sends it to `POST /api/ocr/analyze` (preview) and `POST /api/incidents/ingest` (on submit); `ticketService.js` calls `analyzeMultimodalInputFromImage()` — real server-side Tesseract.js OCR on the actual image bytes, independent of the browser run, with a real per-word bounding box |
+| **Classifier (either path)** | Extracted text is passed through the shared keyword-signature classifier to produce `error_code`, `erp_module`, `detected_ui_component`, `confidence` |
 
 - Both paths use `createWorker(...).recognize(image, {}, { blocks: true })` — the one-shot `Tesseract.recognize()` convenience helper silently omits word/bbox data by default in Tesseract.js v5+, which was the root cause of bounding boxes never rendering
-- The real extracted text (not just the synthetic signature summary) is threaded all the way into the created ticket's `ocr_findings`
+- **The server-side function existed for a full session before it was actually wired to anything** — the frontend built the base64 string but never sent it, so every request silently fell through to the text-only keyword matcher. Fixed by having `SmartReporter.jsx` actually pass `imageBase64` on both the preview and submit calls, and `ticketService.js` branching to `analyzeMultimodalInputFromImage()` when it's present.
+- Images above ~1.8MB base64 skip the server round-trip (client-side size guard, under the backend's 2MB request-body cap) and fall back to text-based classification instead of failing the submit
+- The real extracted text and bounding box are threaded all the way into the created ticket's `ocr_findings`
 - Self-fix suggestions generated for known resolvable errors (e.g. missing GSTIN exemption)
 
 ---
