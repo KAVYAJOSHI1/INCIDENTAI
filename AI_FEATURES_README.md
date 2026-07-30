@@ -1,25 +1,26 @@
-# 🤖 IncidentAI — AI Features & Implementation Plan
+# 🤖 IncidentAI — AI Features, Status & Roadmap
 
-> **Status:** Active Development · Hackathon Build — Websys Gooru 2026
+> **Status:** Active Development · Hackathon Build — Websys Gooru 2026  
+> **Last updated:** 2026-07-30 · Commit `00310c2`
 
 ---
 
 ## Overview
 
-IncidentAI is an ERP Support Intelligence Engine that uses a **multi-layer AI pipeline** — real Claude reasoning, Voyage AI vector embeddings, pgvector semantic search, and Tesseract.js OCR — to autonomously triage, diagnose, route, and resolve enterprise ERP incidents.
+IncidentAI is an ERP Support Intelligence Engine that uses a **multi-layer AI pipeline** — LLM reasoning (Groq/Claude), Voyage AI vector embeddings, pgvector semantic search, and Tesseract.js OCR — to autonomously triage, diagnose, route, and resolve enterprise ERP incidents.
 
 Every AI feature follows a **graceful degradation contract**: if no API key is configured or a call fails for any reason, the system silently falls back to a deterministic rule-based equivalent. The app never breaks because an AI provider is unavailable.
 
 ---
 
-## 🧠 AI Features (Current — Implemented)
+## ✅ Completed (Shipped)
 
 ### 1. Severity Scoring Engine
-**File:** `server/services/severityService.js`
+**File:** `server/services/severityService.js` · **Status: ✅ Live**
 
 | Mode | Method |
 |---|---|
-| **AI Mode** | Claude JSON-schema constrained classification (`P0_CRITICAL` → `P3_LOW`) with reasoning |
+| **AI Mode** | LLM JSON-schema constrained classification (`P0_CRITICAL` → `P3_LOW`) with reasoning |
 | **Fallback** | Weighted keyword scoring + ERP module base impact table |
 
 - Classifies by **business impact**, not emotional tone
@@ -29,11 +30,11 @@ Every AI feature follows a **graceful degradation contract**: if no API key is c
 ---
 
 ### 2. Root Cause & Patch Predictor
-**File:** `server/services/rootCauseService.js`
+**File:** `server/services/rootCauseService.js` · **Status: ✅ Live**
 
 | Mode | Method |
 |---|---|
-| **AI Mode** | Claude diagnoses root cause + proposes concrete SQL/code patch with calibrated confidence |
+| **AI Mode** | LLM diagnoses root cause + proposes concrete SQL/code patch with calibrated confidence |
 | **Fallback** | Signature lookup table (5 known ERP error patterns) + generic template |
 
 - ERP-convention-aware prompts (SAP ABAP, Odoo ORM, Oracle PL/SQL, NetSuite SuiteScript)
@@ -42,12 +43,12 @@ Every AI feature follows a **graceful degradation contract**: if no API key is c
 ---
 
 ### 3. Duplicate Detection (3-Layer Pipeline)
-**File:** `server/services/duplicateService.js`
+**File:** `server/services/duplicateService.js` · **Status: ✅ Live**
 
 ```
 Layer 1: TF-IDF cosine similarity  →  cheap candidate shortlist
 Layer 2: pgvector cosine distance  →  semantic vector ranking (Voyage AI embeddings)
-Layer 3: Claude reranking          →  semantic judgment on the shortlist
+Layer 3: LLM reranking             →  semantic judgment on the shortlist
 ```
 
 - Error code exact-match boost (`+0.35` to cosine score)
@@ -57,11 +58,11 @@ Layer 3: Claude reranking          →  semantic judgment on the shortlist
 ---
 
 ### 4. RAG Knowledge Hub
-**File:** `server/services/knowledgeService.js`
+**File:** `server/services/knowledgeService.js` · **Status: ✅ Live**
 
 ```
 Retrieve: TF-IDF or pgvector candidate articles
-Generate: Claude semantic reranking with why_relevant per article
+Generate: LLM semantic reranking with why_relevant per article
 ```
 
 - Search-as-you-type with 60-second TTL cache
@@ -70,22 +71,31 @@ Generate: Claude semantic reranking with why_relevant per article
 
 ---
 
-### 5. AI Developer Copilot (Chat)
+### 5. AI Developer Copilot — SSE Streaming + Multi-Turn Memory
 **File:** `server/services/copilotService.js`  
-**Route:** `POST /api/copilot/chat`
+**Routes:** `POST /api/copilot/chat` (blocking) · `POST /api/copilot/stream` (SSE)  
+**Status: ✅ Live**
 
-- Full ticket context injected into system prompt (title, root cause, patch, routing, OCR findings)
-- Intent-matched fallback for: root cause / patch / postmortem / assignment queries
-- **Planned upgrade:** SSE streaming + multi-turn conversation memory (see roadmap below)
+- **Real-time token streaming** via SSE — tokens render live into the chat bubble
+- **Multi-turn conversation memory** — last 10 turns passed as `history[]` on every request
+- Full ticket context injected into system prompt (root cause, patch, OCR findings, routing)
+- Intent-matched fallback (root cause / patch / postmortem / assignment) when LLM unavailable
+
+```
+Server → Client: text/event-stream
+data: {"chunk": "Row lock contention"}
+data: {"chunk": " on emp_tax_deductions_2026"}
+data: [DONE]
+```
 
 ---
 
 ### 6. AI Patch Preview & Safety Guardrails
-**File:** `server/services/patchPreviewService.js`
+**File:** `server/services/patchPreviewService.js` · **Status: ✅ Live**
 
 | Mode | Method |
 |---|---|
-| **AI Mode** | Claude reviews its own suggested patch — affected tables, risk score, rollback plan, execution steps |
+| **AI Mode** | LLM reviews its own suggested patch — affected tables, risk score, rollback plan, execution steps |
 | **Fallback** | Regex table extraction + severity/module-based risk heuristic |
 
 - Financial module detection (`PAYROLL`, `GENERAL_LEDGER`) triggers dual sign-off warning
@@ -94,21 +104,21 @@ Generate: Claude semantic reranking with why_relevant per article
 ---
 
 ### 7. AI Decision Explainability Matrix
-**File:** `server/services/explainabilityService.js`
+**File:** `server/services/explainabilityService.js` · **Status: ✅ Live**
 
 - Surfaces **why** every AI decision was made — severity, routing, duplicate match, KB matches
-- `ai_generated` flag on every field distinguishes real Claude output from rule-based fallback
-- **AI Mode:** Claude synthesizes a plain-English narrative from the structured explainability JSON
+- `ai_generated` flag on every field distinguishes real LLM output from rule-based fallback
+- **AI Mode:** LLM synthesizes a plain-English narrative from the structured explainability JSON
 - **Fallback:** Template-based sentence assembly
 
 ---
 
 ### 8. Business Impact & Financial Loss Engine
-**File:** `server/services/businessImpactService.js`
+**File:** `server/services/businessImpactService.js` · **Status: ✅ Live**
 
 | Mode | Method |
 |---|---|
-| **AI Mode** | Claude estimates revenue loss/hour, affected users, departments, compliance risk, SLA breach % |
+| **AI Mode** | LLM estimates revenue loss/hour, affected users, departments, compliance risk, SLA breach % |
 | **Fallback** | Module × severity multiplier table with SLA urgency bump |
 
 - Module revenue baselines: `PAYROLL: $8,200/hr`, `INVOICING: $6,400/hr`, etc.
@@ -117,37 +127,37 @@ Generate: Claude semantic reranking with why_relevant per article
 ---
 
 ### 9. Executive AI Briefing
-**File:** `server/services/executiveSummaryService.js`
+**File:** `server/services/executiveSummaryService.js` · **Status: ✅ Live**
 
 | Mode | Method |
 |---|---|
-| **AI Mode** | Claude writes plain-English headline + business summary grounded in computed impact figures |
+| **AI Mode** | LLM writes plain-English headline + business summary grounded in computed impact figures |
 | **Fallback** | Template string assembly from ticket + impact data |
 
-- JSON schema enforces no hallucinated numbers — Claude uses provided figures exactly
+- JSON schema enforces no hallucinated numbers — LLM uses provided figures exactly
 - Generates recommended leadership actions per ticket
 
 ---
 
-### 10. Dynamic Developer Load Balancing
-**File:** `server/services/loadBalancerService.js`
+### 10. Dynamic Developer Load Balancing + AI Reasoning
+**File:** `server/services/loadBalancerService.js` · **Status: ✅ Live**
 
 ```
 Match Score = SkillMatch(0.45) × CapacityScore(0.35) × SpeedFactor(0.20) × OnCallBonus
 ```
 
-- Skill overlap matching against `MODULE_SKILLS_MAP` (SAP ABAP, Oracle PL/SQL, etc.)
-- MTTR-based speed factor: faster resolvers scored higher
-- P0 escalation triggers automatic workload rebalancing — offloads P2/P3 tickets from overloaded devs
+- `recommendDeveloperForTicket()` — deterministic math formula (always available)
+- `recommendDeveloperWithAI()` — LLM reranks top 3 math candidates with nuanced reasoning
+- P0 escalation triggers automatic workload rebalancing — offloads P2/P3 from overloaded devs
 
 ---
 
 ### 11. Multimodal OCR & Vision Diagnostics
-**File:** `server/services/ocrService.js`
+**File:** `server/services/ocrService.js` · **Status: ⚠️ Simulated**
 
 | Mode | Method |
 |---|---|
-| **Current** | Keyword signature matching on submitted text (simulated) |
+| **Current** | Keyword signature matching on submitted text (not real image reading) |
 | **Planned** | Real Tesseract.js server-side OCR on uploaded screenshot images |
 
 - Extracts: `error_code`, `erp_module`, `detected_ui_component`, `bounding_box`, `confidence`
@@ -156,7 +166,7 @@ Match Score = SkillMatch(0.45) × CapacityScore(0.35) × SpeedFactor(0.20) × On
 ---
 
 ### 12. Vector Embeddings (Voyage AI + pgvector)
-**File:** `server/services/embeddingService.js`
+**File:** `server/services/embeddingService.js` · **Status: ✅ Architecture Live (needs VOYAGE_API_KEY)**
 
 - Model: `voyage-3.5`, 1024 dimensions — matches `vector(1024)` columns in `schema.sql`
 - Query embedding cached for 60 seconds (prevents re-embedding on search-as-you-type)
@@ -165,58 +175,67 @@ Match Score = SkillMatch(0.45) × CapacityScore(0.35) × SpeedFactor(0.20) × On
 
 ---
 
-## 🚀 Real-Time Upgrade Roadmap
+## 📋 Things To Do (Pending Changes)
 
-> These are the **planned upgrades** to replace remaining static/simulated behaviour.
+> Ordered by priority. These are the remaining tasks to reach full real-time AI mode.
 
-### Priority 1 — Streaming Copilot Chat
-**Problem:** Claude's reply appears all at once after full inference. Feels static.  
-**Fix:** Replace `POST /api/copilot/chat` with an SSE endpoint (`GET /api/copilot/stream`).
+### 🔴 P1 — Critical (Breaks AI Mode)
 
-```
-Server → Client: text/event-stream
-data: {"chunk": "The root cause"}
-data: {"chunk": " is a missing index"}
-data: {"chunk": " on emp_tax_deductions_2026"}
-data: [DONE]
-```
+#### [ ] Wire Groq as LLM Provider in `llmService.js`
+- **Why:** `GROQ_API_KEY` is now in `.env` and `groq-sdk` is installed, but `llmService.js` still only checks for `ANTHROPIC_API_KEY`. All AI features are in fallback mode.
+- **What:** Rewrite `llmService.js` to be provider-agnostic:
+  - Try Anthropic first (if `ANTHROPIC_API_KEY` set)
+  - Fall back to Groq (if `GROQ_API_KEY` set) using `llama-3.3-70b-versatile`
+  - For JSON output: use Groq's `response_format: { type: "json_object" }` + schema in system prompt
+  - For streaming: use `groq.chat.completions.create({ stream: true })`
+- **Files:** `server/services/llmService.js`, `server/utils/loadEnv.js`
 
-Frontend: tokens rendered live into chat bubble with a blinking cursor. No "thinking…" spinner.
-
----
-
-### Priority 2 — Multi-Turn Conversation Memory
-**Problem:** Every Copilot message is independent — Claude forgets prior answers.  
-**Fix:** Frontend maintains `history: [{role, content}]` array; passed on every SSE request.
-
-```js
-// Each new message appends the history
-messages: [...history, { role: "user", content: newMessage }]
-```
-
-Claude now remembers the full conversation thread within a session.
+#### [ ] Update `.env.example` with Groq key
+- Add `GROQ_API_KEY=gsk_...` to `.env.example` so future devs know it's needed
+- **File:** `.env.example`
 
 ---
 
-### Priority 3 — Real Tesseract.js OCR
-**Problem:** `ocrService.js` does keyword matching on text input, not real image reading.  
-**Fix:** Accept `base64` image in request body, run server-side Tesseract.js, extract real text.
+### 🟡 P2 — Important (Improves Realism)
 
-```
-User uploads ERP screenshot → Tesseract extracts real text → Error signature classifier runs on real OCR output
-```
+#### [ ] Real Tesseract.js OCR (server-side)
+- **Why:** `ocrService.js` fakes OCR by matching keywords from text input — it never reads an actual image
+- **What:**
+  - Accept `base64` image data in `POST /api/ocr/analyze` request body
+  - Run `tesseract.js` (already installed) on the decoded image bytes
+  - Pass extracted text through existing error-signature classifier
+  - Return real bounding box coordinates from Tesseract word-level data
+- **Files:** `server/services/ocrService.js`, `server/routes/ocr.js`, `server/utils/schemas.js`
+
+#### [ ] Image Upload in SmartReporter UI
+- **Why:** Currently Reporter only accepts text — users can't upload a real screenshot
+- **What:** Add drag-and-drop / file picker for image files; send as base64 to `/api/ocr/analyze`
+- **File:** `src/components/Reporter/SmartReporter.jsx`
+
+#### [ ] Blinking Cursor in Copilot Streaming Bubble
+- **Why:** While tokens are streaming, the bubble shows partial text but no visual cue that it's still writing
+- **What:** Append a CSS `animate-pulse` blinking `|` cursor to the last AI bubble while `isCopilotTyping` is true; hide it when stream ends
+- **File:** `src/components/Workbench/DeveloperWorkbench.jsx`
 
 ---
 
-### Priority 4 — AI Load Balancer Reasoning
-**Problem:** Load balancer routing is pure math — no LLM reasoning.  
-**Fix:** Add `recommendDeveloperWithAI()` that has Claude reason over the developer pool using ticket context.
+### 🟢 P3 — Polish (Nice to Have)
 
----
+#### [ ] Persist Copilot History Across Ticket Navigation
+- **Why:** Switching tickets resets the entire chat log even if you come back to the same ticket
+- **What:** Store `chatMessages` per `ticket.id` in a `useRef` map so history survives tab switches
 
-### Priority 5 — Model Name Fix
-**Problem:** `MODEL = "claude-opus-4-8"` is invalid and will throw API errors.  
-**Fix:** `"claude-opus-4-8"` → `"claude-opus-4-5"`
+#### [ ] `ai_generated` Badge in Copilot Bubble
+- **Why:** User can't tell if a reply came from real Groq/Claude or from the rule-based fallback
+- **What:** Show a small `⚡ AI` or `📋 Fallback` pill below each AI bubble based on `reply.ai_generated`
+
+#### [ ] Voyage AI Embeddings via Groq-compatible Embedding Model
+- **Why:** `VOYAGE_API_KEY` is not set — pgvector semantic search falls back to TF-IDF
+- **What:** Add Groq embedding support or swap to a free embedding provider (e.g. `nomic-embed-text` via Ollama, or OpenRouter)
+
+#### [ ] Regenerate Exposed Groq API Key
+- **Why:** The key was shared in a chat session — treat it as potentially compromised
+- **What:** Go to [console.groq.com](https://console.groq.com) → API Keys → Delete old key → Create new → update `.env`
 
 ---
 
@@ -226,31 +245,34 @@ User uploads ERP screenshot → Tesseract extracts real text → Error signature
 User reports incident (text / screenshot)
          │
          ▼
-  [OCR / Vision Layer]  ←── Tesseract.js + Signature Classifier
+  [OCR / Vision Layer]  ←── Tesseract.js + Signature Classifier    ⚠️ simulated
          │
          ▼
-  [Severity Engine]  ←── Claude JSON schema / Keyword fallback
+  [Severity Engine]  ←── Groq/Claude JSON schema / Keyword fallback  ✅ live
          │
          ▼
-  [Duplicate Check]  ←── TF-IDF → pgvector → Claude reranker
+  [Duplicate Check]  ←── TF-IDF → pgvector → LLM reranker           ✅ live
          │
          ▼
-  [Root Cause + Patch]  ←── Claude ERP-domain reasoning
+  [Root Cause + Patch]  ←── LLM ERP-domain reasoning                 ✅ live
          │
          ▼
-  [Developer Routing]  ←── Skill × Capacity × MTTR formula
+  [Developer Routing]  ←── Math formula + LLM reranking              ✅ live
          │
          ▼
-  [RAG Knowledge Hub]  ←── pgvector search → Claude reranker
+  [RAG Knowledge Hub]  ←── pgvector search → LLM reranker            ✅ live
          │
          ▼
-  [Business Impact]  ←── Claude / Module-severity table
+  [Business Impact]  ←── LLM / Module-severity table                 ✅ live
          │
          ▼
-  [Executive Summary]  ←── Claude plain-English briefing
+  [Executive Summary]  ←── LLM plain-English briefing                ✅ live
          │
          ▼
-  [Explainability]  ←── Claude narrative / Template fallback
+  [Explainability]  ←── LLM narrative / Template fallback            ✅ live
+         │
+         ▼
+  [Copilot Chat]  ←── SSE streaming + multi-turn memory              ✅ live
 ```
 
 ---
@@ -258,10 +280,11 @@ User reports incident (text / screenshot)
 ## ⚙️ Environment Variables
 
 ```env
-# Required for Claude AI reasoning
-ANTHROPIC_API_KEY=sk-ant-...
+# LLM — use either Groq (free) or Anthropic (paid)
+GROQ_API_KEY=gsk_...          # Free at console.groq.com — uses llama-3.3-70b-versatile
+ANTHROPIC_API_KEY=sk-ant-...  # Paid — uses claude-opus-5 (checked first if both present)
 
-# Required for Voyage AI vector embeddings  
+# Vector embeddings (optional — falls back to TF-IDF if not set)
 VOYAGE_API_KEY=pa-...
 
 # Postgres (pgvector)
@@ -275,27 +298,29 @@ PGDATABASE=incidentai
 JWT_SECRET=your-secret-here
 ```
 
-> Without `ANTHROPIC_API_KEY`, all Claude calls return `null` and the system runs entirely on deterministic fallbacks. The app is fully functional in both modes.
+> The app is fully functional with **no API keys at all** — everything falls back to deterministic rule-based logic.
 
 ---
 
-## 📊 AI Feature Rating (Honest Assessment)
+## 📊 AI Feature Rating (Current State)
 
-| Feature | Score | Mode |
+| Feature | Score | Status |
 |---|---|---|
 | Graceful Degradation Architecture | ⭐⭐⭐⭐⭐ 10/10 | ✅ Live |
-| Duplicate Detection (3-layer pipeline) | ⭐⭐⭐⭐⭐ 9/10 | ✅ Live |
+| SSE Streaming Copilot | ⭐⭐⭐⭐⭐ 10/10 | ✅ Live |
+| Multi-Turn Conversation Memory | ⭐⭐⭐⭐⭐ 10/10 | ✅ Live |
+| Duplicate Detection (3-layer) | ⭐⭐⭐⭐⭐ 9/10 | ✅ Live |
 | Severity Scoring | ⭐⭐⭐⭐½ 9/10 | ✅ Live |
 | RAG Knowledge Hub | ⭐⭐⭐⭐½ 8.5/10 | ✅ Live |
-| Vector Embeddings (Voyage + pgvector) | ⭐⭐⭐⭐½ 8.5/10 | ✅ Live |
-| Patch Preview & Safety Guardrails | ⭐⭐⭐⭐ 8/10 | ✅ Live |
+| Vector Embeddings (pgvector) | ⭐⭐⭐⭐½ 8.5/10 | ✅ Live (needs VOYAGE_API_KEY) |
+| Patch Preview & Guardrails | ⭐⭐⭐⭐ 8/10 | ✅ Live |
 | AI Explainability Matrix | ⭐⭐⭐⭐ 8/10 | ✅ Live |
 | Business Impact Engine | ⭐⭐⭐⭐ 8/10 | ✅ Live |
-| AI Copilot (no streaming yet) | ⭐⭐⭐⭐ 8/10 | ✅ Live |
-| Executive Briefing | ⭐⭐⭐⭐ 8/10 | ✅ Live |
-| Load Balancer (no AI yet) | ⭐⭐⭐ 6/10 | 🔧 Planned |
-| OCR (simulated) | ⭐⭐ 4/10 | 🔧 Planned |
-| **Overall** | **⭐⭐⭐⭐ 8.2/10** | |
+| Executive AI Briefing | ⭐⭐⭐⭐ 8/10 | ✅ Live |
+| AI Load Balancer | ⭐⭐⭐⭐ 8/10 | ✅ Live (needs LLM key) |
+| Groq Provider Integration | ⭐ 1/10 | 🔴 TODO — key added, not wired |
+| OCR (simulated) | ⭐⭐ 4/10 | 🟡 TODO — real Tesseract pending |
+| **Overall** | **⭐⭐⭐⭐ 8.5/10** | |
 
 ---
 
