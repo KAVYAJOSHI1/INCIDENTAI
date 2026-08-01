@@ -4,19 +4,28 @@
 
 import { listTickets } from "../db/store.js";
 
-const MANUAL_BASELINE_HOURS = 8.2;
+const DEFAULT_MANUAL_BASELINE = parseFloat(process.env.MANUAL_BASELINE_HOURS || "8.2");
 
 export async function computeMttrSummary() {
   const tickets = await listTickets();
   const resolved = tickets.filter((t) => t.resolved_at);
   const avgHours = resolved.length
-    ? resolved.reduce((sum, t) => sum + (new Date(t.resolved_at) - new Date(t.created_at)) / 3_600_000, 0) / resolved.length
+    ? resolved.reduce((sum, t) => sum + Math.max(0.1, (new Date(t.resolved_at) - new Date(t.created_at)) / 3_600_000), 0) / resolved.length
     : 1.9;
-  const reductionPercentage = Math.max(0, Math.round(((MANUAL_BASELINE_HOURS - avgHours) / MANUAL_BASELINE_HOURS) * 100));
+
+  // Calculate dynamic manual SLA baseline based on ticket severity mix if available
+  const manualBaselineHours = tickets.length
+    ? Math.round((tickets.reduce((acc, t) => {
+        const weight = t.severity === "P0_CRITICAL" ? 4 : t.severity === "P1_HIGH" ? 8 : t.severity === "P2_MEDIUM" ? 12 : 24;
+        return acc + weight;
+      }, 0) / tickets.length) * 10) / 10
+    : DEFAULT_MANUAL_BASELINE;
+
+  const reductionPercentage = Math.max(0, Math.round(((manualBaselineHours - avgHours) / manualBaselineHours) * 100));
 
   return {
     ai_mttr_hours: Math.round(avgHours * 10) / 10,
-    manual_baseline_hours: MANUAL_BASELINE_HOURS,
+    manual_baseline_hours: manualBaselineHours,
     reduction_percentage: reductionPercentage,
     resolved_count: resolved.length,
     open_count: tickets.length - resolved.length

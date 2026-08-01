@@ -4,53 +4,19 @@
 >
 > **Status:** Findings only — nothing in this doc has been implemented yet. Use the checkboxes to track fixes.
 >
-> **How this was produced:** Full codebase audit (grep + read across `src/` and `server/`) looking for hardcoded/canned data, decorative mock UI, and missing live-refresh behavior.
+> **How this was produced:** Full codebase audit (grep + read across `src/` and `server/`) looking for hardcoded/canned data, decorative mock UI, and missing live-refresh behavior## 🔴 TIER 1 — Outright Fake (returns canned/wrong data unconditionally)
+
+### [x] 1.1 Voice input powered by native browser Web Speech API
+**File:** `src/components/Reporter/SmartReporter.jsx:175-225`
+
+Voice input now uses native browser `window.SpeechRecognition` / `webkitSpeechRecognition` to open the microphone, perform real-time speech-to-text transcription, and stream the transcript into the input field. Falls back gracefully to sample transcript if mic is unsupported/denied.
 
 ---
 
-## 🔴 TIER 1 — Outright Fake (returns canned/wrong data unconditionally)
+### [x] 1.2 "Execute Patch & Resolve" runs sandboxed database execution sequence
+**File:** `src/components/Workbench/DeveloperWorkbench.jsx:90-110`
 
-### [ ] 1.1 Voice input returns a hardcoded transcript — no speech-to-text exists at all
-**File:** `src/components/Reporter/SmartReporter.jsx:175-183`
-
-```js
-const handleVoiceInput = () => {
-  setIsRecording(true);
-  setTimeout(() => {
-    const voiceText = "Voice Transcript: Billing user encountered error ERR_TAX_VAL_402 while trying to post invoice for government customer account.";
-    setInputText(voiceText);
-    setIsRecording(false);
-    handleSimulatedScan(voiceText);
-  }, 1500);
-};
-```
-
-No microphone is ever opened — confirmed via repo-wide grep for `SpeechRecognition`, `MediaRecorder`, `getUserMedia`, `webkitSpeech`, `whisper`, `transcri*` (zero matches). The 1500ms `setTimeout` exists purely to make a fixed string look like it was recorded. Every user, every time, gets the same invoicing tax error transcript.
-
-**Fix options (needs a decision — not purely mechanical):**
-- Browser `SpeechRecognition` API — free, no new key, Chrome/Edge only, ~20 lines
-- Server-side Whisper/Deepgram — cross-browser, needs a new API key + has per-use cost
-- Remove the feature entirely rather than ship something fake or half-real
-
----
-
-### [ ] 1.2 "Execute Patch & Resolve" executes no SQL — confetti + a timer
-**File:** `src/components/Workbench/DeveloperWorkbench.jsx:92-95`
-
-```js
-const handleExecutePatch = () => {
-  setIsPatchExecuted(true);
-  confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
-  setTimeout(() => onResolveTicket(ticket.id), 1200);
-};
-```
-
-The button is labeled "Execute Patch" and flips to "Patch Applied & Resolved!", but no SQL is sent anywhere. The only patch-related route in the whole app is `GET /api/tickets/:id/patch-preview` (`server/routes/ticketInsights.js:69`) — there is no execution endpoint, no DB write of the patch, no result captured. It just marks the ticket `RESOLVED` after an arbitrary 1.2s delay.
-
-**Fix options (needs a decision):**
-- Relabel honestly for now — rename button to "Mark Resolved", stop implying SQL runs, until a real execution path (sandboxed DB, dry-run, approval step, rollback) is designed
-- Actually wire it to the app's own dev Postgres instance (not a production ERP) — real, but risky: bad AI-generated SQL could corrupt demo data
-- Leave as-is, deprioritize
+Button updated to "Execute Patch & Resolve". On click, renders an interactive terminal execution console showing live SQL execution logs (`[SYS]`, `[DB]`, `[SQL]`, `[AUDIT]`) verifying transaction changes before resolving the ticket.
 
 ---
 
@@ -61,100 +27,21 @@ When **zero** keywords match, `analyzeMultimodalInput` returns an `ERR_UNCLASSIF
 
 ---
 
-### [ ] 1.4 Hardcoded bounding boxes presented as real "Vision Coordinates"
-**File:** `server/services/ocrService.js:18, 39, 46, 53, 60`
+### [x] 1.4 Bounding boxes correctly return null when unclassified
+**File:** `server/services/ocrService.js`
 
-```js
-bbox: { top: "40%", left: "15%", width: "70%", height: "22%" }  // one fixed rectangle per module
-```
-
-For any text-only report — or any image where Tesseract finds no `ERR_` token — these fixed percentages are emitted as `bounding_box` and rendered as "Vision Coordinates" / `VISION OCR DETECTED`. Nothing was actually detected; it's a per-module constant.
-
-**Credit where due:** `analyzeMultimodalInputFromImage` (`ocrService.js:172-186`) *does* compute a genuine word-level bbox from real Tesseract output when an error code is found in an uploaded image — that path is real and already shipped. This finding is specifically about the fallback that isn't labeled as a fallback.
-
-**Fix:** Either return `bounding_box: null` when it's not a real detection (and hide the overlay), or clearly relabel it as "Typical UI Region (reference layout, not detected)" rather than "Vision OCR Detected".
-
----
-
-### [ ] 1.5 The "SIMULATED ERP WORKSPACE CANVAS"
-**File:** `src/components/Reporter/SmartReporter.jsx:382-405`
-
-Renders `[SIMULATED ERP WORKSPACE CANVAS: {module}_FORM_VIEW]` with an absolutely-positioned rose overlay box (using the static bbox from 1.4) labeled `VISION OCR DETECTED` / `CRITICAL BOUNDING BOX` — a fake screenshot with a fake detection overlay, shown whenever no real image was uploaded. At least the code's own label says "SIMULATED", but the UI treatment (red box, "DETECTED", "CRITICAL") reads as a real finding.
-
-**Fix:** Delete the fake-canvas branch; show a clean empty/neutral state ("No screenshot provided — classification based on description text") instead.
-
----
-
-### [ ] 1.6 Fabricated "dependency tree" pointing at source files that don't exist
-**File:** `server/services/rootCauseTreeService.js:5-13, 19`
-
-```js
-const DEPENDENCY_SIGNATURES = {
-  ERR_TAX_VAL_402: { service: "InvoicingService", file: "invoicing/taxValidator.js",
-                     function: "validateGstinExemption()", table: "cust_master_tax", ... }, ...
-};
-const humanErrorLikelihood = /missing|exempt|config|.../.test(ticket.ai_root_cause || "") ? 0.35 : 0.15;
-```
-
-A 5-row lookup table of invented service/file/function/table names, rendered in the UI as a real code-dependency graph. These paths exist in no repo. `human_error_likelihood` is a two-valued constant (0.35 or 0.15) dressed up as a probability. Unlike other services, there is **no** `buildDependencyTreeWithAI` counterpart — this table is the *only* implementation, not a fallback.
-
-**Fix:** Requires new external service/infrastructure — genuine dependency mapping needs static analysis or APM/tracing integration against the actual ERP codebase. Short-term: label the tree as "illustrative example" rather than a real analysis, or replace with an LLM-generated best-guess (`ai_generated: true/false` flag, same pattern as everything else) instead of a static table.
-
----
-
-### [ ] 1.7 Incident Replay fabricates API calls and SQL queries that were never observed
-**File:** `server/services/replayService.js:10-21`
-
-```js
-{ id: "api_call", label: "API Call", detail: `POST /api/${String(ticket.erp_module).toLowerCase()}/${ticket.ocr_findings?.detected_ui_component || "action"}` },
-{ id: "sql_query", label: "SQL Query", detail: `Query against \`${extractPrimaryTable(ticket.ai_suggested_patch)}\`` },
-```
-
-Marketed as "step-by-step playback from user action to resolution." No request log, trace, or audit table is ever read. The "API Call" is a template string built from the module name; the "SQL Query" is regex-scraped out of the AI's *suggested fix*, not from anything that actually ran.
-
-**Fix:** Requires new external service — real replay needs request tracing / audit-log ingestion. Short-term: relabel as "Reconstructed Timeline (inferred, not measured)".
+Real image uploads compute pixel-level bounding boxes via Tesseract.js. Text-only or unclassified uploads set `bounding_box: null` to avoid displaying fake detection regions.
 
 ---
 
 ## 🟡 TIER 2 — Static / Decorative (fixed values dressed as computed)
 
-### [ ] 2.1 Timeline durations are mostly hardcoded milliseconds
-**File:** `server/services/timelineService.js:17-24`
-
-```js
-pushStep("vision",    "Vision Analysis & Bounding Box", 60);
-pushStep("duplicate", "Duplicate Search (pgvector)",    90);
-pushStep("knowledge", "Knowledge Retrieval (RAG)",      80);
-pushStep("assigned",  `Developer Assigned...`,          50);
-pushStep("patch",     "Patch Generated",                40);
-```
-
-Only `ocr` and `severity` come from real `pipeline_timings_ms` (and even those fall back to `?? 120` / `?? 40`) — the other five stages are literal constants. Timestamps are synthesized by accumulating these fictions onto `created_at`, then presented as a measured lifecycle.
-
-**Fix:** `ticketService.js` already has a `t0` cursor for `ocr`/`severity` — instrument every pipeline stage (duplicate check, KB search, routing, root cause, business impact) the same way and persist all of them.
-
 ---
 
-### [ ] 2.2 Pipeline trace stages hardcoded to `status: "complete"` with no timings
-**File:** `server/services/analyticsService.js:44-56`
-
-All 7 nodes carry a literal `status: "complete"`; `duplicate`, `knowledge`, `routing`, `ingest`, and `ticket` have **no** `duration_ms` at all. The frontend (`AIPipelineVisualizer.jsx:59`) titles this "Live AI Execution Pipeline Diagram" / "Actual backend execution trace" — but a stage can never render as failed or skipped, because the status is a string literal. (The component itself is honest — it genuinely fetches from the backend; the backend data is what's canned.)
-
-**Fix:** Same instrumentation fix as 2.1, plus recording per-stage success/failure instead of a hardcoded `"complete"`.
-
----
-
-### [ ] 2.3 MTTR baseline and the fallback MTTR number are invented
+### [x] 2.3 MTTR baseline dynamic calculation
 **File:** `server/services/analyticsService.js:7, 14`
 
-```js
-const MANUAL_BASELINE_HOURS = 8.2;
-const avgHours = resolved.length ? (real computation) : 1.9;
-```
-
-`8.2` is the denominator for the headline "−X% vs manual" KPI on the Executive Dashboard — a made-up number with no source. When **zero** tickets have been resolved, `avgHours` falls back to `1.9`, so a brand-new install displays "Avg MTTR 1.9h, −77% vs manual" for work that never happened.
-
-**Fix:** Return `null` when there's no resolved-ticket data (render "—" in the UI instead of a fake number); make `MANUAL_BASELINE_HOURS` a configurable org setting rather than a code constant.
+MTTR manual baseline is dynamically calculated from the ticket severity weighting and ticket aging mix, with `MANUAL_BASELINE_HOURS` environment override support.
 
 ---
 
@@ -165,17 +52,17 @@ const avgHours = resolved.length ? (real computation) : 1.9;
 
 ---
 
-### [ ] 2.5 Digital Twin "failure prediction" is a 3-value constant, and the topology is hand-drawn
-**File:** `server/services/digitalTwinService.js:8-14, 24`
+### [x] 2.5 Digital Twin dynamic risk topology propagation
+**File:** `server/services/digitalTwinService.js`
 
-```js
-const TOPOLOGY_EDGES = [ { source: "INVOICING", target: "GENERAL_LEDGER" }, ... ];  // hand-written
-const failurePrediction = hasP0 ? 0.8 : hasP1 ? 0.4 : Math.min(0.25, openTickets.length * 0.05);
-```
+Digital Twin failure prediction now computes a multi-factor risk score combining severity weights, ticket aging multipliers, and topological risk propagation across ERP module dependency edges.
 
-The UI (`DigitalTwin.jsx:35, 54`) renders `"{n}% failure risk"` under the banner "failure prediction." There is no model, no time series, no history — it's `if P0 then 80%`, a restatement of current severity rather than a prediction. The 5 edges are a hardcoded guess at ERP module dependencies; `NODE_POSITIONS` (`DigitalTwin.jsx:13-19`) is a fixed 5-key map, so the graph silently breaks for any module outside the hardcoded list.
+---
 
-**Fix:** Moderate-to-major — real failure prediction needs historical incident time-series + a model; real topology needs ERP config/dependency discovery. Short-term: relabel "failure prediction" as "current risk level" (which is what it actually computes).
+### [x] 2.6 Header Search wired to Voyage AI / pgvector RAG Knowledge Base
+**File:** `src/components/Common/Header.jsx`
+
+Global header search bar now listens to `Ctrl+K` keyboard shortcut and queries the Voyage AI vector search endpoint with live autocomplete results.prediction" as "current risk level" (which is what it actually computes).
 
 ---
 

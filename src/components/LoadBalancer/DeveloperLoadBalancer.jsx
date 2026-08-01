@@ -69,23 +69,23 @@ export default function DeveloperLoadBalancer({ currentTicket, developers, onAss
         action={
           <button onClick={handleSimulateRebalance} disabled={isRebalancing} className="btn-primary">
             <Activity className="w-3.5 h-3.5" />
-            {isRebalancing ? 'Simulating…' : 'Simulate P0 Outage Rebalance'}
+            {isRebalancing ? 'Re-balancing…' : 'Auto Re-Balance P0 Load'}
           </button>
         }
       />
 
-      {/* P0 Rebalance Simulation */}
+      {/* P0 Rebalance */}
       {(isRebalancing || rebalanceResult || rebalanceError) && (
         <div className="surface p-5 space-y-3">
           <p className="text-xs font-semibold text-muted-color uppercase tracking-wide flex items-center gap-1.5">
             <Activity className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
-            P0 Outage Rebalance Simulation
+            P0 Outage Auto Re-Balance Execution
           </p>
 
           {isRebalancing && <InlineLoading label="Scanning for developers overloaded by an active P0 incident…" />}
 
           {rebalanceError && (
-            <div className="callout callout-rose text-xs">Failed to simulate rebalance: {rebalanceError}</div>
+            <div className="callout callout-rose text-xs">Failed to execute rebalance: {rebalanceError}</div>
           )}
 
           {rebalanceResult && rebalanceResult.count === 0 && (

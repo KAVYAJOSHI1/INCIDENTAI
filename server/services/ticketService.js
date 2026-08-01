@@ -158,6 +158,7 @@ export async function runIncidentIngestPipeline(inputPayload) {
     ai_root_cause: rootCause.root_cause,
     ai_suggested_patch: rootCause.suggested_patch,
     ai_confidence: rootCause.confidence,
+    ai_generated: Boolean(rootCause.ai_generated || severityResult.ai_generated || duplicateResult.ai_generated || process.env.GROQ_API_KEY || process.env.ANTHROPIC_API_KEY),
     sla_remaining_minutes: severityResult.sla_remaining_minutes,
     created_at: new Date().toISOString(),
     pipeline_timings_ms: { ocr: ocrDurationMs, severity: severityDurationMs, total: Date.now() - t0 }

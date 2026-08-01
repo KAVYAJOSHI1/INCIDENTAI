@@ -59,6 +59,7 @@ function rowToTicket(row) {
     ai_root_cause: row.ai_root_cause,
     ai_suggested_patch: row.ai_suggested_patch,
     ai_confidence: row.ai_confidence != null ? Number(row.ai_confidence) : null,
+    ai_generated: row.ai_generated != null ? Boolean(row.ai_generated) : true,
     sla_remaining_minutes: row.sla_remaining_minutes,
     pipeline_timings_ms: row.pipeline_timings_ms,
     created_at: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,

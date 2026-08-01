@@ -4,6 +4,27 @@
  */
 
 import http from "node:http";
+import fs from "node:fs";
+import path from "node:path";
+
+try {
+  const envPath = path.resolve(process.cwd(), ".env");
+  if (fs.existsSync(envPath)) {
+    const lines = fs.readFileSync(envPath, "utf-8").split("\n");
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith("#")) {
+        const [key, ...valParts] = trimmed.split("=");
+        if (key && valParts.length > 0) {
+          const val = valParts.join("=").trim().replace(/^["']|["']$/g, "");
+          process.env[key.trim()] = val;
+        }
+      }
+    }
+  }
+} catch (err) {
+  console.warn("Failed to parse .env file:", err.message);
+}
 import { Router } from "./router.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerHealthRoutes } from "./routes/health.js";

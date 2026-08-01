@@ -172,14 +172,61 @@ export default function SmartReporter({ onSubmitIncident }) {
     }
   };
 
+  const recognitionRef = useRef(null);
+
   const handleVoiceInput = () => {
-    setIsRecording(true);
-    setTimeout(() => {
-      const voiceText = "Voice Transcript: Billing user encountered error ERR_TAX_VAL_402 while trying to post invoice for government customer account.";
-      setInputText(voiceText);
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      setIsRecording(true);
+      setTimeout(() => {
+        const voiceText = "Voice Transcript: Billing user encountered error ERR_TAX_VAL_402 while trying to post invoice for government customer account.";
+        setInputText(voiceText);
+        setIsRecording(false);
+        handleSimulatedScan(voiceText);
+      }, 1500);
+      return;
+    }
+
+    if (isRecording) {
+      if (recognitionRef.current) recognitionRef.current.stop();
       setIsRecording(false);
-      handleSimulatedScan(voiceText);
-    }, 1500);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+      recognitionRef.current = recognition;
+
+      recognition.onstart = () => {
+        setIsRecording(true);
+      };
+
+      recognition.onresult = (event) => {
+        let transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        setInputText(transcript);
+      };
+
+      recognition.onerror = (err) => {
+        console.warn('Speech recognition error:', err.error);
+        setIsRecording(false);
+      };
+
+      recognition.onend = () => {
+        setIsRecording(false);
+      };
+
+      recognition.start();
+    } catch (err) {
+      console.error('Speech recognition failed to start:', err);
+      setIsRecording(false);
+    }
   };
 
   const handleSubmit = (e) => {

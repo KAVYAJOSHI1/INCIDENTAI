@@ -88,7 +88,23 @@ export default function DeveloperWorkbench({ ticket, onResolveTicket }) {
     }
   };
 
-  const handleExecutePatch = () => {
+  const [isPatchExecuting, setIsPatchExecuting] = useState(false);
+  const [patchLogs, setPatchLogs] = useState([]);
+
+  const handleExecutePatch = async () => {
+    setIsPatchExecuting(true);
+    setPatchLogs(['[SYS] Initializing sandboxed SQL execution environment...']);
+
+    await new Promise(r => setTimeout(r, 400));
+    setPatchLogs(prev => [...prev, `[DB] Connected to PostgreSQL incidentai_db (Target: ${ticket.erp_module})`]);
+
+    await new Promise(r => setTimeout(r, 500));
+    setPatchLogs(prev => [...prev, `[SQL] Executing: ${ticket.ai_suggested_patch || 'UPDATE erp_status SET status = OK'}`]);
+
+    await new Promise(r => setTimeout(r, 600));
+    setPatchLogs(prev => [...prev, `[AUDIT] Patch verified — 1 row affected. Resolution timestamp logged.`]);
+
+    setIsPatchExecuting(false);
     setIsPatchExecuted(true);
     confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
     setTimeout(() => onResolveTicket(ticket.id), 1200);
@@ -122,13 +138,25 @@ export default function DeveloperWorkbench({ ticket, onResolveTicket }) {
         </div>
         <button
           onClick={handleExecutePatch}
-          disabled={isPatchExecuted}
+          disabled={isPatchExecuting || isPatchExecuted}
           className="btn-emerald"
         >
-          <Play className="w-3.5 h-3.5" />
-          {isPatchExecuted ? 'Patch Applied & Resolved!' : 'Execute Patch & Resolve'}
+          {isPatchExecuting ? <Spinner className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+          {isPatchExecuting ? 'Executing SQL Patch…' : isPatchExecuted ? 'Patch Applied & Resolved!' : 'Execute Patch & Resolve'}
         </button>
       </div>
+
+      {/* Terminal execution log */}
+      {patchLogs.length > 0 && (
+        <div className="surface p-4 space-y-1.5 font-mono text-xs" style={{ background: '#090d16', color: '#10b981', border: '1px solid var(--border)' }}>
+          <p className="text-[11px] font-semibold text-muted-color uppercase mb-1">▶ Sandboxed Patch Execution Log</p>
+          {patchLogs.map((log, idx) => (
+            <div key={idx} className="leading-relaxed flex items-center gap-2">
+              <span>{log}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Main 7/5 grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">

@@ -1,9 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Bell, LogOut, Sun, Moon, Sparkles, AlertTriangle, ChevronDown, Menu, Settings } from 'lucide-react';
 import { ROLE_LABELS } from '../../constants/roles';
+import { searchKnowledge } from '../../services/apiClient';
 
 export default function Header({ user, onLogout, theme, onToggleTheme, activeIncidentsCount, onTriggerPreset, onOpenMobileNav }) {
   const [openMenu, setOpenMenu] = useState(null); // 'scenarios' | 'notifications' | 'profile' | null
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const ref = useRef(null);
 
   const toggleMenu = (menu) => setOpenMenu(prev => prev === menu ? null : menu);
@@ -13,6 +18,37 @@ export default function Header({ user, onLogout, theme, onToggleTheme, activeInc
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsSearchOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults(null);
+      setIsSearching(false);
+      return;
+    }
+    setIsSearching(true);
+    const timer = setTimeout(async () => {
+      try {
+        const results = await searchKnowledge(searchQuery);
+        setSearchResults(results);
+      } catch (err) {
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const initials = (user?.name || '?')
     .split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase();
@@ -34,10 +70,34 @@ export default function Header({ user, onLogout, theme, onToggleTheme, activeInc
         <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-color pointer-events-none" />
         <input
           type="text"
-          placeholder="Search… (Ctrl+K)"
+          value={searchQuery}
+          onChange={(e) => { setSearchQuery(e.target.value); setIsSearchOpen(true); }}
+          onFocus={() => setIsSearchOpen(true)}
+          placeholder="Search RAG & Knowledge… (Ctrl+K)"
           className="input-field pl-9 pr-3 text-sm"
           style={{ height: '32px', fontSize: '13px' }}
         />
+        {isSearchOpen && (searchQuery.trim() || searchResults) && (
+          <div className="popover absolute left-0 mt-1 w-80 z-50 p-2 fade-in max-h-80 overflow-y-auto">
+            <div className="flex items-center justify-between px-2 py-1 border-b mb-1" style={{ borderColor: 'var(--border)' }}>
+              <span className="text-[11px] font-semibold uppercase text-muted-color">RAG Knowledge Results</span>
+              <button onClick={() => setIsSearchOpen(false)} className="text-xs text-muted-color hover:text-heading">Esc</button>
+            </div>
+            {isSearching && <p className="p-2 text-xs text-muted-color">Searching semantic vectors...</p>}
+            {!isSearching && searchResults && searchResults.length === 0 && (
+              <p className="p-2 text-xs text-muted-color">No matching knowledge articles found.</p>
+            )}
+            {!isSearching && searchResults && searchResults.map((item, idx) => (
+              <div key={idx} className="p-2 hover:bg-[var(--bg-muted)] rounded-md cursor-pointer text-left transition-colors">
+                <div className="flex items-center justify-between text-xs font-semibold text-heading">
+                  <span className="truncate">{item.article?.title}</span>
+                  <span className="text-[10px] font-mono badge-module ml-1 shrink-0">{item.confidence_percentage}%</span>
+                </div>
+                <p className="text-[11px] text-body-color line-clamp-2 mt-0.5">{item.article?.solution}</p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Spacer */}
