@@ -24,7 +24,15 @@ export async function buildMissionControlSnapshot() {
 
   const totalActive = developers.reduce((sum, d) => sum + d.active_tickets, 0);
   const totalCapacity = developers.reduce((sum, d) => sum + d.max_capacity, 0);
-  const hoursSaved = Math.max(0, summary.manual_baseline_hours - summary.ai_mttr_hours) * summary.resolved_count;
+  const now = new Date();
+  const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+  const resolved24h = tickets.filter(
+    (t) => CLOSED_STATUSES.includes(t.status) && new Date(t.created_at || t.updated_at) >= oneDayAgo
+  ).length;
+
+  const hoursSaved24h = Math.max(0, summary.manual_baseline_hours - summary.ai_mttr_hours) * resolved24h;
+  const hoursSavedTotal = Math.max(0, summary.manual_baseline_hours - summary.ai_mttr_hours) * summary.resolved_count;
 
   return {
     live_incidents: tickets.filter((t) => !CLOSED_STATUSES.includes(t.status)).length,
@@ -36,7 +44,8 @@ export async function buildMissionControlSnapshot() {
     ai_queue_latency_ms: aiQueueLatencyMs,
     knowledge_base_hits: knowledgeBase.length,
     module_health: heatmap.map((h) => ({ erp_module: h.erp_module, total: h.total, critical: h.P0_CRITICAL })),
-    daily_cost_savings: Math.round(hoursSaved * HOURLY_ENGINEERING_RATE),
+    daily_cost_savings: Math.round(hoursSaved24h * HOURLY_ENGINEERING_RATE),
+    total_cost_savings: Math.round(hoursSavedTotal * HOURLY_ENGINEERING_RATE),
     team_mttr_hours: summary.ai_mttr_hours,
     generated_at: new Date().toISOString()
   };

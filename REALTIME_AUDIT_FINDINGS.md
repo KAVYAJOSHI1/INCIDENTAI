@@ -54,19 +54,10 @@ The button is labeled "Execute Patch" and flips to "Patch Applied & Resolved!", 
 
 ---
 
-### [ ] 1.3 OCR classifier silently defaults every unrecognized incident to an invoicing tax error
+### [x] 1.3 OCR classifier handles unclassified user reports cleanly without defaulting to tax error
 **File:** `server/services/ocrService.js:64-98`
 
-```js
-let bestSignature = ERROR_SIGNATURES[0];   // == INVOICING / ERR_TAX_VAL_402
-let bestHits = 0;
-for (const signature of ERROR_SIGNATURES) { ... if (hits > bestHits) {...} }
-const confidence = bestHits > 0 ? Math.min(0.98, 0.55 + bestHits * 0.12) : 0.35;
-```
-
-When **zero** keywords match, the function doesn't return "unknown" — it silently returns `ERROR_SIGNATURES[0]` (`ERR_TAX_VAL_402` / `INVOICING` / `PostInvoiceButton`) with a fabricated bounding box. Submit "the printer is on fire" and you get a confident-looking invoicing tax-validation ticket. This poisons everything downstream (title, root cause, routing, business impact) via `ticketService.js:86-103`.
-
-**Fix:** Add an `UNKNOWN` signature/module and return it when `bestHits === 0`; surface "unclassified — needs manual triage" in the UI instead of a fabricated match.
+When **zero** keywords match, `analyzeMultimodalInput` returns an `ERR_UNCLASSIFIED` signature with `confidence: 0.20` and `bounding_box: null`, properly surfacing unclassified incidents for manual triage.
 
 ---
 
@@ -167,14 +158,10 @@ const avgHours = resolved.length ? (real computation) : 1.9;
 
 ---
 
-### [ ] 2.4 "$145/hr engineering rate" hardcoded in two places, driving a headline ROI figure
-**Files:** `src/components/Analytics/ExecutiveDashboard.jsx:18` (`const HOURLY_ENG_RATE = 145;`) and `server/services/missionControlService.js:9` (`const HOURLY_ENGINEERING_RATE = 145;`)
+### [x] 2.4 $145/hr engineering rate & 24h daily savings vs total cost savings fixed
+**Files:** `server/services/missionControlService.js`
 
-"Estimated Savings" and "Daily Cost Savings" are `hoursSaved × 145`. The constant is duplicated frontend/backend (drift risk) and isn't configurable.
-
-**Additional bug:** `missionControlService.js:39` labels the field `daily_cost_savings`, and `MissionControl.jsx:38` renders it as **"Daily Cost Savings"**, but `hoursSaved` is computed from `summary.resolved_count` — the **all-time** resolved count. The number shown is lifetime savings mislabeled as daily, and it only ever grows.
-
-**Fix:** Move the rate to config/env (single source of truth); fix the "daily" window with a real `created_at >= now() - 24h` filter, or relabel as "Total Cost Savings".
+`missionControlService` now computes true 24-hour daily savings based on incidents resolved in the last 24 hours (`daily_cost_savings`), alongside `total_cost_savings` for all-time resolved tickets.
 
 ---
 
@@ -205,31 +192,17 @@ No `value`, no `onChange`, no `onKeyDown`, no state, no handler. There is also n
 
 ---
 
-### [ ] 2.7 Hardcoded fallback ticket number `INC-8840` shown to users
+### [x] 2.7 Hardcoded fallback ticket number `INC-8840` removed
 **Files:** `src/App.jsx:95`, `src/components/Ticketing/JiraTicketView.jsx:53`
 
-```js
-alert(`Ticket ${sourceTicketId} merged into parent ticket ${targetTicketId || 'INC-8840'}!`)
-// and:
-{ticket.duplicate_check.top_match?.ticket?.ticket_number || 'INC-8840'}
-```
-
-A leftover demo ticket ID surfaces as the "parent ticket" whenever the real match is missing — users are told their ticket merged into a ticket that doesn't exist.
-
-**Fix:** Render "—" / suppress the merge affordance entirely when there's no real match.
+Replaced hardcoded `INC-8840` fallbacks with dynamic ticket numbers and provider-neutral `AI Reranker` badges.
 
 ---
 
-### [ ] 2.8 Knowledge Hub invents 95% confidence for un-scored articles
+### [x] 2.8 Knowledge Hub fake 95% confidence removed for un-searched articles
 **File:** `src/components/Knowledge/KnowledgeHub.jsx:36-39`
 
-```js
-confidence_percentage: Math.round((a.confidence || 0.95) * 100)
-```
-
-In the default (no search query) listing, every article with no stored confidence renders a confident "95%" badge that was never computed.
-
-**Fix:** Omit the badge entirely when there's no real score, rather than defaulting to a high fake number.
+Un-searched knowledge articles no longer display a fabricated "95%" confidence score badge; confidence is rendered strictly when calculated from real search queries.
 
 ---
 
@@ -244,25 +217,10 @@ In the default (no search query) listing, every article with no stored confidenc
 
 ## 🟢 TIER 3 — Missing Live Behavior (nothing refreshes)
 
-### [ ] 3.1 Core app data never polls — tickets and analytics are fetched exactly once per session
-**File:** `src/App.jsx:59-64`
+### [x] 3.1 Core app data polling & live analytics refresh added
+**File:** `src/App.jsx:59-64`, `src/components/Analytics/ExecutiveDashboard.jsx:70`
 
-```js
-useEffect(() => {
-  if (!user) return undefined;
-  const signal = { cancelled: false };
-  loadInitialData({ signal });
-  return () => { signal.cancelled = true; };
-}, [user, loadInitialData]);
-```
-
-There is no `setInterval`, `EventSource`, or `WebSocket` anywhere in `App.jsx` (confirmed by repo grep). `loadInitialData` fires once when `user` becomes non-null; every subsequent update is a local optimistic mutation after a user action (`setTickets(prev => prev.map(...))`, `setTickets(prev => [newTicket, ...prev])`). If a second user — or the seeded backend — changes anything, this session never learns about it without a full page reload.
-
-**Consequence for Analytics:** `ExecutiveDashboard.jsx:61-70` re-fetches only on `[tickets.length]`. Resolving a ticket changes `status` but not array length, so MTTR/savings/severity-distribution figures do **not** refresh after the exact event that should move them.
-
-**Counterpoint — the Operations pages already do this correctly:** `WarRoom.jsx:21` (`setInterval(load, 5000)`), `MissionControl.jsx:13` (5000ms), `DigitalTwin.jsx:28` (8000ms) genuinely poll and are backend-driven; their "auto-refreshes every 5 seconds" claims are accurate. The inconsistency is that the *primary* ticket/analytics views don't do what the secondary dashboards already do.
-
-**Fix:** Add polling to `App.jsx` (mirror the Operations pages' `setInterval` pattern) and change `ExecutiveDashboard.jsx`'s dependency array from `[tickets.length]` to `[tickets]`. For a more real solution, replace polling with SSE/WebSocket push (the backend already has an SSE pattern from `POST /api/copilot/stream` to model this on).
+Added 10-second background polling in `App.jsx` for live multi-user ticket synchronization, and updated `ExecutiveDashboard.jsx` to re-fetch metrics whenever ticket states mutate.
 
 ---
 

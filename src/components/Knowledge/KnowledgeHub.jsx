@@ -34,7 +34,7 @@ export default function KnowledgeHub({ knowledgeBase, onAddArticle }) {
 
   const raw = remoteResults ?? knowledgeBase.map(a => ({
     article: a,
-    confidence_percentage: Math.round((a.confidence || 0.95) * 100),
+    confidence_percentage: a.confidence ? Math.round(a.confidence * 100) : null,
   }));
 
   const articles = raw.filter(item =>
@@ -193,15 +193,17 @@ export default function KnowledgeHub({ knowledgeBase, onAddArticle }) {
                 <div className="flex items-center gap-1.5 shrink-0">
                   {item.ai_generated !== undefined && (
                     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${item.ai_generated ? 'badge-green' : 'badge-p3'}`}>
-                      {item.ai_generated ? 'Claude' : 'TF-IDF'}
+                      {item.ai_generated ? 'AI' : 'TF-IDF'}
                     </span>
                   )}
-                  <span
-                    className="text-[11px] font-mono font-bold px-2 py-0.5 rounded"
-                    style={{ background: 'var(--accent-subtle-bg)', color: 'var(--accent-subtle-text)', border: '1px solid var(--accent-subtle-bd)' }}
-                  >
-                    {item.confidence_percentage}%
-                  </span>
+                  {item.confidence_percentage != null && (
+                    <span
+                      className="text-[11px] font-mono font-bold px-2 py-0.5 rounded"
+                      style={{ background: 'var(--accent-subtle-bg)', color: 'var(--accent-subtle-text)', border: '1px solid var(--accent-subtle-bd)' }}
+                    >
+                      {item.confidence_percentage}%
+                    </span>
+                  )}
                 </div>
               </div>
 

@@ -50,10 +50,10 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
               <p className="text-sm font-semibold">
                 Duplicate detected — {Math.round(ticket.duplicate_check.similarity_score * 100)}% similarity
                 {' '}with <code className="font-mono font-bold">
-                  {ticket.duplicate_check.top_match?.ticket?.ticket_number || 'INC-8840'}
+                  {ticket.duplicate_check.top_match?.ticket?.ticket_number || ticket.duplicate_check.top_match?.ticket_number || 'Parent Incident'}
                 </code>
                 <span className="ml-2 text-xs font-normal opacity-75">
-                  via {ticket.duplicate_check.ai_generated ? 'Claude AI' : 'TF-IDF'}
+                  via {ticket.duplicate_check.ai_generated ? 'AI Reranker' : 'TF-IDF'}
                 </span>
               </p>
               {ticket.duplicate_check.reasoning && (

@@ -67,7 +67,7 @@ export default function ExecutiveDashboard({ tickets, developers }) {
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [tickets.length]);
+  }, [tickets]);
 
   const pieData = severityDistribution
     .filter(s => s.count > 0)

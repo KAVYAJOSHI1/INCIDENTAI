@@ -60,7 +60,16 @@ export default function App() {
     if (!user) return undefined;
     const signal = { cancelled: false };
     loadInitialData({ signal });
-    return () => { signal.cancelled = true; };
+
+    // Poll every 10 seconds for real-time multi-user synchronization
+    const interval = setInterval(() => {
+      loadInitialData({ signal });
+    }, 10000);
+
+    return () => {
+      signal.cancelled = true;
+      clearInterval(interval);
+    };
   }, [user, loadInitialData]);
 
   const allowedViews = user ? VIEWS_BY_ROLE[user.role] : [];
@@ -92,7 +101,8 @@ export default function App() {
     try {
       const updated = await api.patchTicket(sourceTicketId, { status: 'RESOLVED_DUPLICATE_MERGED' });
       setTickets((prev) => prev.map((t) => (t.id === sourceTicketId ? updated : t)));
-      alert(`Ticket ${sourceTicketId} merged into parent ticket ${targetTicketId || 'INC-8840'}!`);
+      const targetLabel = targetTicketId || 'parent incident';
+      alert(`Ticket ${sourceTicketId} merged into ${targetLabel}!`);
     } catch (err) {
       alert(`Failed to merge ticket: ${err.message}`);
     }

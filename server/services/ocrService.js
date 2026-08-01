@@ -64,7 +64,7 @@ const ERROR_SIGNATURES = [
 export function analyzeMultimodalInput(inputData) {
   const text = (inputData.text || inputData.fileName || "").toLowerCase();
 
-  let bestSignature = ERROR_SIGNATURES[0];
+  let bestSignature = null;
   let bestHits = 0;
   for (const signature of ERROR_SIGNATURES) {
     const hits = signature.keywords.filter((keyword) => text.includes(keyword)).length;
@@ -74,16 +74,33 @@ export function analyzeMultimodalInput(inputData) {
     }
   }
 
-  const confidence = bestHits > 0 ? Math.min(0.98, 0.55 + bestHits * 0.12) : 0.35;
+  if (!bestSignature) {
+    bestSignature = {
+      module: "GENERAL_LEDGER",
+      errorCode: "ERR_UNCLASSIFIED",
+      component: "GeneralWorkspaceView",
+      keywords: [],
+      bbox: null
+    };
+  }
+
+  const confidence = bestHits > 0 ? Math.min(0.98, 0.55 + bestHits * 0.12) : 0.20;
   const selfFix = bestSignature.selfFix ? bestSignature.selfFix(text) : null;
 
-  const ocrExtractedText =
-    `[Vision OCR] Screen Text: "${inputData.text || "Error pop-up detected in ERP workspace."}"\n` +
-    `Extracted Symbol: ${bestSignature.errorCode}\n` +
-    `Target Module: ${bestSignature.module}\n` +
-    `Detected UI Component: <${bestSignature.component}/>\n` +
-    `Vision Bounding Coordinates: [Top: ${bestSignature.bbox.top}, Left: ${bestSignature.bbox.left}, W: ${bestSignature.bbox.width}, H: ${bestSignature.bbox.height}]\n` +
-    `Confidence: ${(confidence * 100).toFixed(1)}%`;
+  const bboxText = bestSignature.bbox
+    ? `[Top: ${bestSignature.bbox.top}, Left: ${bestSignature.bbox.left}, W: ${bestSignature.bbox.width}, H: ${bestSignature.bbox.height}]`
+    : `[No bounding box - unclassified text report]`;
+
+  const ocrExtractedText = bestHits > 0
+    ? `[Vision OCR] Screen Text: "${inputData.text || "Error pop-up detected in ERP workspace."}"\n` +
+      `Extracted Symbol: ${bestSignature.errorCode}\n` +
+      `Target Module: ${bestSignature.module}\n` +
+      `Detected UI Component: <${bestSignature.component}/>\n` +
+      `Vision Bounding Coordinates: ${bboxText}\n` +
+      `Confidence: ${(confidence * 100).toFixed(1)}%`
+    : `[Vision OCR] Screen Text: "${inputData.text || "Unclassified user report."}"\n` +
+      `Classification: UNCLASSIFIED (No known ERP error keywords found)\n` +
+      `Confidence: 20.0%`;
 
   return {
     raw_text: inputData.text || "",
