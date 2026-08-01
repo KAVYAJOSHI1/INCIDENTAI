@@ -293,7 +293,7 @@ JWT_SECRET=your-secret-here
 | Duplicate Detection (3-layer) | ⭐⭐⭐⭐⭐ 9/10 | ✅ Live |
 | Severity Scoring | ⭐⭐⭐⭐½ 9/10 | ✅ Live |
 | RAG Knowledge Hub | ⭐⭐⭐⭐½ 8.5/10 | ✅ Live |
-| Vector Embeddings (pgvector) | ⭐⭐⭐⭐½ 8.5/10 | ✅ Live (needs VOYAGE_API_KEY) |
+| Vector Embeddings (pgvector) | ⭐⭐⭐⭐⭐ 10/10 | ✅ Live (Voyage AI Connected) |
 | Patch Preview & Guardrails | ⭐⭐⭐⭐ 8/10 | ✅ Live |
 | AI Explainability Matrix | ⭐⭐⭐⭐ 8/10 | ✅ Live |
 | Business Impact Engine | ⭐⭐⭐⭐ 8/10 | ✅ Live |
