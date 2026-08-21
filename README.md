@@ -293,7 +293,7 @@ You'll land on a login screen. `npm run db:seed` creates one demo account per ro
 
 ## 📄 Architecture Specifications
 
-For full database schema specifications, RBAC matrix, API documentation, and component breakdowns, see [SAAS_ARCHITECTURE_SPEC.md](SAAS_ARCHITECTURE_SPEC.md) and [INCIDENT_AI_PROJECT_PLAN.md](INCIDENT_AI_PROJECT_PLAN.md).
+For full database schema specifications, RBAC matrix, API documentation, component breakdowns, and technical interview preparation, see [INCIDENTAI_MASTER_DOCUMENTATION.md](INCIDENTAI_MASTER_DOCUMENTATION.md).
 
 ---
 
