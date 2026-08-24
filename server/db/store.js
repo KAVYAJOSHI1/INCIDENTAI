@@ -8,6 +8,23 @@
 import { query } from "./postgres.js";
 import { embedDocuments, toVectorLiteral } from "../services/embeddingService.js";
 
+// Ensure Phase 6 evidence columns exist on database startup
+(async function migrateSchema() {
+  try {
+    await query(`
+      ALTER TABLE tickets
+      ADD COLUMN IF NOT EXISTS mcp_evidence JSONB NOT NULL DEFAULT '[]',
+      ADD COLUMN IF NOT EXISTS rag_evidence JSONB NOT NULL DEFAULT '[]',
+      ADD COLUMN IF NOT EXISTS ai_diagnosis JSONB NOT NULL DEFAULT '{}',
+      ADD COLUMN IF NOT EXISTS correlation_id TEXT,
+      ADD COLUMN IF NOT EXISTS resolution_type TEXT,
+      ADD COLUMN IF NOT EXISTS requires_human_review BOOLEAN DEFAULT TRUE;
+    `);
+  } catch (err) {
+    // Ignore migration error if DB connecting later
+  }
+})();
+
 function rowToUser(row) {
   return {
     id: row.id,
@@ -41,6 +58,7 @@ function rowToTicket(row) {
     ticket_number: row.ticket_number,
     title: row.title,
     reporter: row.reporter,
+    erp_context: row.erp_context,
     assigned_dev_id: row.assigned_dev_id,
     assigned_dev_name: row.assigned_dev_name,
     erp_module: row.erp_module,
@@ -60,6 +78,12 @@ function rowToTicket(row) {
     ai_suggested_patch: row.ai_suggested_patch,
     ai_confidence: row.ai_confidence != null ? Number(row.ai_confidence) : null,
     ai_generated: row.ai_generated != null ? Boolean(row.ai_generated) : true,
+    mcp_evidence: row.mcp_evidence || [],
+    rag_evidence: row.rag_evidence || [],
+    ai_diagnosis: row.ai_diagnosis || {},
+    correlation_id: row.correlation_id || null,
+    resolution_type: row.resolution_type || null,
+    requires_human_review: row.requires_human_review ?? true,
     sla_remaining_minutes: row.sla_remaining_minutes,
     pipeline_timings_ms: row.pipeline_timings_ms,
     created_at: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
@@ -132,8 +156,9 @@ export async function addTicket(ticket) {
       vague_user_input, structured_description, reproduction_steps, expected_behavior, actual_behavior,
       ocr_findings, severity_analysis, duplicate_check, rag_kb_matches, developer_routing,
       ai_root_cause, ai_suggested_patch, ai_confidence, sla_remaining_minutes, pipeline_timings_ms,
+      mcp_evidence, rag_evidence, ai_diagnosis, correlation_id, erp_context, resolution_type, requires_human_review,
       embedding, created_at, resolved_at
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34)
     RETURNING *`,
     [
       ticket.id,
@@ -160,6 +185,13 @@ export async function addTicket(ticket) {
       ticket.ai_confidence,
       ticket.sla_remaining_minutes,
       JSON.stringify(ticket.pipeline_timings_ms || {}),
+      JSON.stringify(ticket.mcp_evidence || []),
+      JSON.stringify(ticket.rag_evidence || []),
+      JSON.stringify(ticket.ai_diagnosis || {}),
+      ticket.correlation_id || null,
+      JSON.stringify(ticket.erp_context || {}),
+      ticket.resolution_type || null,
+      ticket.requires_human_review ?? true,
       toVectorLiteral(embedding),
       ticket.created_at || new Date().toISOString(),
       ticket.resolved_at || null
@@ -169,11 +201,12 @@ export async function addTicket(ticket) {
   return rowToTicket(rows[0]);
 }
 
-const TICKET_JSON_COLUMNS = new Set(["reproduction_steps", "ocr_findings", "severity_analysis", "duplicate_check", "rag_kb_matches", "developer_routing", "pipeline_timings_ms"]);
+const TICKET_JSON_COLUMNS = new Set(["reproduction_steps", "ocr_findings", "severity_analysis", "duplicate_check", "rag_kb_matches", "developer_routing", "pipeline_timings_ms", "mcp_evidence", "rag_evidence", "ai_diagnosis"]);
 const TICKET_COLUMNS = new Set([
   "ticket_number", "title", "reporter", "assigned_dev_id", "assigned_dev_name", "erp_module", "severity", "status",
   "vague_user_input", "structured_description", "expected_behavior", "actual_behavior",
   "ai_root_cause", "ai_suggested_patch", "ai_confidence", "sla_remaining_minutes", "resolved_at",
+  "correlation_id", "resolution_type", "requires_human_review",
   ...TICKET_JSON_COLUMNS
 ]);
 
@@ -194,7 +227,7 @@ export async function listKnowledgeBase() {
 }
 
 export async function addKnowledgeArticle(article) {
-  const embeddingText = [article.title, article.solution].filter(Boolean).join("\n");
+  const embeddingText = [article.title, article.problem, article.root_cause, article.solution].filter(Boolean).join("\n");
   const [embedding] = (await embedDocuments([embeddingText])) || [null];
 
   const { rows } = await query(

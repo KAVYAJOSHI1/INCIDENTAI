@@ -54,6 +54,9 @@ export const fetchTicket = (id) => request(`/tickets/${id}`).then((d) => d.ticke
 export const patchTicket = (id, patch) =>
   request(`/tickets/${id}`, { method: "PATCH", body: JSON.stringify(patch) }).then((d) => d.ticket);
 
+export const verifyTicket = (id, verificationData) =>
+  request(`/tickets/${id}/verify`, { method: "POST", body: JSON.stringify(verificationData) });
+
 export const ingestIncident = (payload) =>
   request("/incidents/ingest", { method: "POST", body: JSON.stringify(payload) }).then((d) => d.ticket);
 

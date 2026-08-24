@@ -7,11 +7,14 @@
  * when no API key is configured or the call fails.
  */
 
+import crypto from "node:crypto";
 import { tokenize, computeIdf, tfidfVector, cosineSimilarity } from "../utils/textSimilarity.js";
 import { completeJson } from "./llmService.js";
 import { createTtlCache } from "../utils/simpleCache.js";
 import { embedQuery } from "./embeddingService.js";
 import { query as pgQuery } from "../db/postgres.js";
+import { addKnowledgeArticle } from "../db/store.js";
+
 
 // Search-as-you-type can fire several requests per second for near-identical queries;
 // cache successful reranks briefly so we don't burn API calls on every keystroke.
@@ -147,3 +150,38 @@ export function searchKnowledgeBase(queryText, erpModule, kbArticles, { minScore
     .filter((m) => m.score >= minScore)
     .sort((a, b) => b.score - a.score);
 }
+
+/**
+ * Phase 7: Captures a developer-verified resolution and embeds it into the pgvector knowledge base.
+ * Only human-verified resolutions are permitted into the trusted RAG index.
+ */
+export async function captureVerifiedKnowledge(ticket, verificationData = {}) {
+  if (!ticket) throw new Error("Ticket is required for knowledge capture");
+
+  const title = verificationData.title || `[Verified Resolution] ${ticket.title}`;
+  const solution = verificationData.verified_resolution || ticket.ai_suggested_patch || ticket.structured_description;
+  const rootCause = verificationData.root_cause || ticket.ai_root_cause || "Developer verified root cause";
+  const errorCode = ticket.ocr_findings?.extracted_error_code || "ERR_VERIFIED";
+  const erpModule = ticket.erp_module || "GENERAL";
+
+  const article = {
+    id: `kb_${crypto.randomInt(100000, 999999)}`,
+    title,
+    erp_module: erpModule,
+    error_code: errorCode,
+    solution,
+    problem: ticket.vague_user_input || ticket.title,
+    root_cause: rootCause,
+    confidence: 1.0, // Human verified!
+    is_verified: true,
+    tags: [erpModule, errorCode, "VERIFIED_RESOLUTION", ...(verificationData.tags || [])]
+  };
+
+  const savedArticle = await addKnowledgeArticle(article);
+
+  // Clear rerank cache so vector search reflects new article immediately
+  rerankCache.clear?.();
+
+  return savedArticle;
+}
+

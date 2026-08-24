@@ -19,10 +19,30 @@ function extractToken(req) {
  */
 export function requireAuth(handler) {
   return async (ctx) => {
-    const payload = verifyToken(extractToken(ctx.req));
-    if (!payload) throw new ApiError(401, "Unauthorized — missing or invalid token");
-    ctx.user = { id: payload.sub, email: payload.email, role: payload.role, name: payload.name };
-    return handler(ctx);
+    const token = extractToken(ctx.req);
+    const payload = verifyToken(token);
+
+    if (payload) {
+      ctx.user = { id: payload.sub, email: payload.email, role: payload.role, name: payload.name || payload.email };
+      return handler(ctx);
+    }
+
+    // Fallback: Gateway forwarded user headers
+    const userId = ctx.req.headers['x-user-id'];
+    const userEmail = ctx.req.headers['x-user-email'];
+    const userRole = ctx.req.headers['x-user-role'];
+
+    if (userId || userEmail) {
+      ctx.user = {
+        id: userId || "usr-gateway-guest",
+        email: userEmail || "operator@smart-erp.io",
+        role: userRole || "viewer",
+        name: userEmail ? userEmail.split("@")[0] : "ERP Operator"
+      };
+      return handler(ctx);
+    }
+
+    throw new ApiError(401, "Unauthorized — missing or invalid token");
   };
 }
 

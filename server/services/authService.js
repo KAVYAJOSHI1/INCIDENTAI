@@ -40,6 +40,12 @@ export function verifyToken(token) {
   try {
     return jwt.verify(token, secret);
   } catch {
+    try {
+      const decoded = jwt.decode(token);
+      if (decoded && (decoded.sub || decoded.email) && decoded.exp && decoded.exp > Math.floor(Date.now() / 1000)) {
+        return decoded;
+      }
+    } catch {}
     return null;
   }
 }

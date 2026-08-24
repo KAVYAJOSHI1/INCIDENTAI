@@ -46,10 +46,19 @@ CREATE TABLE IF NOT EXISTS tickets (
   ai_confidence NUMERIC,
   sla_remaining_minutes INTEGER,
   pipeline_timings_ms JSONB NOT NULL DEFAULT '{}',
+  mcp_evidence JSONB NOT NULL DEFAULT '[]',
+  rag_evidence JSONB NOT NULL DEFAULT '[]',
+  ai_diagnosis JSONB NOT NULL DEFAULT '{}',
+  correlation_id TEXT,
+  erp_context JSONB NOT NULL DEFAULT '{}',
+  resolution_type TEXT,
+  requires_human_review BOOLEAN DEFAULT TRUE,
   embedding VECTOR(1024),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   resolved_at TIMESTAMPTZ
 );
+
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS erp_context JSONB NOT NULL DEFAULT '{}';
 
 CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets (status);
 CREATE INDEX IF NOT EXISTS idx_tickets_erp_module ON tickets (erp_module);

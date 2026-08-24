@@ -13,7 +13,8 @@ export const incidentInputSchema = z
     // Base64-encoded screenshot (with or without a data: URL prefix), for server-side
     // Tesseract.js OCR via POST /api/ocr/analyze.
     imageBase64: z.string().trim().min(1).optional(),
-    reporter: z.string().trim().min(1).optional()
+    reporter: z.string().trim().min(1).optional(),
+    erp_context: z.any().optional()
   })
   .refine((v) => v.text || v.fileName || v.ocrRawText || v.imageBase64, {
     message: 'Request body must include "text", "fileName", "ocrRawText", or "imageBase64"'

@@ -7,13 +7,14 @@ import { analyzeMultimodalInput, analyzeMultimodalInputFromImage } from "./ocrSe
 import { scoreSeverity, scoreSeverityWithAI } from "./severityService.js";
 import { predictRootCause, predictRootCauseWithAI } from "./rootCauseService.js";
 import { findDuplicateTickets, findDuplicateTicketsWithAI, findDuplicateTicketsWithVector } from "./duplicateService.js";
-import { searchKnowledgeBase, searchKnowledgeBaseWithAI, searchKnowledgeBaseWithVector } from "./knowledgeService.js";
+import { searchKnowledgeBase, searchKnowledgeBaseWithAI, searchKnowledgeBaseWithVector, captureVerifiedKnowledge } from "./knowledgeService.js";
 import { recommendDeveloperForTicket } from "./loadBalancerService.js";
+import { performEvidenceGroundedDiagnosis } from "./diagnosisService.js";
 import { listTickets, listKnowledgeBase, listDevelopers, addTicket, updateDeveloper, getTicketById, getDeveloperById, updateTicket } from "../db/store.js";
 import { CLOSED_STATUSES } from "../constants.js";
 
 function generateTicketNumber() {
-  return `INC-${crypto.randomInt(1000, 9999)}`;
+  return `INC-${crypto.randomInt(10000, 99999)}-${Date.now().toString().slice(-4)}`;
 }
 
 /**
@@ -77,6 +78,7 @@ export async function runIncidentIngestPipeline(inputPayload) {
       ocrFindings.ocr_extracted_text = `[Tesseract.js Real OCR]\n${inputPayload.ocrRawText}\n\n${ocrFindings.ocr_extracted_text}`;
     }
   }
+  ocrFindings.erp_context = inputPayload.erp_context || null;
   const ocrDurationMs = Date.now() - t0;
 
   const severityResult =
@@ -117,16 +119,42 @@ export async function runIncidentIngestPipeline(inputPayload) {
   const kbMatches = (await searchKnowledgeBaseWithAI(sourceText || title, ocrFindings.erp_module, kbShortlist)) ?? kbFallback;
   const routing = recommendDeveloperForTicket({ erp_module: ocrFindings.erp_module }, developers);
 
+  // Execute Phase 6 RAG + MCP + LLM Evidence-Grounded Diagnosis
+  const initialTicketDraft = {
+    id: `INC-${crypto.randomUUID()}`,
+    title,
+    erp_module: ocrFindings.erp_module,
+    severity: severityResult.severity,
+    vague_user_input: inputPayload.text || sourceText,
+    ocr_findings: ocrFindings,
+    erp_context: inputPayload.erp_context || { erp: "Smart Manufacturing ERP", module: ocrFindings.erp_module, route: null, record_id: null },
+    duplicate_check: {
+      is_duplicate: duplicateResult.is_duplicate,
+      similarity_score: duplicateResult.top_match ? duplicateResult.top_match.similarity_score : 0,
+      reasoning: duplicateResult.reasoning || null
+    }
+  };
+
+  const diagnosisResult = await performEvidenceGroundedDiagnosis({
+    incident: initialTicketDraft,
+    ragKbMatches: kbMatches
+  });
+
+  const finalRootCause = diagnosisResult.ai_diagnosis.root_cause || rootCause.root_cause;
+  const finalResolution = diagnosisResult.ai_diagnosis.recommended_resolution || rootCause.suggested_patch;
+  const finalConfidence = diagnosisResult.ai_diagnosis.confidence || rootCause.confidence;
+
   const ticket = {
-    id: `INC-2026-${crypto.randomInt(1000, 9999)}`,
+    id: initialTicketDraft.id,
     ticket_number: generateTicketNumber(),
     title,
     reporter: inputPayload.reporter || "ERP Operator User",
+    erp_context: initialTicketDraft.erp_context,
     assigned_dev_id: routing.recommended.id,
     assigned_dev_name: routing.recommended.name,
     erp_module: ocrFindings.erp_module,
     severity: severityResult.severity,
-    status: "TRIAGED",
+    status: diagnosisResult.ai_diagnosis.resolution_type === "SELF_SERVICE" ? "SELF_SERVICE_RESOLVED" : "TRIAGED",
     vague_user_input: inputPayload.text || sourceText,
     structured_description: structuredDescription,
     reproduction_steps: reproductionSteps,
@@ -155,9 +183,15 @@ export async function runIncidentIngestPipeline(inputPayload) {
       ai_generated: m.ai_generated ?? false
     })),
     developer_routing: routing,
-    ai_root_cause: rootCause.root_cause,
-    ai_suggested_patch: rootCause.suggested_patch,
-    ai_confidence: rootCause.confidence,
+    ai_root_cause: finalRootCause,
+    ai_suggested_patch: finalResolution,
+    ai_confidence: finalConfidence,
+    mcp_evidence: diagnosisResult.mcp_evidence,
+    rag_evidence: diagnosisResult.rag_evidence,
+    ai_diagnosis: diagnosisResult.ai_diagnosis,
+    resolution_type: diagnosisResult.ai_diagnosis.resolution_type,
+    requires_human_review: diagnosisResult.ai_diagnosis.requires_human_review,
+    correlation_id: diagnosisResult.correlation_id,
     ai_generated: Boolean(rootCause.ai_generated || severityResult.ai_generated || duplicateResult.ai_generated || process.env.GROQ_API_KEY || process.env.ANTHROPIC_API_KEY),
     sla_remaining_minutes: severityResult.sla_remaining_minutes,
     created_at: new Date().toISOString(),
@@ -169,3 +203,27 @@ export async function runIncidentIngestPipeline(inputPayload) {
 
   return savedTicket;
 }
+
+/**
+ * Phase 7: Verification workflow executed by developer.
+ * Marks ticket as VERIFIED -> KNOWLEDGE_CAPTURED and triggers RAG writeback via Voyage embeddings.
+ */
+export async function verifyAndCaptureKnowledge(id, verificationData = {}, developerUser = {}) {
+  const ticket = await getTicketById(id);
+  if (!ticket) return null;
+
+  // 1. Capture verified knowledge and generate Voyage vector embedding
+  const kbArticle = await captureVerifiedKnowledge(ticket, verificationData);
+
+  // 2. Transition ticket through VERIFIED -> KNOWLEDGE_CAPTURED
+  const updatedTicket = await applyTicketUpdate(id, {
+    status: "KNOWLEDGE_CAPTURED",
+    resolved_at: new Date().toISOString(),
+    ai_root_cause: verificationData.root_cause || ticket.ai_root_cause,
+    ai_suggested_patch: verificationData.verified_resolution || ticket.ai_suggested_patch,
+    requires_human_review: false
+  });
+
+  return { ticket: updatedTicket, kbArticle };
+}
+

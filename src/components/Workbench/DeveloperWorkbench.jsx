@@ -90,6 +90,9 @@ export default function DeveloperWorkbench({ ticket, onResolveTicket }) {
 
   const [isPatchExecuting, setIsPatchExecuting] = useState(false);
   const [patchLogs, setPatchLogs] = useState([]);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [isVerified, setIsVerified] = useState(ticket?.status === 'VERIFIED' || ticket?.status === 'KNOWLEDGE_CAPTURED');
+  const [devNotes, setDevNotes] = useState(ticket?.ai_suggested_patch || '');
 
   const handleExecutePatch = async () => {
     setIsPatchExecuting(true);
@@ -108,6 +111,24 @@ export default function DeveloperWorkbench({ ticket, onResolveTicket }) {
     setIsPatchExecuted(true);
     confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
     setTimeout(() => onResolveTicket(ticket.id), 1200);
+  };
+
+  const handleVerifyKnowledge = async () => {
+    setIsVerifying(true);
+    try {
+      const { verifyTicket } = await import('../../services/apiClient');
+      await verifyTicket(ticket.id, {
+        verified_resolution: devNotes || ticket.ai_suggested_patch,
+        root_cause: ticket.ai_root_cause
+      });
+      setIsVerified(true);
+      confetti({ particleCount: 100, spread: 80, origin: { y: 0.5 } });
+      setTimeout(() => onResolveTicket(ticket.id), 1500);
+    } catch (err) {
+      alert(`Verification failed: ${err.message}`);
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   const QUICK_PROMPTS = ['Why did this happen?', 'Show SQL patch', 'Draft postmortem', 'List affected users'];
@@ -130,20 +151,40 @@ export default function DeveloperWorkbench({ ticket, onResolveTicket }) {
               {ticket.ticket_number}
             </code>
             <span className="badge-module">{ticket.erp_module}</span>
+            {isVerified && (
+              <span className="text-xs font-bold px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 flex items-center gap-1 font-mono">
+                <CheckCircle2 className="w-3 h-3 text-emerald-400" /> VERIFIED & RAG INDEXED
+              </span>
+            )}
             <span className="text-xs text-muted-color">
               Assigned: <span className="font-semibold text-heading">{ticket.assigned_dev_name}</span>
             </span>
           </div>
           <h2 className="text-base font-semibold text-heading leading-snug">{ticket.title}</h2>
         </div>
-        <button
-          onClick={handleExecutePatch}
-          disabled={isPatchExecuting || isPatchExecuted}
-          className="btn-emerald"
-        >
-          {isPatchExecuting ? <Spinner className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-          {isPatchExecuting ? 'Executing SQL Patch…' : isPatchExecuted ? 'Patch Applied & Resolved!' : 'Execute Patch & Resolve'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleVerifyKnowledge}
+            disabled={isVerifying || isVerified}
+            className="px-3 py-1.5 text-xs font-bold rounded flex items-center gap-1.5 transition-all shadow-sm"
+            style={{
+              background: isVerified ? 'var(--bg-muted)' : 'linear-gradient(135deg, #2563eb, #7c3aed)',
+              color: '#ffffff',
+              opacity: isVerified ? 0.7 : 1
+            }}
+          >
+            {isVerifying ? <Spinner className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+            {isVerifying ? 'Indexing into RAG KB…' : isVerified ? 'Verified & Indexed into RAG' : 'Verify & Index into RAG KB'}
+          </button>
+          <button
+            onClick={handleExecutePatch}
+            disabled={isPatchExecuting || isPatchExecuted}
+            className="btn-emerald"
+          >
+            {isPatchExecuting ? <Spinner className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+            {isPatchExecuting ? 'Executing SQL Patch…' : isPatchExecuted ? 'Patch Applied & Resolved!' : 'Execute Patch & Resolve'}
+          </button>
+        </div>
       </div>
 
       {/* Terminal execution log */}
@@ -161,8 +202,100 @@ export default function DeveloperWorkbench({ ticket, onResolveTicket }) {
       {/* Main 7/5 grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
 
-        {/* Left — Stack trace + Patch (7 cols) */}
+        {/* Left — Evidence-Grounded Diagnosis + Stack Trace + Patch (7 cols) */}
         <div className="lg:col-span-7 space-y-4">
+
+          {/* Evidence-Grounded Diagnosis Panel */}
+          <div className="surface p-4 space-y-3" style={{ borderLeft: '4px solid #10b981' }}>
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-heading flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-emerald-400" />
+                Evidence-Grounded AI Diagnostics
+              </h4>
+              {ticket.ai_diagnosis?.confidence && (
+                <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800">
+                  Confidence: {Math.round(ticket.ai_confidence * 100)}%
+                </span>
+              )}
+            </div>
+
+            {/* 🟢 1. LIVE ERP FACTS */}
+            <div className="p-3 rounded bg-slate-900/80 border border-emerald-900/60 space-y-2">
+              <div className="flex items-center justify-between text-xs font-semibold text-emerald-400">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  🟢 LIVE ERP FACTS (MCP Execution)
+                </span>
+                <span className="text-[10px] font-mono text-slate-400">
+                  Trace ID: {ticket.correlation_id || 'mcp-trace-live'}
+                </span>
+              </div>
+              <div className="space-y-1 text-xs text-slate-300 font-mono">
+                {ticket.mcp_evidence && ticket.mcp_evidence.length > 0 ? (
+                  ticket.mcp_evidence.map((fact, idx) => (
+                    <div key={idx} className="p-2 rounded bg-slate-950/60 border border-slate-800 flex items-start justify-between gap-2">
+                      <div>
+                        <span className="font-bold text-emerald-300">[{fact.tool}]</span>{' '}
+                        <span>{fact.status === 200 ? 'Verified real-time state' : fact.error || 'Execution note'}</span>
+                      </div>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${fact.status === 200 ? 'bg-emerald-900 text-emerald-200' : 'bg-amber-900 text-amber-200'}`}>
+                        {fact.status === 200 ? '200 OK' : `HTTP ${fact.status}`}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-amber-400 text-[11px]">LIVE ERP VERIFICATION UNAVAILABLE</p>
+                )}
+              </div>
+            </div>
+
+            {/* 🔵 2. HISTORICAL KNOWLEDGE */}
+            <div className="p-3 rounded bg-slate-900/80 border border-blue-900/60 space-y-2">
+              <div className="flex items-center justify-between text-xs font-semibold text-blue-400">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-blue-400"></span>
+                  🔵 HISTORICAL KNOWLEDGE (RAG Database)
+                </span>
+                <span className="text-[10px] font-mono text-slate-400">Voyage Vector Embeddings</span>
+              </div>
+              <div className="space-y-1 text-xs text-slate-300">
+                {ticket.rag_evidence && ticket.rag_evidence.length > 0 ? (
+                  ticket.rag_evidence.slice(0, 2).map((rag, idx) => (
+                    <div key={idx} className="p-2 rounded bg-slate-950/60 border border-slate-800 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-blue-300">{rag.title}</span>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800">
+                          {rag.confidence_percentage}% match
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400">{rag.verified_resolution}</p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-slate-400 text-[11px]">No high-confidence historical matches found.</p>
+                )}
+              </div>
+            </div>
+
+            {/* 🟣 3. AI INFERENCE */}
+            <div className="p-3 rounded bg-slate-900/80 border border-purple-900/60 space-y-2">
+              <div className="flex items-center justify-between text-xs font-semibold text-purple-400">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-purple-400"></span>
+                  🟣 AI INFERENCE & DIAGNOSIS
+                </span>
+                <span className="text-[10px] font-mono text-purple-300">
+                  Target: {ticket.resolution_type || 'DEVELOPER'}
+                </span>
+              </div>
+              <p className="text-xs text-purple-200 font-medium">
+                <strong className="text-purple-300">Root Cause:</strong> {ticket.ai_root_cause}
+              </p>
+              <p className="text-xs text-slate-300">
+                <strong className="text-purple-300">Recommendation:</strong> {ticket.ai_suggested_patch}
+              </p>
+            </div>
+          </div>
 
           {/* Stack trace / OCR output */}
           <div className="surface">

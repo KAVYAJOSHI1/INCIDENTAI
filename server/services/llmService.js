@@ -12,7 +12,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import Groq from "groq-sdk";
 
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || "claude-3-5-sonnet-20241022";
-const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.1-8b-instant";
 
 let anthropicClient = null;
 let groqClient = null;
