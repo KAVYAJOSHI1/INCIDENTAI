@@ -31,8 +31,11 @@ async function request(path, options = {}) {
   const data = await res.json().catch(() => ({}));
 
   if (res.status === 401) {
-    setAuthToken(null);
-    onUnauthorized?.();
+    const isAuthRoute = path === "/auth/login" || path === "/auth/register";
+    if (!isAuthRoute && authToken) {
+      setAuthToken(null);
+      onUnauthorized?.();
+    }
   }
   if (!res.ok) throw new Error(data.error || `Request failed with status ${res.status}`);
   return data;
@@ -148,3 +151,15 @@ export const fetchPatchPreview = (ticketId) => request(`/tickets/${ticketId}/pat
 export const fetchWarRoom = () => request("/warroom").then((d) => d.warroom);
 export const fetchDigitalTwin = () => request("/digital-twin").then((d) => d.twin);
 export const fetchMissionControl = () => request("/mission-control").then((d) => d.missionControl);
+
+// Platform Remediation Platform APIs
+export const fetchIntegrations = () => request("/integrations");
+export const fetchRemediation = (ticketId) => request(`/incidents/${ticketId}/remediation`).then((d) => d.remediation);
+export const approveRemediation = (ticketId, actor) => request(`/incidents/${ticketId}/remediation/approve`, { method: "POST", body: JSON.stringify({ actor }) }).then((d) => d.remediation);
+export const rejectRemediation = (ticketId, reason, actor) => request(`/incidents/${ticketId}/remediation/reject`, { method: "POST", body: JSON.stringify({ reason, actor }) }).then((d) => d.remediation);
+export const fetchPatch = (ticketId) => request(`/incidents/${ticketId}/patch`).then((d) => d.patch);
+export const verifyPatch = (ticketId, options = {}) => request(`/incidents/${ticketId}/verify-patch`, { method: "POST", body: JSON.stringify(options) }).then((d) => d.verification);
+export const applyPatch = (ticketId, actor) => request(`/incidents/${ticketId}/apply-patch`, { method: "POST", body: JSON.stringify({ actor }) }).then((d) => d.patch_result);
+export const rollbackPatch = (ticketId, reason, actor) => request(`/incidents/${ticketId}/rollback`, { method: "POST", body: JSON.stringify({ reason, actor }) }).then((d) => d.rollback);
+export const fetchAuditLogs = (ticketId) => request(ticketId ? `/incidents/${ticketId}/audit-logs` : "/audit-logs").then((d) => d.audit_logs);
+

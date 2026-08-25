@@ -1,16 +1,16 @@
 import React from 'react';
 import {
   ShieldAlert, UserCheck, Code2, BarChart3, GitFork,
-  Radio, Map, Gauge, X, Zap
+  Radio, Map, Gauge, X, Zap, Server
 } from 'lucide-react';
 
 const NAV_SECTIONS = [
   {
     label: 'Incident Management',
     items: [
-      { id: 'REPORTER',  label: 'Submit Incident',       icon: UserCheck  },
-      { id: 'TRIAGE',    label: 'Triage Feed',            icon: ShieldAlert },
-      { id: 'DEVELOPER', label: 'Developer Workbench',    icon: Code2      },
+      { id: 'MY_INCIDENTS', label: 'My Incidents',         icon: UserCheck  },
+      { id: 'TRIAGE',       label: 'Triage Feed',          icon: ShieldAlert },
+      { id: 'DEVELOPER',    label: 'Developer Workbench',  icon: Code2      },
     ]
   },
   {
@@ -21,8 +21,9 @@ const NAV_SECTIONS = [
     ]
   },
   {
-    label: 'Operations',
+    label: 'Operations & Platform',
     items: [
+      { id: 'INTEGRATIONS',  label: 'Integration Hub',   icon: Server },
       { id: 'WARROOM',       label: 'War Room',          icon: Radio  },
       { id: 'DIGITALTWIN',   label: 'Digital Twin',      icon: Map    },
       { id: 'MISSIONCONTROL',label: 'Mission Control',   icon: Gauge  },

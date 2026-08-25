@@ -3,8 +3,21 @@ import { applyTicketUpdate, verifyAndCaptureKnowledge } from "../services/ticket
 import { requireAuth, requireRole } from "../middleware/authMiddleware.js";
 import { validateBody } from "../utils/validate.js";
 import { ticketPatchSchema } from "../utils/schemas.js";
-import { STAFF_ROLES } from "../constants.js";
+import { TRIAGE_AND_DEV_ROLES, DEVELOPER_ROLES } from "../constants.js";
 import { sendJson, ApiError } from "../utils/http.js";
+
+function isTicketOwner(ticket, user) {
+  if (!ticket || !user) return false;
+  const userEmail = (user.email || "").toLowerCase();
+  const userName = (user.name || "").toLowerCase();
+  const reporter = (ticket.reporter || "").toLowerCase();
+  if (reporter === userName || reporter === userEmail) return true;
+  // Match demo enduser ("Dana Reporter" or incidents submitted by End User reporter)
+  if (userEmail.includes("enduser") && (reporter.includes("dana") || reporter.includes("sample scenario") || reporter.includes("end user"))) {
+    return true;
+  }
+  return false;
+}
 
 function sanitizeTicketForUser(ticket, role) {
   if (!ticket || role !== "END_USER") return ticket;
@@ -36,7 +49,10 @@ export function registerTicketRoutes(router) {
   router.get(
     "/api/tickets",
     requireAuth(async ({ res, query, user }) => {
-      const tickets = await listTickets(query);
+      let tickets = await listTickets(query);
+      if (user.role === "END_USER") {
+        tickets = tickets.filter((t) => isTicketOwner(t, user));
+      }
       const sanitized = tickets.map((t) => sanitizeTicketForUser(t, user.role));
       sendJson(res, 200, { tickets: sanitized });
     })
@@ -47,13 +63,16 @@ export function registerTicketRoutes(router) {
     requireAuth(async ({ res, params, user }) => {
       const ticket = await getTicketById(params.id);
       if (!ticket) throw new ApiError(404, `Ticket ${params.id} not found`);
+      if (user.role === "END_USER" && !isTicketOwner(ticket, user)) {
+        throw new ApiError(403, "Forbidden — End users can only access their own incidents");
+      }
       sendJson(res, 200, { ticket: sanitizeTicketForUser(ticket, user.role) });
     })
   );
 
   router.patch(
     "/api/tickets/:id",
-    requireRole(STAFF_ROLES, async ({ res, params, body }) => {
+    requireRole(TRIAGE_AND_DEV_ROLES, async ({ res, params, body }) => {
       const patch = validateBody(ticketPatchSchema, body);
       const ticket = await applyTicketUpdate(params.id, patch);
       if (!ticket) throw new ApiError(404, `Ticket ${params.id} not found`);
@@ -63,7 +82,7 @@ export function registerTicketRoutes(router) {
 
   router.post(
     "/api/tickets/:id/verify",
-    requireRole(STAFF_ROLES, async ({ res, params, body, user }) => {
+    requireRole(DEVELOPER_ROLES, async ({ res, params, body, user }) => {
       const result = await verifyAndCaptureKnowledge(params.id, body || {}, user);
       if (!result) throw new ApiError(404, `Ticket ${params.id} not found`);
       sendJson(res, 200, {
@@ -75,4 +94,5 @@ export function registerTicketRoutes(router) {
     })
   );
 }
+
 

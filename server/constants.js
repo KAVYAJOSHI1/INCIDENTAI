@@ -15,8 +15,10 @@ export const INCIDENT_STATUSES = [
 ];
 export const ERP_MODULES = ["INVOICING", "PAYROLL", "INVENTORY", "GENERAL_LEDGER", "PROCUREMENT"];
 export const ROLES = ["END_USER", "SUPPORT_TRIAGE", "DEVELOPER", "EXECUTIVE"];
-// Roles allowed to perform internal-staff mutations (assign/resolve tickets, curate the
-// knowledge base, rebalance load, use the developer copilot). END_USER can submit incidents
-// but not act on them once triaged.
 export const STAFF_ROLES = ["SUPPORT_TRIAGE", "DEVELOPER", "EXECUTIVE"];
+export const TRIAGE_ROLES = ["SUPPORT_TRIAGE"];
+export const DEVELOPER_ROLES = ["DEVELOPER"];
+export const EXECUTIVE_ROLES = ["EXECUTIVE"];
+export const TRIAGE_AND_DEV_ROLES = ["SUPPORT_TRIAGE", "DEVELOPER"];
+export const OPS_ROLES = ["SUPPORT_TRIAGE", "EXECUTIVE"];
 

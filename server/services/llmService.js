@@ -12,10 +12,16 @@ import Anthropic from "@anthropic-ai/sdk";
 import Groq from "groq-sdk";
 
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || "claude-3-5-sonnet-20241022";
-const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.1-8b-instant";
+const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+const GROQ_MODELS = ["llama-3.3-70b-versatile"];
 
 let anthropicClient = null;
 let groqClient = null;
+
+function cleanThinkingText(text) {
+  if (!text) return text;
+  return text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+}
 
 function hasAnthropic() {
   return Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
@@ -30,12 +36,12 @@ export function isLlmConfigured() {
 }
 
 function getAnthropicClient() {
-  if (!anthropicClient) anthropicClient = new Anthropic();
+  if (!anthropicClient) anthropicClient = new Anthropic({ maxRetries: 0, timeout: 4000 });
   return anthropicClient;
 }
 
 function getGroqClient() {
-  if (!groqClient) groqClient = new Groq();
+  if (!groqClient) groqClient = new Groq({ maxRetries: 0, timeout: 4000 });
   return groqClient;
 }
 
@@ -78,24 +84,29 @@ export async function completeJson({ system, prompt, schema, maxTokens = 1024, e
   }
 
   if (hasGroq()) {
-    try {
-      const completion = await getGroqClient().chat.completions.create({
-        model: GROQ_MODEL,
-        max_tokens: maxTokens,
-        response_format: { type: "json_object" },
-        messages: [
+    for (const model of GROQ_MODELS) {
+      try {
+        const completion = await getGroqClient().chat.completions.create(
           {
-            role: "system",
-            content: `${system}\n\nRespond with ONLY a single valid JSON object matching this JSON Schema, and nothing else:\n${JSON.stringify(schema)}`
+            model,
+            max_tokens: maxTokens,
+            response_format: { type: "json_object" },
+            messages: [
+              {
+                role: "system",
+                content: `${system}\n\nRespond with ONLY a single valid JSON object matching this JSON Schema, and nothing else:\n${JSON.stringify(schema)}`
+              },
+              { role: "user", content: prompt }
+            ]
           },
-          { role: "user", content: prompt }
-        ]
-      });
+          { timeout: 5000 }
+        );
 
-      const text = completion.choices[0]?.message?.content;
-      if (text) return JSON.parse(text);
-    } catch (err) {
-      console.warn(`[llmService] Groq completeJson failed, falling back to rule-based logic: ${err.message}`);
+        const text = completion.choices[0]?.message?.content;
+        if (text) return JSON.parse(text);
+      } catch (err) {
+        console.warn(`[llmService] Groq model ${model} failed (${err.message}), attempting next fallback model...`);
+      }
     }
   }
 

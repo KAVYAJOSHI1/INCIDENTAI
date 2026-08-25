@@ -56,7 +56,8 @@ async function fetchErpData(endpoint, correlationId) {
         "X-Correlation-ID": traceId,
         "X-User-Id": "sys-incidentai-mcp",
         "X-User-Role": "viewer"
-      }
+      },
+      signal: AbortSignal.timeout(3000)
     });
 
     if (!res.ok) {

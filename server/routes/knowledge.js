@@ -4,7 +4,7 @@ import { searchKnowledgeBase, searchKnowledgeBaseWithAI, searchKnowledgeBaseWith
 import { requireAuth, requireRole } from "../middleware/authMiddleware.js";
 import { validateBody } from "../utils/validate.js";
 import { knowledgeArticleSchema } from "../utils/schemas.js";
-import { STAFF_ROLES } from "../constants.js";
+import { DEVELOPER_ROLES } from "../constants.js";
 import { sendJson } from "../utils/http.js";
 
 export function registerKnowledgeRoutes(router) {
@@ -29,7 +29,7 @@ export function registerKnowledgeRoutes(router) {
 
   router.post(
     "/api/knowledge",
-    requireRole(STAFF_ROLES, async ({ res, body }) => {
+    requireRole(DEVELOPER_ROLES, async ({ res, body }) => {
       const input = validateBody(knowledgeArticleSchema, body);
       const article = {
         id: input.id || `kb_${crypto.randomInt(100000, 999999)}`,

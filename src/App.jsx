@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import Sidebar from './components/Common/Sidebar';
 import Header from './components/Common/Header';
 import SmartReporter from './components/Reporter/SmartReporter';
+import EndUserPortal from './components/Reporter/EndUserPortal';
 import JiraTicketView from './components/Ticketing/JiraTicketView';
 import DeveloperLoadBalancer from './components/LoadBalancer/DeveloperLoadBalancer';
 import DeveloperWorkbench from './components/Workbench/DeveloperWorkbench';
@@ -11,6 +12,7 @@ import AIPipelineVisualizer from './components/Pipeline/AIPipelineVisualizer';
 import WarRoom from './components/Operations/WarRoom';
 import DigitalTwin from './components/Operations/DigitalTwin';
 import MissionControl from './components/Operations/MissionControl';
+import IntegrationHub from './components/Integrations/IntegrationHub';
 
 import * as api from './services/apiClient';
 import { ShieldAlert, Loader2, Inbox, RefreshCw } from 'lucide-react';
@@ -18,12 +20,12 @@ import EmptyState from './components/Common/EmptyState';
 import LoginScreen from './components/Auth/LoginScreen';
 import { useAuth } from './context/AuthContext';
 import { useTheme } from './hooks/useTheme';
-import { VIEWS_BY_ROLE } from './constants/roles';
+import { VIEWS_BY_ROLE, DEFAULT_VIEW_BY_ROLE } from './constants/roles';
 
 export default function App() {
   const { user, isLoading: isAuthLoading, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const [currentView, setCurrentView] = useState('REPORTER');
+  const [currentView, setCurrentView] = useState(null);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [tickets, setTickets] = useState([]);
   const [developers, setDevelopers] = useState([]);
@@ -35,44 +37,54 @@ export default function App() {
 
   const selectedTicket = tickets.find((t) => t.id === selectedTicketId) || tickets[0];
 
-  const loadInitialData = React.useCallback(async ({ signal } = {}) => {
-    setIsLoading(true);
+  const loadInitialData = React.useCallback(async ({ signal, isInitial = false } = {}) => {
+    if (isInitial) setIsLoading(true);
     try {
+      const isStaff = user && user.role !== 'END_USER';
       const [ticketsData, developersData, kbData] = await Promise.all([
         api.fetchTickets(),
-        api.fetchDevelopers(),
-        api.fetchKnowledgeBase()
+        isStaff ? api.fetchDevelopers().catch(() => []) : Promise.resolve([]),
+        api.fetchKnowledgeBase().catch(() => [])
       ]);
       if (signal?.cancelled) return;
       setTickets(ticketsData);
       setDevelopers(developersData);
       setKnowledgeBase(kbData);
-      setSelectedTicketId(ticketsData[0]?.id ?? null);
+      setSelectedTicketId((prev) => prev || (ticketsData[0]?.id ?? null));
       setLoadError(null);
     } catch (err) {
       if (!signal?.cancelled) setLoadError(err.message);
     } finally {
-      if (!signal?.cancelled) setIsLoading(false);
+      if (isInitial && !signal?.cancelled) setIsLoading(false);
     }
-  }, []);
+  }, [user?.role]);
 
   useEffect(() => {
     if (!user) return undefined;
     const signal = { cancelled: false };
-    loadInitialData({ signal });
+    loadInitialData({ signal, isInitial: true });
 
     // Poll every 10 seconds for real-time multi-user synchronization
     const interval = setInterval(() => {
-      loadInitialData({ signal });
+      loadInitialData({ signal, isInitial: false });
     }, 10000);
 
     return () => {
       signal.cancelled = true;
       clearInterval(interval);
     };
-  }, [user, loadInitialData]);
+  }, [user?.id, loadInitialData]);
 
-  const allowedViews = user ? VIEWS_BY_ROLE[user.role] : [];
+  const allowedViews = user ? (VIEWS_BY_ROLE[user.role] || []) : [];
+
+  useEffect(() => {
+    if (!user) return;
+    const allowed = VIEWS_BY_ROLE[user.role] || [];
+    const defaultView = DEFAULT_VIEW_BY_ROLE[user.role] || 'MY_INCIDENTS';
+    if (!currentView || !allowed.includes(currentView)) {
+      setCurrentView(defaultView);
+    }
+  }, [user, currentView]);
 
   const handleSubmitIncident = async (inputPayload) => {
     try {
@@ -80,8 +92,10 @@ export default function App() {
       setTickets((prev) => [newTicket, ...prev]);
       setSelectedTicketId(newTicket.id);
       if (allowedViews.includes('TRIAGE')) setCurrentView('TRIAGE');
-      const refreshedDevelopers = await api.fetchDevelopers();
-      setDevelopers(refreshedDevelopers);
+      if (user?.role !== 'END_USER') {
+        const refreshedDevelopers = await api.fetchDevelopers();
+        setDevelopers(refreshedDevelopers);
+      }
     } catch (err) {
       alert(`Failed to ingest incident: ${err.message}`);
     }
@@ -112,8 +126,10 @@ export default function App() {
     try {
       const updated = await api.patchTicket(ticketId, { assigned_dev_id: devId, status: 'ASSIGNED' });
       setTickets((prev) => prev.map((t) => (t.id === ticketId ? updated : t)));
-      const refreshedDevelopers = await api.fetchDevelopers();
-      setDevelopers(refreshedDevelopers);
+      if (user?.role !== 'END_USER') {
+        const refreshedDevelopers = await api.fetchDevelopers();
+        setDevelopers(refreshedDevelopers);
+      }
     } catch (err) {
       alert(`Failed to assign developer: ${err.message}`);
     }
@@ -124,7 +140,10 @@ export default function App() {
   // can surface that itself.
   const handleRebalanceLoad = async () => {
     const { reassignments, count } = await api.rebalanceLoad();
-    const [refreshedTickets, refreshedDevelopers] = await Promise.all([api.fetchTickets(), api.fetchDevelopers()]);
+    const [refreshedTickets, refreshedDevelopers] = await Promise.all([
+      api.fetchTickets(),
+      api.fetchDevelopers()
+    ]);
     setTickets(refreshedTickets);
     setDevelopers(refreshedDevelopers);
     return { reassignments, count };
@@ -134,8 +153,10 @@ export default function App() {
     try {
       const updated = await api.patchTicket(ticketId, { status: 'RESOLVED' });
       setTickets((prev) => prev.map((t) => (t.id === ticketId ? updated : t)));
-      const refreshedDevelopers = await api.fetchDevelopers();
-      setDevelopers(refreshedDevelopers);
+      if (user?.role !== 'END_USER') {
+        const refreshedDevelopers = await api.fetchDevelopers();
+        setDevelopers(refreshedDevelopers);
+      }
     } catch (err) {
       alert(`Failed to resolve ticket: ${err.message}`);
     }
@@ -369,9 +390,9 @@ export default function App() {
         {!isTriage && (
           <main className="flex-1 px-6 py-6 pb-16 overflow-y-auto">
 
-            {/* View 1: End User Reporter */}
-            {currentView === 'REPORTER' && (
-              <SmartReporter onSubmitIncident={handleSubmitIncident} />
+            {/* View 1: End User Self-Service Portal */}
+            {currentView === 'MY_INCIDENTS' && (
+              <EndUserPortal tickets={tickets} />
             )}
 
             {/* View 3: Developer Workbench & Copilot */}
@@ -412,6 +433,9 @@ export default function App() {
 
             {/* View 8: Mission Control Command Center */}
             {currentView === 'MISSIONCONTROL' && <MissionControl />}
+
+            {/* View 9: Integration Hub */}
+            {currentView === 'INTEGRATIONS' && <IntegrationHub />}
           </main>
         )}
       </div>

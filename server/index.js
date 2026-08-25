@@ -38,6 +38,7 @@ import { registerAnalyticsRoutes } from "./routes/analytics.js";
 import { registerCopilotRoutes } from "./routes/copilot.js";
 import { registerTicketInsightRoutes } from "./routes/ticketInsights.js";
 import { registerOperationsRoutes } from "./routes/operations.js";
+import { registerRemediationRoutes } from "./routes/remediationRoutes.js";
 
 const router = new Router();
 registerAuthRoutes(router);
@@ -52,6 +53,15 @@ registerAnalyticsRoutes(router);
 registerCopilotRoutes(router);
 registerTicketInsightRoutes(router);
 registerOperationsRoutes(router);
+registerRemediationRoutes(router);
+
+process.on("uncaughtException", (err) => {
+  console.error("[Uncaught Exception]", err);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("[Unhandled Rejection]", reason);
+});
 
 const PORT = process.env.PORT || 4000;
 const server = http.createServer((req, res) => router.handle(req, res));

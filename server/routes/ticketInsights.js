@@ -6,7 +6,8 @@ import { buildIncidentTimeline } from "../services/timelineService.js";
 import { generateExecutiveSummary, generateExecutiveSummaryWithAI } from "../services/executiveSummaryService.js";
 import { buildIncidentReplay } from "../services/replayService.js";
 import { buildPatchPreview, buildPatchPreviewWithAI } from "../services/patchPreviewService.js";
-import { requireAuth } from "../middleware/authMiddleware.js";
+import { requireAuth, requireRole } from "../middleware/authMiddleware.js";
+import { STAFF_ROLES } from "../constants.js";
 import { sendJson, ApiError } from "../utils/http.js";
 
 async function requireTicket(id) {
@@ -18,14 +19,14 @@ async function requireTicket(id) {
 export function registerTicketInsightRoutes(router) {
   router.get(
     "/api/tickets/:id/root-cause-tree",
-    requireAuth(async ({ res, params }) => {
+    requireRole(STAFF_ROLES, async ({ res, params }) => {
       sendJson(res, 200, { tree: buildDependencyTree(await requireTicket(params.id)) });
     })
   );
 
   router.get(
     "/api/tickets/:id/explainability",
-    requireAuth(async ({ res, params }) => {
+    requireRole(STAFF_ROLES, async ({ res, params }) => {
       const explainability = buildExplainability(await requireTicket(params.id));
       const narrative = (await explainDecisionWithAI(explainability)) ?? explainDecisionFallback(explainability);
       sendJson(res, 200, { explainability: { ...explainability, ...narrative } });
@@ -34,7 +35,7 @@ export function registerTicketInsightRoutes(router) {
 
   router.get(
     "/api/tickets/:id/business-impact",
-    requireAuth(async ({ res, params }) => {
+    requireRole(STAFF_ROLES, async ({ res, params }) => {
       const ticket = await requireTicket(params.id);
       const impact = (await computeBusinessImpactWithAI(ticket)) ?? computeBusinessImpact(ticket);
       sendJson(res, 200, { impact });
@@ -43,14 +44,14 @@ export function registerTicketInsightRoutes(router) {
 
   router.get(
     "/api/tickets/:id/timeline",
-    requireAuth(async ({ res, params }) => {
+    requireRole(STAFF_ROLES, async ({ res, params }) => {
       sendJson(res, 200, { timeline: buildIncidentTimeline(await requireTicket(params.id)) });
     })
   );
 
   router.get(
     "/api/tickets/:id/executive-summary",
-    requireAuth(async ({ res, params }) => {
+    requireRole(STAFF_ROLES, async ({ res, params }) => {
       const ticket = await requireTicket(params.id);
       const impact = (await computeBusinessImpactWithAI(ticket)) ?? computeBusinessImpact(ticket);
       const summary = (await generateExecutiveSummaryWithAI(ticket, impact)) ?? generateExecutiveSummary(ticket, impact);
@@ -60,17 +61,18 @@ export function registerTicketInsightRoutes(router) {
 
   router.get(
     "/api/tickets/:id/replay",
-    requireAuth(async ({ res, params }) => {
+    requireRole(STAFF_ROLES, async ({ res, params }) => {
       sendJson(res, 200, { replay: buildIncidentReplay(await requireTicket(params.id)) });
     })
   );
 
   router.get(
     "/api/tickets/:id/patch-preview",
-    requireAuth(async ({ res, params }) => {
+    requireRole(STAFF_ROLES, async ({ res, params }) => {
       const ticket = await requireTicket(params.id);
       const preview = (await buildPatchPreviewWithAI(ticket)) ?? buildPatchPreview(ticket);
       sendJson(res, 200, { preview });
     })
   );
 }
+

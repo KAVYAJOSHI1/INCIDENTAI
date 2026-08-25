@@ -27,21 +27,6 @@ export function requireAuth(handler) {
       return handler(ctx);
     }
 
-    // Fallback: Gateway forwarded user headers
-    const userId = ctx.req.headers['x-user-id'];
-    const userEmail = ctx.req.headers['x-user-email'];
-    const userRole = ctx.req.headers['x-user-role'];
-
-    if (userId || userEmail) {
-      ctx.user = {
-        id: userId || "usr-gateway-guest",
-        email: userEmail || "operator@smart-erp.io",
-        role: userRole || "viewer",
-        name: userEmail ? userEmail.split("@")[0] : "ERP Operator"
-      };
-      return handler(ctx);
-    }
-
     throw new ApiError(401, "Unauthorized — missing or invalid token");
   };
 }

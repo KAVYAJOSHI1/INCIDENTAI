@@ -1,5 +1,3 @@
-// Mirrors server/constants.js ROLES/STAFF_ROLES — kept in sync manually since the
-// frontend and backend don't share a module.
 export const ROLES = ['END_USER', 'SUPPORT_TRIAGE', 'DEVELOPER', 'EXECUTIVE'];
 
 export const ROLE_LABELS = {
@@ -9,14 +7,18 @@ export const ROLE_LABELS = {
   EXECUTIVE: 'Executive'
 };
 
-const ALL_VIEWS = ['REPORTER', 'TRIAGE', 'DEVELOPER', 'ADMIN', 'PIPELINE', 'WARROOM', 'DIGITALTWIN', 'MISSIONCONTROL'];
-
-// END_USER accounts can only submit incidents — every other view is internal-staff
-// tooling (triage, dev workbench, analytics, ops dashboards), gated to the other
-// three roles which can all see the full nav (mirrors STAFF_ROLES on the backend).
 export const VIEWS_BY_ROLE = {
-  END_USER: ['REPORTER'],
-  SUPPORT_TRIAGE: ALL_VIEWS,
-  DEVELOPER: ALL_VIEWS,
-  EXECUTIVE: ALL_VIEWS
+  END_USER: ['MY_INCIDENTS'],
+  SUPPORT_TRIAGE: ['TRIAGE', 'INTEGRATIONS', 'PIPELINE'],
+  DEVELOPER: ['DEVELOPER', 'INTEGRATIONS', 'PIPELINE'],
+  EXECUTIVE: ['ADMIN', 'INTEGRATIONS', 'WARROOM', 'DIGITALTWIN', 'MISSIONCONTROL']
 };
+
+export const DEFAULT_VIEW_BY_ROLE = {
+  END_USER: 'MY_INCIDENTS',
+  SUPPORT_TRIAGE: 'TRIAGE',
+  DEVELOPER: 'DEVELOPER',
+  EXECUTIVE: 'ADMIN'
+};
+
+

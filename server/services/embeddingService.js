@@ -9,7 +9,7 @@
 import "../utils/loadEnv.js";
 import { createTtlCache } from "../utils/simpleCache.js";
 
-const MODEL = "voyage-3.5";
+const MODEL = process.env.VOYAGE_MODEL || "voyage-3";
 const OUTPUT_DIMENSION = 1024;
 const API_URL = "https://api.voyageai.com/v1/embeddings";
 
@@ -21,22 +21,29 @@ export function isEmbeddingConfigured() {
   return Boolean(process.env.VOYAGE_API_KEY);
 }
 
-async function callVoyage(inputs, inputType) {
-  const response = await fetch(API_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.VOYAGE_API_KEY}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ input: inputs, model: MODEL, input_type: inputType, output_dimension: OUTPUT_DIMENSION })
-  });
+async function callVoyage(inputs, inputType, retries = 2) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.VOYAGE_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ input: inputs, model: MODEL, input_type: inputType, output_dimension: OUTPUT_DIMENSION })
+    });
 
-  if (!response.ok) {
+    if (response.ok) {
+      const body = await response.json();
+      return body.data.sort((a, b) => a.index - b.index).map((d) => d.embedding);
+    }
+
+    if (response.status === 429 && attempt < retries) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      continue;
+    }
+
     throw new Error(`Voyage API returned ${response.status}: ${await response.text()}`);
   }
-
-  const body = await response.json();
-  return body.data.sort((a, b) => a.index - b.index).map((d) => d.embedding);
 }
 
 /**

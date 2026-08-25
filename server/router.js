@@ -52,6 +52,7 @@ export class Router {
       const body = ["POST", "PATCH", "PUT"].includes(req.method) ? await parseJsonBody(req) : undefined;
       await route.handler({ req, res, params, query, body });
     } catch (err) {
+      console.error(`[Router Error] ${req.method} ${pathname}:`, err);
       const status = err instanceof ApiError ? err.statusCode : 500;
       sendJson(res, status, { error: err.message || "Internal Server Error" });
     }
