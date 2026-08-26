@@ -335,15 +335,28 @@ export default function App() {
                             className="text-[11px] font-mono font-bold truncate"
                             style={{ color: 'var(--accent-subtle-text)' }}
                           >
-                            {t.ticket_number}
+                            {t.ticket_number || t.id}
                           </code>
                         </div>
-                        <span
-                          className={isP0 ? 'badge-p0' : isP1 ? 'badge-p1' : t.severity === 'P2_MEDIUM' ? 'badge-p2' : 'badge-p3'}
-                          style={{ fontSize: '10px', padding: '1px 6px', flexShrink: 0 }}
-                        >
-                          {t.severity?.split('_')[0]}
-                        </span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {t.status && (
+                            <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                              t.status === 'RESOLVED' || t.status === 'VERIFIED'
+                                ? 'bg-emerald-500/10 text-emerald-400'
+                                : t.status === 'VERIFICATION_FAILED'
+                                ? 'bg-rose-500/10 text-rose-400'
+                                : 'bg-blue-500/10 text-blue-400'
+                            }`}>
+                              {t.status}
+                            </span>
+                          )}
+                          <span
+                            className={isP0 ? 'badge-p0' : isP1 ? 'badge-p1' : t.severity === 'P2_MEDIUM' ? 'badge-p2' : 'badge-p3'}
+                            style={{ fontSize: '10px', padding: '1px 6px' }}
+                          >
+                            {t.severity?.split('_')[0]}
+                          </span>
+                        </div>
                       </div>
 
                       {/* Row 2: title */}
@@ -357,14 +370,21 @@ export default function App() {
                         {t.title}
                       </p>
 
-                      {/* Row 3: dev name + module */}
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] truncate" style={{ color: 'var(--text-muted)' }}>
-                          {t.assigned_dev_name || 'Unassigned'}
+                      {/* Row 3: dev name + AI confidence + SLA + module */}
+                      <div className="flex items-center justify-between gap-1 text-[10px] font-mono">
+                        <span className="truncate" style={{ color: 'var(--text-muted)' }}>
+                          Dev: <strong className="text-heading">{t.assigned_dev_name || 'UNASSIGNED'}</strong>
                         </span>
-                        <span className="badge-module shrink-0" style={{ fontSize: '9px', padding: '1px 5px' }}>
-                          {t.erp_module?.replace('_', ' ')}
-                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {t.ai_confidence != null && (
+                            <span className="text-amber-400 font-bold">
+                              {Math.round(t.ai_confidence * 100)}%
+                            </span>
+                          )}
+                          <span className="badge-module" style={{ fontSize: '9px', padding: '1px 5px' }}>
+                            {t.erp_module?.replace('_', ' ')}
+                          </span>
+                        </div>
                       </div>
                     </button>
                   );
