@@ -550,31 +550,89 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
                 <Sparkles className="w-4 h-4 text-amber-500" /> WHAT DID AI FIND & WHY?
               </h3>
               <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                Confidence: {confidencePercent}
+                Confidence: {confidencePercent} (MEDIUM CONFIDENCE)
               </span>
             </div>
 
-            <p className="text-xs font-medium text-heading leading-relaxed">
-              AI Root Cause Diagnosis: <strong className="text-accent-color">{suspectedRootCauseText}</strong>
-            </p>
-
-            {/* Evidence List */}
-            <div className="space-y-2 pt-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-muted-color block">Grounding Evidence Gathered:</span>
-              <div className="p-3 rounded-xl bg-subtle border border-[var(--border)] text-xs font-mono space-y-2">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                  <span>ERP Error Code extracted: <code className="text-rose-500 font-bold">{errorCode}</code></span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                  <span>UI Component detected: <code className="text-purple-400 font-bold">{uiComponent}</code></span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                  <span>MCP Live Fact: Redis stock cache key <code className="text-amber-400">inv_stock:SK-902</code> mismatch with SQL table balance</span>
-                </div>
+            {/* Technical Execution Path Chain */}
+            <div className="p-4 rounded-xl surface-muted border border-[var(--border)] space-y-2">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-muted-color block">
+                Technical Path Hierarchy & Execution Chain
+              </span>
+              <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
+                <span className="px-2 py-1 rounded bg-accent-subtle-bg text-accent-subtle-text font-bold">INVENTORY</span>
+                <span className="text-muted-color">&rarr;</span>
+                <span className="px-2 py-1 rounded surface border border-[var(--border)] font-bold text-heading">InventoryService</span>
+                <span className="text-muted-color">&rarr;</span>
+                <span className="px-2 py-1 rounded surface border border-[var(--border)] font-bold text-purple-400">inventory/binTransfer.js</span>
+                <span className="text-muted-color">&rarr;</span>
+                <span className="px-2 py-1 rounded surface border border-[var(--border)] font-bold text-amber-400">validateStockQuantity()</span>
+                <span className="text-muted-color">&rarr;</span>
+                <span className="px-2 py-1 rounded surface border border-[var(--border)] font-bold text-rose-400">inv_stock_cache</span>
               </div>
+            </div>
+
+            {/* Grounding Categories & Badges Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+              {/* FACT */}
+              <div className="p-3.5 rounded-xl surface-muted border border-[var(--border)] space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    FACT
+                  </span>
+                  <span className="text-xs font-bold text-heading">Grounded ERP Facts</span>
+                </div>
+                <ul className="text-xs font-mono text-muted-color space-y-1 pl-1">
+                  <li>• Error Code: <code className="text-rose-500 font-bold">{errorCode}</code></li>
+                  <li>• Bin Location: <code className="text-heading font-bold">{affectedWarehouse}</code></li>
+                  <li>• Transfer Requested: <code className="text-rose-400 font-bold">100 units &gt; 84 available</code></li>
+                </ul>
+              </div>
+
+              {/* AI INFERENCE */}
+              <div className="p-3.5 rounded-xl surface-muted border border-[var(--border)] space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                    AI INFERENCE
+                  </span>
+                  <span className="text-xs font-bold text-heading">Probabilistic Root Cause</span>
+                </div>
+                <p className="text-xs text-body-color leading-relaxed font-sans">
+                  {suspectedRootCauseText}
+                </p>
+                <span className="text-[10px] font-mono text-muted-color block">Note: AI Inference is probabilistic and requires human review.</span>
+              </div>
+
+              {/* HISTORICAL EVIDENCE */}
+              <div className="p-3.5 rounded-xl surface-muted border border-[var(--border)] space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                    HISTORICAL EVIDENCE
+                  </span>
+                  <span className="text-xs font-bold text-heading">Vector Knowledge Match</span>
+                </div>
+                <p className="text-xs text-muted-color font-mono">
+                  Matched Article <strong className="text-heading">KB-802 (Concurrency Stock Lock)</strong> with <strong>88% RAG similarity score</strong>.
+                </p>
+              </div>
+
+              {/* RECOMMENDATION */}
+              <div className="p-3.5 rounded-xl surface-muted border border-[var(--border)] space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                    RECOMMENDATION
+                  </span>
+                  <span className="text-xs font-bold text-heading">Proposed Fix</span>
+                </div>
+                <p className="text-xs text-muted-color font-mono line-clamp-2">
+                  {suggestedPatchText}
+                </p>
+              </div>
+            </div>
+
+            {/* AI Insights Embedded Sub-Panel */}
+            <div className="pt-3 border-t border-[var(--border)]">
+              <AIInsightsPanel ticket={ticket} />
             </div>
           </div>
         </div>
