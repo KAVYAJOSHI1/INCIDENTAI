@@ -381,6 +381,7 @@ export default function App() {
                 ticket={selectedTicket}
                 onMergeDuplicate={handleMergeDuplicate}
                 onAssignDeveloper={handleAssignDeveloper}
+                onNavigateToErp={() => setCurrentView('DIGITALTWIN')}
               />
             </div>
           </div>
@@ -429,7 +430,14 @@ export default function App() {
             {currentView === 'WARROOM' && <WarRoom />}
 
             {/* View 7: ERP Digital Twin */}
-            {currentView === 'DIGITALTWIN' && <DigitalTwin />}
+            {currentView === 'DIGITALTWIN' && (
+              <DigitalTwin
+                onSelectTicket={(ticketId) => {
+                  setSelectedTicketId(ticketId);
+                  setCurrentView('TRIAGE');
+                }}
+              />
+            )}
 
             {/* View 8: Mission Control Command Center */}
             {currentView === 'MISSIONCONTROL' && <MissionControl />}

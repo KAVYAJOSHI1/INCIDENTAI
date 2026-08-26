@@ -4,7 +4,8 @@ import {
   AlertTriangle, Layers, BookOpen, FileSearch, Terminal, Sparkles,
   ChevronDown, ChevronUp, Copy, AlertCircle, ArrowRight, ArrowDown,
   Database, Cpu, Server, FileCode, Check, AlertOctagon, HelpCircle,
-  ExternalLink, Code2, Tag, Activity, ShieldCheck, RotateCcw
+  ExternalLink, Code2, Tag, Activity, ShieldCheck, RotateCcw,
+  UserCheck, Shield, RefreshCw
 } from 'lucide-react';
 import AIInsightsPanel from './AIInsightsPanel';
 import EmptyState from '../Common/EmptyState';
@@ -22,8 +23,8 @@ const SEV_BADGE = {
   P3_LOW:      'badge-p3',
 };
 
-export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDeveloper }) {
-  const [activeTab, setActiveTab] = useState('OVERVIEW'); // OVERVIEW | REMEDIATION | PATCH | VERIFICATION | TIMELINE | INSIGHTS
+export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDeveloper, onNavigateToErp }) {
+  const [activeTab, setActiveTab] = useState('OVERVIEW');
   const [isReproduceOpen, setIsReproduceOpen] = useState(true);
   const [copiedPatch, setCopiedPatch] = useState(false);
 
@@ -84,6 +85,7 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
       const res = await api.verifyPatch(ticket.id, { simulate_failure: simulateFail });
       setVerificationResult(res);
       await loadTicketData(ticket.id);
+      setActiveTab('VERIFICATION');
     } catch (err) {
       console.error("Verification failed:", err);
     }
@@ -117,9 +119,9 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
     );
   }
 
-  // Normalization
+  // Ticket fields normalization
   const ticketId = ticket.ticket_number || ticket.id || 'INC-79613-6322';
-  const isDemoScenario = ticketId.includes('79613') || ticket.erp_module === 'INVENTORY';
+  const correlationId = ticket.correlation_id || `ERP-${ticket.erp_module || 'INV'}-W2-20260826-1042`;
 
   const rawSeverity = ticket.severity || 'P3_LOW';
   const sevBadgeClass = SEV_BADGE[rawSeverity] || 'badge-p3';
@@ -128,199 +130,168 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
     : rawSeverity;
 
   const erpModule = ticket.erp_module || 'INVENTORY';
-  const status = ticket.remediation_status || ticket.status || 'RESOLVED';
+  const status = ticket.remediation_status || ticket.status || 'IN_PROGRESS';
   const slaMinutes = ticket.sla_remaining_minutes != null ? ticket.sla_remaining_minutes : 240;
+  const isSlaAtRisk = slaMinutes < 30 && status !== 'RESOLVED';
 
-  const confidenceScore = isDemoScenario && ticket.ai_confidence == null ? 0.65 : (ticket.ai_confidence ?? 0.65);
+  const confidenceScore = ticket.ai_confidence ?? 0.65;
   const confidencePercent = `${Math.round(confidenceScore * 100)}%`;
 
-  const reporter = ticket.reporter || 'erp_operator@smartfactory.demo';
+  const reporter = ticket.reporter || 'ERP Operator (John Doe)';
   const assignedDev = ticket.assigned_dev_name || 'Marcus Vance';
+  const reviewerName = ticket.reviewer_name || 'Sarah Chen';
+  const resolutionOwner = ticket.resolution_owner || assignedDev;
+
   const errorCode = ticket.ocr_findings?.extracted_error_code || ticket.error_code || 'ERR_STOCK_NEG';
   const uiComponent = ticket.ocr_findings?.detected_component || ticket.ui_component || 'BinTransferGrid';
-  const businessImpact = ticket.business_impact_score || ticket.business_impact || 6;
+  const businessImpact = ticket.business_impact_score || 6;
+  const affectedWarehouse = ticket.affected_warehouse || (erpModule === 'INVENTORY' ? 'WH-A / Bin W2' : 'Primary Operations Center');
+  const affectedProcess = ticket.affected_process || (erpModule === 'INVENTORY' ? 'Warehouse Stock Movement' : 'ERP Transaction Workflow');
 
   const userReportText = ticket.vague_user_input || ticket.structured_description ||
-    "ERR_INVENTORY_VAL_808: Negative quantity violation during stock transfer in warehouse bin W2";
+    "ERR_STOCK_NEG: Negative quantity violation during stock transfer in warehouse bin W2";
 
-  const aiDiagnosisTitle = "AI Diagnosis";
-  const suspectedRootCauseText = ticket.ai_root_cause || "Stale cache read before transfer validation";
-  const fullRootCauseDetail = "Unexpected inventory validation or execution exception in the INVENTORY module. Suspected trigger: stale cache read before transfer validation.";
-
-  const rootCauseChain = [
-    { type: 'MODULE', label: erpModule, icon: Server, color: 'var(--accent)' },
-    { type: 'SERVICE', label: 'InventoryService', icon: Cpu, color: 'var(--purple)' },
-    { type: 'FILE', label: 'inventory/binTransfer.js', icon: FileCode, color: 'var(--accent-subtle-text)' },
-    { type: 'FUNCTION', label: 'validateStockQuantity()', icon: Terminal, color: '#f59e0b' },
-    { type: 'DB TABLE', label: 'inv_stock_cache', icon: Database, color: '#ef4444' }
-  ];
-
-  const expectedBehaviorText = ticket.expected_behavior ||
-    "ERP processes the inventory payload without validation failures and records the transaction.";
-  const actualBehaviorText = ticket.actual_behavior ||
-    "System triggers ERR_STOCK_NEG exception and aborts the transaction thread.";
-
-  const reproductionSteps = (ticket.reproduction_steps && ticket.reproduction_steps.length > 0)
-    ? ticket.reproduction_steps
-    : [
-        "Open ERP Workspace → INVENTORY Module",
-        "Execute BinTransferGrid",
-        "Submit form payload with ERR_INVENTORY_VAL_808: Negative quantity",
-        "Observe ERR_STOCK_NEG"
-      ];
-
-  const recommendedActionText = "Review inventory cache/configuration and retry the transaction. If the issue persists, escalate to developer on-call.";
+  const suspectedRootCauseText = ticket.ai_root_cause || "Stale inventory cache read before transfer validation";
   const suggestedPatchText = ticket.ai_suggested_patch || "EXEC redis-cli DEL inv_stock:SK-902 && SELECT sync_inventory_cache('SK-902');";
 
-  const rawRagMatches = ticket.rag_kb_matches && ticket.rag_kb_matches.length > 0
-    ? ticket.rag_kb_matches
-    : [
-        {
-          article: {
-            title: "[Verified Resolution] [GENERAL_LEDGER] ERR_GL_UNBALANCED",
-            solution: "Round journal line amounts to 2 decimal places before batch posting and reconcile FX conversion rate snapshot.",
-            erp_module: "GENERAL_LEDGER"
-          },
-          confidence_percentage: 25,
-          why_relevant: "Matched on general error keywords across database tables."
-        }
-      ];
-
-  const handleCopyPatch = () => {
-    navigator.clipboard.writeText(suggestedPatchText);
-    setCopiedPatch(true);
-    setTimeout(() => setCopiedPatch(false), 1600);
+  const getStatusColor = (st) => {
+    if (st === 'RESOLVED' || st === 'VERIFIED' || st === 'APPLIED') return { bg: 'bg-emerald-100 dark:bg-emerald-950', text: 'text-emerald-700 dark:text-emerald-300', border: 'border-emerald-300', dot: 'bg-emerald-500' };
+    if (st === 'VERIFICATION_FAILED' || st === 'FAILED') return { bg: 'bg-rose-100 dark:bg-rose-950', text: 'text-rose-700 dark:text-rose-300', border: 'border-rose-300', dot: 'bg-rose-500' };
+    if (st === 'ROLLED_BACK' || st === 'REVERTED') return { bg: 'bg-amber-100 dark:bg-amber-950', text: 'text-amber-700 dark:text-amber-300', border: 'border-amber-300', dot: 'bg-amber-500' };
+    return { bg: 'bg-blue-100 dark:bg-blue-950', text: 'text-blue-700 dark:text-blue-300', border: 'border-blue-300', dot: 'bg-blue-500' };
   };
 
-  const getTrustBadgeStyle = (score) => {
-    if (score >= 0.8) return { bg: 'var(--green-bg)', text: 'var(--green-text)', border: 'var(--green-border)', label: 'High Confidence' };
-    if (score >= 0.5) return { bg: 'var(--amber-bg)', text: 'var(--amber-text)', border: 'var(--amber-border)', label: 'Medium Confidence' };
-    return { bg: 'var(--red-bg)', text: 'var(--red-text)', border: 'var(--red-border)', label: 'Low Confidence' };
-  };
-
-  const confidenceTrustStyle = getTrustBadgeStyle(confidenceScore);
+  const statusStyle = getStatusColor(status);
 
   return (
-    <div className="max-w-6xl mx-auto space-y-5">
-      {/* --- DUPLICATE ALERT BANNER --- */}
-      {ticket.duplicate_check?.is_duplicate && (
-        <div className="callout callout-amber flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <AlertTriangle className="w-4 h-4 shrink-0" />
-            <div>
-              <p className="text-sm font-semibold">
-                Duplicate detected — {Math.round(ticket.duplicate_check.similarity_score * 100)}% similarity
-                {' '}with <code className="font-mono font-bold">
-                  {ticket.duplicate_check.top_match?.ticket?.ticket_number || ticket.duplicate_check.top_match?.ticket_number || 'Parent Incident'}
-                </code>
-              </p>
-              {ticket.duplicate_check.reasoning && (
-                <p className="text-xs opacity-75 mt-0.5">"{ticket.duplicate_check.reasoning}"</p>
-              )}
-            </div>
-          </div>
-          <button
-            onClick={() => onMergeDuplicate?.(ticket.id, ticket.duplicate_check.top_match?.ticket?.id)}
-            className="btn-secondary text-xs shrink-0"
-            style={{ borderColor: 'var(--amber-border)' }}
-          >
-            <GitMerge className="w-3.5 h-3.5" />
-            Merge Duplicate
-          </button>
-        </div>
-      )}
-
-      {/* --- REVERT ROLLBACK BANNER IF PATCH APPLIED / REVERTED --- */}
-      {(status === 'APPLIED' || status === 'RESOLVED' || status === 'REVERTED') && (
-        <div className="surface p-4 rounded-xl border border-[var(--border)] flex flex-wrap items-center justify-between gap-3 shadow-sm bg-[var(--accent-subtle-bg)]/20">
-          <div className="flex items-center gap-3 text-xs font-mono">
-            <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-            <div>
-              <span className="font-bold text-heading">REMEDIATION STATUS: </span>
-              <span className={status === 'REVERTED' ? 'text-rose-400 font-bold' : 'text-emerald-400 font-bold'}>
-                {status === 'REVERTED' ? 'REVERTED TO v1.4.8' : 'PATCH APPLIED (v1.4.9)'}
-              </span>
-            </div>
-          </div>
-
-          <button onClick={() => setIsRollbackModalOpen(true)} className="btn-secondary text-xs text-rose-400 hover:border-rose-500/50">
-            <RotateCcw className="w-3.5 h-3.5" /> Revert Patch
-          </button>
-        </div>
-      )}
-
+    <div className="max-w-6xl mx-auto space-y-6">
       {/* ==========================================
-          1. INCIDENT HEADER
+          1. VISUALLY DOMINANT INCIDENT STATUS HEADER
           ========================================== */}
-      <div className="surface p-5 rounded-xl border border-[var(--border)] shadow-sm space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-3" style={{ borderBottom: '1px solid var(--border)' }}>
-          {/* Metadata Badges Bar */}
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-md bg-[var(--accent-subtle-bg)] text-[var(--accent-subtle-text)] border border-[var(--accent-subtle-bd)]">
-              {ticketId}
-            </span>
-
-            <span className={`${sevBadgeClass} font-mono text-xs px-2.5 py-1 rounded-md`}>
-              {severityFormatted}
-            </span>
-
-            <span className="badge-module font-mono text-xs px-2.5 py-1 rounded-md">
-              {erpModule}
-            </span>
-
-            <span
-              className="text-xs px-2.5 py-1 rounded-md font-bold font-mono uppercase"
-              style={{
-                background: status === 'RESOLVED' || status === 'APPLIED' ? 'var(--green-bg)' : 'var(--bg-muted)',
-                color: status === 'RESOLVED' || status === 'APPLIED' ? 'var(--green-text)' : 'var(--text-muted)',
-                border: status === 'RESOLVED' || status === 'APPLIED' ? '1px solid var(--green-border)' : '1px solid var(--border)'
-              }}
-            >
+      <div className="surface p-6 rounded-2xl border border-[var(--border)] shadow-md space-y-5">
+        {/* Top Metadata & Navigation Action Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-[var(--border)]">
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Status Badge */}
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-extrabold border ${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}>
+              <span className={`w-2 h-2 rounded-full animate-pulse ${statusStyle.dot}`} />
               {status}
             </span>
 
-            <span className="inline-flex items-center gap-1.5 text-xs font-mono font-semibold px-2.5 py-1 rounded-md surface-muted">
-              <Clock className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
-              SLA: {slaMinutes} min
+            {/* Ticket Number */}
+            <span className="text-xs font-mono font-extrabold px-3 py-1 rounded-lg bg-accent-subtle-bg text-accent-subtle-text border border-accent-subtle-bd">
+              {ticketId}
             </span>
 
-            <span
-              className="inline-flex items-center gap-1.5 text-xs font-mono font-bold px-2.5 py-1 rounded-md"
-              style={{
-                background: confidenceTrustStyle.bg,
-                color: confidenceTrustStyle.text,
-                border: `1px solid ${confidenceTrustStyle.border}`
-              }}
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              AI Confidence: {confidencePercent}
+            {/* Correlation ID */}
+            <span className="text-xs font-mono px-2.5 py-1 rounded-lg surface-muted border border-[var(--border)] text-muted-color hidden md:inline">
+              Ref: {correlationId}
+            </span>
+
+            {/* Severity Badge */}
+            <span className={`${sevBadgeClass} text-xs font-mono px-2.5 py-1 rounded-lg`}>
+              {severityFormatted}
+            </span>
+
+            {/* Module Badge */}
+            <span className="badge-module text-xs font-mono px-2.5 py-1 rounded-lg">
+              {erpModule}
             </span>
           </div>
 
+          {/* Right Action Controls: Two-Way ERP Navigation + Tab Jumpers */}
           <div className="flex items-center gap-2">
-            {onAssignDeveloper && (
-              <div className="flex items-center gap-1 text-xs">
-                <span className="text-muted-color hidden sm:inline">Assignee:</span>
-                <span className="font-semibold text-heading">{assignedDev}</span>
-              </div>
+            {onNavigateToErp && (
+              <button
+                onClick={onNavigateToErp}
+                className="btn-secondary text-xs font-bold text-accent-color border-accent-color/30 hover:bg-accent-subtle-bg"
+              >
+                <ExternalLink className="w-3.5 h-3.5" /> Open Source Transaction in ERP
+              </button>
             )}
+
+            <button
+              onClick={() => setIsPatchModalOpen(true)}
+              className="btn-secondary text-xs"
+            >
+              <FileCode className="w-3.5 h-3.5" /> Patch Diff
+            </button>
           </div>
         </div>
 
-        {/* Title */}
-        <h1 className="text-lg font-bold text-heading leading-snug">
-          {ticket.title || `[${erpModule}] ${errorCode}: Negative quantity violation during stock transfer`}
-        </h1>
+        {/* Title & Ownership Header Row */}
+        <div>
+          <h1 className="text-xl font-extrabold text-heading leading-snug">
+            {ticket.title || `[${erpModule}] ${errorCode}: Operational Failure in ${uiComponent}`}
+          </h1>
+          <p className="text-xs text-muted-color mt-1">
+            Source: <strong className="text-heading">Smart Manufacturing ERP</strong> · Module: <strong className="text-heading">{erpModule}</strong> · Correlation ID: <code className="font-mono text-accent-color">{correlationId}</code>
+          </p>
+        </div>
+
+        {/* Header SLA Countdown Bar + AI Confidence Meter */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-[var(--border)]">
+          {/* SLA Timer & Progress Bar */}
+          <div className="surface-muted p-3.5 rounded-xl border border-[var(--border)] space-y-1.5">
+            <div className="flex items-center justify-between text-xs font-mono">
+              <span className="text-muted-color flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-accent-color" /> SLA Target Countdown
+              </span>
+              {isSlaAtRisk ? (
+                <span className="text-rose-500 font-extrabold flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" /> SLA AT RISK ({slaMinutes}m)
+                </span>
+              ) : (
+                <span className="font-bold text-heading">{slaMinutes} min remaining</span>
+              )}
+            </div>
+            <div className="w-full bg-[var(--bg-page)] h-2 rounded-full overflow-hidden p-0.5 border border-[var(--border)]">
+              <div
+                className={`h-full rounded-full transition-all ${isSlaAtRisk ? 'bg-rose-500' : 'bg-accent-color'}`}
+                style={{ width: `${Math.max(10, Math.min(100, (slaMinutes / 240) * 100))}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Assigned Developer */}
+          <div className="surface-muted p-3.5 rounded-xl border border-[var(--border)] flex items-center justify-between">
+            <div>
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-muted-color block">Assigned Developer</span>
+              <span className="text-xs font-extrabold text-heading flex items-center gap-1.5 mt-0.5">
+                <UserCheck className="w-3.5 h-3.5 text-accent-color" /> {assignedDev}
+              </span>
+            </div>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold">
+              Active: 4/5
+            </span>
+          </div>
+
+          {/* AI Confidence Meter */}
+          <div className="surface-muted p-3.5 rounded-xl border border-[var(--border)] space-y-1.5">
+            <div className="flex items-center justify-between text-xs font-mono">
+              <span className="text-muted-color flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" /> AI Diagnostic Confidence
+              </span>
+              <span className="font-extrabold text-amber-500">{confidencePercent}</span>
+            </div>
+            <div className="w-full bg-[var(--bg-page)] h-2 rounded-full overflow-hidden p-0.5 border border-[var(--border)]">
+              <div
+                className="h-full rounded-full bg-amber-500 transition-all"
+                style={{ width: confidencePercent }}
+              />
+            </div>
+          </div>
+        </div>
 
         {/* Navigation Tabs */}
-        <div className="flex flex-wrap items-center gap-1 pt-2 border-t border-[var(--border)]">
+        <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-[var(--border)] overflow-x-auto">
           {[
-            { id: 'OVERVIEW', label: 'Overview & Diagnosis', icon: Activity },
-            { id: 'REMEDIATION', label: 'Remediation Center', icon: ShieldCheck },
-            { id: 'PATCH', label: 'Patch Diff', icon: FileCode },
-            { id: 'VERIFICATION', label: 'Verification Stage', icon: Terminal },
-            { id: 'TIMELINE', label: 'Remediation Timeline', icon: Clock },
-            { id: 'INSIGHTS', label: 'AI Insights', icon: Sparkles }
+            { id: 'OVERVIEW', label: 'Overview & Summary', icon: Activity },
+            { id: 'IMPACT', label: 'Impact & Risk', icon: ShieldAlert },
+            { id: 'DIAGNOSIS', label: 'AI Diagnosis & Evidence', icon: Sparkles },
+            { id: 'REMEDIATION', label: 'Remediation Plan', icon: ShieldCheck },
+            { id: 'VERIFICATION', label: 'Verification Engine', icon: Terminal },
+            { id: 'TIMELINE', label: 'Lifecycle Timeline', icon: Clock }
           ].map((tab) => {
             const TabIcon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -328,10 +299,10 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-3.5 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
+                className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
                   isActive
-                    ? 'bg-[var(--accent)] text-white shadow-sm'
-                    : 'text-muted-color hover:text-heading hover:bg-[var(--bg-muted)]'
+                    ? 'bg-accent-color text-white shadow-sm'
+                    : 'text-muted-color hover:text-heading hover:bg-subtle'
                 }`}
               >
                 <TabIcon className="w-3.5 h-3.5" />
@@ -343,60 +314,165 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
       </div>
 
       {/* ==========================================
-          TAB 1: OVERVIEW & DIAGNOSIS
+          2. DYNAMIC "WHAT HAPPENS NEXT?" PROMPT BOX
+          ========================================== */}
+      <div className="surface p-5 rounded-2xl border border-accent-color/30 bg-accent-subtle-bg/30 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <ArrowRight className="w-4 h-4 text-accent-color" />
+            <h3 className="text-xs font-extrabold uppercase tracking-wider text-heading">
+              CURRENT SITUATION & WHAT HAPPENS NEXT?
+            </h3>
+          </div>
+          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-accent-color text-white">
+            RECOMMENDED NEXT ACTION
+          </span>
+        </div>
+
+        {/* Context Prompt Text based on Status */}
+        <p className="text-xs font-medium text-body-color leading-relaxed">
+          {status === 'VERIFICATION_FAILED' ? (
+            <>
+              ❌ <strong className="text-rose-500">Post-patch verification suite failed.</strong> Stock constraint race condition detected during concurrency check. Action required: Developer <strong>{assignedDev}</strong> must review rollback options and initiate controlled rollback.
+            </>
+          ) : status === 'APPROVED' || status === 'REMEDIATION_PENDING' ? (
+            <>
+              ✓ <strong className="text-emerald-500">Remediation plan approved by {assignedDev}.</strong> Action required: Execute automated verification suite to validate syntax, unit tests, and regression constraints.
+            </>
+          ) : status === 'VERIFICATION' || status === 'VERIFIED' ? (
+            <>
+              ✓ <strong className="text-emerald-500">Verification suite passed 5/5 checks.</strong> Action required: Apply verified patch v1.4.9 to target environment and resolve incident.
+            </>
+          ) : status === 'RESOLVED' || status === 'APPLIED' ? (
+            <>
+              ✓ <strong className="text-emerald-500">Incident successfully resolved and verified.</strong> Knowledge article written back to RAG Knowledge Base.
+            </>
+          ) : (
+            <>
+              ⚠ <strong className="text-amber-500">Incident is currently in progress.</strong> AI has generated a proposed fix with <strong>{confidencePercent} confidence</strong>. Action required: Developer <strong>{assignedDev}</strong> must review and approve the remediation plan.
+            </>
+          )}
+        </p>
+
+        {/* Dynamic CTA Button */}
+        <div className="pt-2 flex items-center justify-end gap-3 border-t border-[var(--border)]">
+          {status === 'VERIFICATION_FAILED' ? (
+            <button
+              onClick={() => setIsRollbackModalOpen(true)}
+              className="btn-primary text-xs bg-rose-600 hover:bg-rose-500"
+            >
+              <RotateCcw className="w-3.5 h-3.5" /> Initiate Controlled Rollback
+            </button>
+          ) : status === 'APPROVED' || status === 'REMEDIATION_PENDING' ? (
+            <button
+              onClick={() => handleRunVerification(false)}
+              className="btn-primary text-xs"
+            >
+              <Terminal className="w-3.5 h-3.5" /> Start Automated Verification Engine
+            </button>
+          ) : status === 'VERIFICATION' || status === 'VERIFIED' ? (
+            <button
+              onClick={handleApplyPatch}
+              className="btn-primary text-xs bg-emerald-600 hover:bg-emerald-500"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" /> Apply Patch & Resolve Incident
+            </button>
+          ) : status === 'RESOLVED' || status === 'APPLIED' ? (
+            <span className="text-xs font-mono font-bold text-emerald-500 flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4" /> Incident Fully Resolved
+            </span>
+          ) : (
+            <button
+              onClick={() => setActiveTab('REMEDIATION')}
+              className="btn-primary text-xs"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" /> Review & Approve Remediation Plan
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ==========================================
+          3. TRANSPARENT OWNERSHIP & RESPONSIBILITY GRID
+          ========================================== */}
+      <div className="surface p-5 rounded-2xl border border-[var(--border)] space-y-3">
+        <h3 className="text-xs font-extrabold uppercase tracking-wider text-heading flex items-center gap-1.5">
+          <User className="w-3.5 h-3.5 text-accent-color" /> INCIDENT OWNERSHIP & RESPONSIBILITY MATRIX
+        </h3>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs font-mono">
+          <div className="p-3 rounded-xl bg-subtle border border-[var(--border)] space-y-1">
+            <span className="text-muted-color text-[10px] uppercase font-bold block">Incident Reporter</span>
+            <span className="font-bold text-heading block truncate">{reporter}</span>
+            <span className="text-[10px] text-muted-color">Role: ERP Operator</span>
+          </div>
+
+          <div className="p-3 rounded-xl bg-subtle border border-[var(--border)] space-y-1">
+            <span className="text-muted-color text-[10px] uppercase font-bold block">Assigned Developer</span>
+            <span className="font-bold text-accent-color block truncate">{assignedDev}</span>
+            <span className="text-[10px] text-muted-color">Capacity: 4/5 tickets</span>
+          </div>
+
+          <div className="p-3 rounded-xl bg-subtle border border-[var(--border)] space-y-1">
+            <span className="text-muted-color text-[10px] uppercase font-bold block">Code Reviewer</span>
+            <span className="font-bold text-heading block truncate">{reviewerName}</span>
+            <span className="text-[10px] text-muted-color">Role: Senior Architect</span>
+          </div>
+
+          <div className="p-3 rounded-xl bg-subtle border border-[var(--border)] space-y-1">
+            <span className="text-muted-color text-[10px] uppercase font-bold block">Resolution Owner</span>
+            <span className="font-bold text-emerald-600 dark:text-emerald-400 block truncate">{resolutionOwner}</span>
+            <span className="text-[10px] text-muted-color">Accountable for MTTR</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ==========================================
+          TAB 1: OVERVIEW & SUMMARY
           ========================================== */}
       {activeTab === 'OVERVIEW' && (
         <div className="space-y-5">
-          {/* Executive Summary & Developer Summary Banners */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Executive Summary */}
-            <div className="surface p-5 rounded-xl border border-[var(--border)] shadow-sm space-y-3 bg-[var(--accent-subtle-bg)]/30">
+          {/* Executive & Technical Summary Panels */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* What Happened? Summary */}
+            <div className="surface p-5 rounded-2xl border border-[var(--border)] space-y-3">
               <div className="flex items-center justify-between pb-2 border-b border-[var(--border)]">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-heading flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-[var(--accent)]" /> INCIDENT EXECUTIVE SUMMARY
+                  <Sparkles className="w-3.5 h-3.5 text-accent-color" /> WHAT HAPPENED? (SUMMARY)
                 </h3>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">
-                  EVALUATOR BRIEF
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
+                  PLAIN LANGUAGE
                 </span>
               </div>
               <p className="text-xs font-medium text-heading leading-relaxed">
-                Inventory stock transfer failed because the system likely read stale inventory cache data during quantity validation (<code className="font-mono text-rose-400">ERR_STOCK_NEG</code>).
+                {userReportText}
               </p>
-              <div className="grid grid-cols-3 gap-2 pt-2 border-t border-[var(--border)] font-mono text-[11px]">
-                <div>
-                  <span className="text-muted-color block text-[9px] uppercase">AI Confidence</span>
-                  <span className="text-amber-400 font-bold">{confidencePercent}</span>
-                </div>
-                <div>
-                  <span className="text-muted-color block text-[9px] uppercase">Risk Level</span>
-                  <span className="text-amber-400 font-bold">MEDIUM</span>
-                </div>
-                <div>
-                  <span className="text-muted-color block text-[9px] uppercase">Remediation</span>
-                  <span className="text-[var(--accent)] font-bold">{remediation?.status || 'Pending Approval'}</span>
-                </div>
+              <div className="pt-2 border-t border-[var(--border)] text-xs text-muted-color space-y-1">
+                <div><strong>Module:</strong> {erpModule}</div>
+                <div><strong>Error Code:</strong> <code className="font-mono text-rose-500">{errorCode}</code></div>
+                <div><strong>UI Component:</strong> <code className="font-mono text-purple-400">{uiComponent}</code></div>
               </div>
             </div>
 
-            {/* Developer Summary */}
-            <div className="surface p-5 rounded-xl border border-[var(--border)] shadow-sm space-y-3">
+            {/* Current Technical Context */}
+            <div className="surface p-5 rounded-2xl border border-[var(--border)] space-y-3">
               <div className="flex items-center justify-between pb-2 border-b border-[var(--border)]">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-heading flex items-center gap-1.5">
-                  <Code2 className="w-3.5 h-3.5 text-[var(--accent)]" /> DEVELOPER TECHNICAL SUMMARY
+                  <Code2 className="w-3.5 h-3.5 text-accent-color" /> TECHNICAL STACK DIAGNOSTIC
                 </h3>
-                <span className="text-[10px] font-mono text-muted-color">STACK Context</span>
+                <span className="text-[10px] font-mono text-muted-color">DEVELOPER VIEW</span>
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs font-mono">
                 <div>
                   <span className="text-muted-color block text-[10px]">Component:</span>
-                  <code className="text-purple-400 font-bold">BinTransferGrid</code>
+                  <code className="text-purple-400 font-bold">{uiComponent}</code>
                 </div>
                 <div>
                   <span className="text-muted-color block text-[10px]">Service:</span>
-                  <code className="text-heading font-bold">InventoryService</code>
+                  <code className="text-heading font-bold">{erpModule}Service</code>
                 </div>
                 <div>
-                  <span className="text-muted-color block text-[10px]">File:</span>
+                  <span className="text-muted-color block text-[10px]">Suspected File:</span>
                   <code className="text-accent-subtle-text font-bold">inventory/binTransfer.js</code>
                 </div>
                 <div>
@@ -405,195 +481,107 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
                 </div>
               </div>
               <div className="pt-2 border-t border-[var(--border)] text-xs font-mono">
-                <span className="text-muted-color">Suspected Trigger: </span>
-                <code className="text-rose-400 font-bold">inv_stock_cache</code>
-              </div>
-            </div>
-          </div>
-          {/* Metadata Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="surface p-5 rounded-xl border border-[var(--border)] shadow-sm space-y-3">
-              <div className="flex items-center justify-between pb-2" style={{ borderBottom: '1px solid var(--border)' }}>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-muted-color flex items-center gap-1.5">
-                  <Activity className="w-3.5 h-3.5 text-[var(--accent)]" /> Incident Metadata
-                </h3>
-                <span className="text-[10px] font-mono text-faint-color">SYSTEM LOGS</span>
-              </div>
-
-              <div className="space-y-2.5 text-xs">
-                <div className="flex items-center justify-between py-1" style={{ borderBottom: '1px border-dashed var(--border)' }}>
-                  <span className="text-muted-color">Reporter:</span>
-                  <span className="font-medium text-heading flex items-center gap-1.5"><User className="w-3 h-3 text-muted-color" /> {reporter}</span>
-                </div>
-                <div className="flex items-center justify-between py-1" style={{ borderBottom: '1px border-dashed var(--border)' }}>
-                  <span className="text-muted-color">Assigned Developer:</span>
-                  <span className="font-semibold text-heading">{assignedDev}</span>
-                </div>
-                <div className="flex items-center justify-between py-1" style={{ borderBottom: '1px border-dashed var(--border)' }}>
-                  <span className="text-muted-color">Error Code:</span>
-                  <code className="font-mono font-bold px-2 py-0.5 rounded text-rose-500 bg-rose-500/10 border border-rose-500/20">{errorCode}</code>
-                </div>
-                <div className="flex items-center justify-between py-1" style={{ borderBottom: '1px border-dashed var(--border)' }}>
-                  <span className="text-muted-color">UI Component:</span>
-                  <code className="font-mono font-bold px-2 py-0.5 rounded text-purple-400 bg-purple-500/10 border border-purple-500/20">{uiComponent}</code>
-                </div>
-                <div className="flex items-center justify-between py-1">
-                  <span className="text-muted-color">Business Impact Score:</span>
-                  <span className="font-mono font-bold px-2 py-0.5 rounded text-amber-500 bg-amber-500/10 border border-amber-500/20">{businessImpact} / 10</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="surface p-5 rounded-xl border border-[var(--border)] shadow-sm flex flex-col justify-between space-y-3">
-              <div className="flex items-center justify-between pb-2" style={{ borderBottom: '1px solid var(--border)' }}>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-muted-color flex items-center gap-1.5">
-                  <FileSearch className="w-3.5 h-3.5 text-[var(--accent)]" /> User Report
-                </h3>
-                <span className="text-[10px] font-mono text-faint-color">INGESTED FEED</span>
-              </div>
-              <div className="surface-muted p-4 rounded-lg flex-1 flex flex-col justify-center border border-[var(--border)]">
-                <p className="text-sm italic font-medium leading-relaxed text-heading">"{userReportText}"</p>
-              </div>
-              <div className="flex items-center justify-between text-[11px] text-muted-color pt-1">
-                <span>Verified Operator Signal</span>
-                <span className="font-mono text-[10px]">Source: Smart ERP Client</span>
+                <span className="text-muted-color">Suspected Root Cause: </span>
+                <strong className="text-heading font-sans block mt-1">{suspectedRootCauseText}</strong>
               </div>
             </div>
           </div>
 
-          {/* AI Diagnosis */}
-          <div
-            className="surface p-6 rounded-xl border shadow-md space-y-5"
-            style={{
-              borderLeft: '4px solid var(--accent)',
-              borderColor: 'var(--accent-subtle-bd)',
-              background: 'linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-subtle) 100%)'
-            }}
-          >
-            <div className="flex flex-wrap items-center justify-between gap-3 pb-3" style={{ borderBottom: '1px solid var(--border)' }}>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-[var(--accent-subtle-bg)] text-[var(--accent)] flex items-center justify-center">
-                  <Sparkles className="w-4 h-4" />
-                </div>
-                <div>
-                  <h2 className="text-base font-bold text-heading leading-none">{aiDiagnosisTitle}</h2>
-                  <p className="text-xs text-muted-color mt-1">Automated Root Cause Identification & Execution Reasoning</p>
-                </div>
-              </div>
-
-              <span
-                className="text-xs font-mono font-bold px-3 py-1 rounded-full flex items-center gap-1.5"
-                style={{
-                  background: confidenceTrustStyle.bg,
-                  color: confidenceTrustStyle.text,
-                  border: `1px solid ${confidenceTrustStyle.border}`
-                }}
-              >
-                ⚡ Confidence: {confidencePercent} ({confidenceTrustStyle.label})
-              </span>
-            </div>
-
-            <div className="surface-muted p-4 rounded-xl border border-[var(--border)] space-y-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-color block">Suspected Root Cause</span>
-              <p className="text-sm font-semibold text-heading leading-relaxed">{suspectedRootCauseText}</p>
-            </div>
-
-            <div className="space-y-3">
-              <p className="text-xs font-bold uppercase tracking-wider text-muted-color flex items-center gap-1.5">
-                <Code2 className="w-3.5 h-3.5 text-[var(--accent)]" /> Visual Dependency & Root Cause Chain
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-center">
-                {rootCauseChain.map((node, idx) => {
-                  const NodeIcon = node.icon;
-                  return (
-                    <React.Fragment key={idx}>
-                      <div className="surface p-3 rounded-lg border border-[var(--border)] shadow-sm text-center flex flex-col items-center justify-center relative hover:border-[var(--accent)] transition-all">
-                        <span className="text-[9px] font-bold uppercase tracking-widest text-muted-color mb-1">{node.type}</span>
-                        <div className="flex items-center gap-1.5 mb-1" style={{ color: node.color }}>
-                          <NodeIcon className="w-3.5 h-3.5 shrink-0" />
-                          <code className="text-xs font-mono font-bold truncate max-w-[120px]">{node.label}</code>
-                        </div>
-                      </div>
-                      {idx < rootCauseChain.length - 1 && (
-                        <div className="hidden sm:flex items-center justify-center text-muted-color">
-                          <ArrowRight className="w-4 h-4 text-[var(--accent)] opacity-70" />
-                        </div>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Expected vs Actual */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="surface p-5 rounded-xl border border-emerald-500/20 bg-emerald-500/5 shadow-sm space-y-2">
-              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                <CheckCircle2 className="w-4 h-4 shrink-0" /> Expected Behavior
-              </div>
-              <p className="text-xs text-body-color leading-relaxed font-medium">{expectedBehaviorText}</p>
-            </div>
-            <div className="surface p-5 rounded-xl border border-rose-500/20 bg-rose-500/5 shadow-sm space-y-2">
-              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">
-                <AlertCircle className="w-4 h-4 shrink-0" /> Actual Behavior
-              </div>
-              <p className="text-xs text-body-color leading-relaxed font-medium">{actualBehaviorText}</p>
-            </div>
-          </div>
-
-          {/* Knowledge Base Matches */}
-          <div className="surface p-5 rounded-xl border border-[var(--border)] shadow-sm space-y-3">
-            <div className="flex items-center justify-between pb-2" style={{ borderBottom: '1px solid var(--border)' }}>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-heading flex items-center gap-2">
-                <BookOpen className="w-4 h-4 text-[var(--accent)]" /> Knowledge Base Matches
-              </h3>
-              <span className="text-[10px] font-mono text-faint-color">PGVECTOR / RAG INDEX</span>
-            </div>
-
-            {rawRagMatches.map((item, idx) => {
-              const matchedModule = item.article?.erp_module;
-              const isModuleMismatch = matchedModule && matchedModule !== erpModule;
-              const matchConfidence = item.confidence_percentage ?? 25;
-
-              return (
-                <div key={idx} className="space-y-3">
-                  {isModuleMismatch && (
-                    <div className="p-3.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-xs space-y-1">
-                      <div className="flex items-center gap-2 text-rose-500 font-bold">
-                        <AlertTriangle className="w-4 h-4 shrink-0" /> ⚠️ Potential Knowledge Base Mismatch
-                      </div>
-                      <p className="text-muted-color leading-relaxed">
-                        Module mismatch detected: Incident belongs to <strong className="text-heading">{erpModule}</strong>, but matched KB article belongs to <strong className="text-heading">{matchedModule}</strong>. Match score is low (TF-IDF {matchConfidence}%). Do not apply resolution without manual verification.
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="surface-muted p-4 rounded-lg flex flex-col sm:flex-row sm:items-start justify-between gap-3 border border-[var(--border)]">
-                    <div className="min-w-0 space-y-1">
-                      <p className="text-xs font-bold text-heading">{item.article?.title || `[Verified Resolution] [${matchedModule || 'GENERAL_LEDGER'}] ERR_GL_UNBALANCED`}</p>
-                      <p className="text-xs text-muted-color leading-relaxed">{item.article?.solution}</p>
-                      {item.why_relevant && <p className="text-[11px] italic text-faint-color">"{item.why_relevant}"</p>}
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      {isModuleMismatch && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">MISMATCH</span>
-                      )}
-                      <span className="text-xs font-mono font-bold px-2.5 py-1 rounded bg-[var(--accent-subtle-bg)] text-[var(--accent-subtle-text)] border border-[var(--accent-subtle-bd)]">
-                        TF-IDF {matchConfidence}%
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+          {/* Reproduction Steps Card */}
+          <div className="surface p-5 rounded-2xl border border-[var(--border)] space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-heading flex items-center gap-1.5">
+              <Terminal className="w-3.5 h-3.5 text-accent-color" /> EXACT REPRODUCTION STEPS
+            </h3>
+            <ol className="list-decimal list-inside space-y-2 text-xs text-body-color font-mono pl-1">
+              <li className="p-2 rounded bg-subtle border border-[var(--border)]">Open ERP Workspace → {erpModule} Module</li>
+              <li className="p-2 rounded bg-subtle border border-[var(--border)]">Navigate to Bin Transfers → Select SKU SK-902 (Industrial Motor Assembly)</li>
+              <li className="p-2 rounded bg-subtle border border-[var(--border)]">Select From Bin W1 (Available: 84 units) → To Bin W2</li>
+              <li className="p-2 rounded bg-subtle border border-[var(--border)]">Enter Transfer Quantity: 100 units (&gt; 84 available balance)</li>
+              <li className="p-2 rounded bg-subtle border border-[var(--border)]">Click Submit Transfer → Observe exception pop-up <code className="text-rose-500 font-bold">{errorCode}</code></li>
+            </ol>
           </div>
         </div>
       )}
 
       {/* ==========================================
-          TAB 2: REMEDIATION CENTER
+          TAB 2: IMPACT & BUSINESS RISK
+          ========================================== */}
+      {activeTab === 'IMPACT' && (
+        <div className="surface p-6 rounded-2xl border border-[var(--border)] space-y-5">
+          <div className="flex items-center justify-between pb-3 border-b border-[var(--border)]">
+            <h3 className="text-base font-bold text-heading flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-amber-500" /> WHAT IS THE IMPACT? (BUSINESS & OPERATIONAL)
+            </h3>
+            <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">
+              Impact Score: {businessImpact} / 10
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 font-mono text-xs">
+            <div className="p-4 rounded-xl bg-subtle border border-[var(--border)] space-y-1">
+              <span className="text-muted-color text-[10px] uppercase font-bold block">Affected Facility / Bin</span>
+              <strong className="text-heading text-sm block">{affectedWarehouse}</strong>
+              <span className="text-muted-color text-[10px]">Warehouse Zone WH-A</span>
+            </div>
+
+            <div className="p-4 rounded-xl bg-subtle border border-[var(--border)] space-y-1">
+              <span className="text-muted-color text-[10px] uppercase font-bold block">Affected Business Process</span>
+              <strong className="text-heading text-sm block">{affectedProcess}</strong>
+              <span className="text-muted-color text-[10px]">Stock Movements & Fulfillment</span>
+            </div>
+
+            <div className="p-4 rounded-xl bg-subtle border border-[var(--border)] space-y-1">
+              <span className="text-muted-color text-[10px] uppercase font-bold block">Transaction Reference</span>
+              <strong className="text-accent-color text-sm block">{correlationId}</strong>
+              <span className="text-muted-color text-[10px]">API Correlation Tracking ID</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==========================================
+          TAB 3: AI DIAGNOSIS & EVIDENCE
+          ========================================== */}
+      {activeTab === 'DIAGNOSIS' && (
+        <div className="space-y-5">
+          <div className="surface p-6 rounded-2xl border border-[var(--border)] space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--border)]">
+              <h3 className="text-base font-bold text-heading flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-500" /> WHAT DID AI FIND & WHY?
+              </h3>
+              <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                Confidence: {confidencePercent}
+              </span>
+            </div>
+
+            <p className="text-xs font-medium text-heading leading-relaxed">
+              AI Root Cause Diagnosis: <strong className="text-accent-color">{suspectedRootCauseText}</strong>
+            </p>
+
+            {/* Evidence List */}
+            <div className="space-y-2 pt-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-muted-color block">Grounding Evidence Gathered:</span>
+              <div className="p-3 rounded-xl bg-subtle border border-[var(--border)] text-xs font-mono space-y-2">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <span>ERP Error Code extracted: <code className="text-rose-500 font-bold">{errorCode}</code></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <span>UI Component detected: <code className="text-purple-400 font-bold">{uiComponent}</code></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <span>MCP Live Fact: Redis stock cache key <code className="text-amber-400">inv_stock:SK-902</code> mismatch with SQL table balance</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==========================================
+          TAB 4: REMEDIATION PLAN
           ========================================== */}
       {activeTab === 'REMEDIATION' && (
         <RemediationCenter
@@ -602,58 +590,27 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
           onApprove={handleApproveRemediation}
           onReject={handleRejectRemediation}
           onViewPatch={() => setIsPatchModalOpen(true)}
-          onStartVerification={() => setActiveTab('VERIFICATION')}
+          onStartVerification={() => handleRunVerification(false)}
         />
       )}
 
       {/* ==========================================
-          TAB 3: PATCH DIFF
-          ========================================== */}
-      {activeTab === 'PATCH' && (
-        <div className="surface p-6 rounded-xl border border-[var(--border)] shadow-sm space-y-4">
-          <div className="flex items-center justify-between pb-3" style={{ borderBottom: '1px solid var(--border)' }}>
-            <h3 className="text-xs font-bold uppercase tracking-wider text-heading flex items-center gap-2">
-              <FileCode className="w-4 h-4 text-[var(--accent)]" /> Patch Preview & Line Diff
-            </h3>
-            <span className="text-[10px] font-mono text-faint-color">UNIFIED DIFF</span>
-          </div>
-
-          <div className="rounded-xl overflow-hidden border border-[var(--border)] bg-[#090d16] font-mono text-xs p-4 space-y-1">
-            <div className="text-purple-400 opacity-80 py-0.5">@@ -42,7 +42,7 @@ function validateStockQuantity(binId, qty) &#123;</div>
-            <div className="text-neutral-400 px-2 py-0.5">&nbsp;&nbsp;const bin = await binRepository.findById(binId);</div>
-            <div className="bg-rose-500/15 text-rose-300 px-2 py-0.5 rounded flex items-center gap-2"><span className="font-bold text-rose-500">-</span>- const stock = inventoryCache.get(binId);</div>
-            <div className="bg-emerald-500/15 text-emerald-300 px-2 py-0.5 rounded flex items-center gap-2"><span className="font-bold text-emerald-500">+</span>+ const stock = await inventoryService.getFreshStock(binId);</div>
-            <div className="text-neutral-400 px-2 py-0.5">&nbsp;&nbsp;if (stock &lt; qty) &#123;</div>
-            <div className="text-neutral-400 px-2 py-0.5">&nbsp;&nbsp;&nbsp;&nbsp;throw new InventoryValidationError('ERR_STOCK_NEG');</div>
-            <div className="text-neutral-400 px-2 py-0.5">&nbsp;&nbsp;&#125;</div>
-          </div>
-        </div>
-      )}
-
-      {/* ==========================================
-          TAB 4: VERIFICATION STAGE
+          TAB 5: VERIFICATION ENGINE
           ========================================== */}
       {activeTab === 'VERIFICATION' && (
         <VerificationPanel
           verificationResult={verificationResult}
           onRunVerification={() => handleRunVerification(false)}
-          onSimulateFailure={() => handleRunVerification(true)}
           onApplyPatch={handleApplyPatch}
+          onSimulateFailure={() => handleRunVerification(true)}
         />
       )}
 
       {/* ==========================================
-          TAB 5: REMEDIATION TIMELINE
+          TAB 6: LIFECYCLE TIMELINE
           ========================================== */}
       {activeTab === 'TIMELINE' && (
-        <RemediationTimeline auditLogs={auditLogs} ticket={ticket} />
-      )}
-
-      {/* ==========================================
-          TAB 6: AI INSIGHTS
-          ========================================== */}
-      {activeTab === 'INSIGHTS' && (
-        <AIInsightsPanel ticket={ticket} />
+        <RemediationTimeline auditLogs={auditLogs} />
       )}
 
       {/* Patch Preview Modal */}
@@ -661,23 +618,23 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
         <PatchPreviewModal
           patchData={patchData}
           onClose={() => setIsPatchModalOpen(false)}
-          onApprove={async () => {
-            await handleApproveRemediation();
+          onApprove={() => {
             setIsPatchModalOpen(false);
+            handleApproveRemediation();
           }}
-          onReject={async () => {
-            await handleRejectRemediation("Developer rejected patch");
-            setIsPatchModalOpen(false);
-          }}
+          onReject={() => setIsPatchModalOpen(false)}
         />
       )}
 
       {/* Rollback Modal */}
-      <RollbackModal
-        isOpen={isRollbackModalOpen}
-        onClose={() => setIsRollbackModalOpen(false)}
-        onConfirmRollback={handleRollbackConfirm}
-      />
+      {isRollbackModalOpen && (
+        <RollbackModal
+          ticket={ticket}
+          remediation={remediation}
+          onClose={() => setIsRollbackModalOpen(false)}
+          onRollback={handleRollbackConfirm}
+        />
+      )}
     </div>
   );
 }

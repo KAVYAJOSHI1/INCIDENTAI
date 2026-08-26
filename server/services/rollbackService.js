@@ -35,14 +35,14 @@ export async function executePatchRollback(ticketId, reason = "Rollback after un
     { step: 4, action: "Rollback verified. Re-opening incident for investigation", status: "COMPLETED", timestamp: new Date().toISOString() }
   ];
 
-  remediation.status = "REVERTED";
+  remediation.status = "ROLLED_BACK";
   remediation.current_version = restoredVersion;
   remediation.reverted_at = new Date().toISOString();
   remediation.rollback_reason = reason;
 
   await updateTicket(ticketId, {
-    remediation_status: "REVERTED",
-    status: "REOPENED_POST_ROLLBACK",
+    remediation_status: "ROLLED_BACK",
+    status: "ROLLED_BACK",
     patch_version: restoredVersion
   });
 
@@ -51,10 +51,10 @@ export async function executePatchRollback(ticketId, reason = "Rollback after un
     actor,
     action: "ROLLBACK_SUCCESSFUL",
     previous_state: "ROLLBACK_IN_PROGRESS",
-    new_state: "REVERTED",
+    new_state: "ROLLED_BACK",
     patch_version: restoredVersion,
     rollback_status: "SUCCESSFUL",
-    details: `Rollback completed. Restored version ${restoredVersion}. Incident reopened.`
+    details: `Rollback completed. Restored version ${restoredVersion}. Incident reset to IN_PROGRESS.`
   });
 
   return {

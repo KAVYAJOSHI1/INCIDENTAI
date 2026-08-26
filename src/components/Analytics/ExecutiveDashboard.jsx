@@ -125,6 +125,46 @@ export default function ExecutiveDashboard({ tickets, developers }) {
         />
       </div>
 
+      {/* Attention Required Banner */}
+      {tickets.filter(t => t.status === 'VERIFICATION_FAILED' || t.status === 'PROPOSED' || (t.sla_remaining_minutes != null && t.sla_remaining_minutes < 30 && t.status !== 'RESOLVED')).length > 0 && (
+        <div className="surface p-5 rounded-2xl border border-rose-500/30 bg-rose-500/5 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-extrabold uppercase tracking-wider text-rose-500 flex items-center gap-2">
+              <Activity className="w-4 h-4" /> ATTENTION REQUIRED — OPERATIONAL ALERTS
+            </h3>
+            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-rose-500 text-white">
+              URGENT ACTION NEEDED
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-mono">
+            {tickets.filter(t => t.status === 'VERIFICATION_FAILED').map(t => (
+              <div key={t.id} className="p-3 rounded-xl border border-rose-500/30 bg-rose-500/10 space-y-1">
+                <span className="text-rose-500 font-extrabold block">VERIFICATION FAILED</span>
+                <span className="font-bold text-heading block">{t.ticket_number || t.id}</span>
+                <span className="text-[10px] text-muted-color">Rollback required</span>
+              </div>
+            ))}
+
+            {tickets.filter(t => t.status === 'PROPOSED' || t.status === 'IN_PROGRESS').slice(0, 2).map(t => (
+              <div key={t.id} className="p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 space-y-1">
+                <span className="text-amber-500 font-extrabold block">AWAITING APPROVAL</span>
+                <span className="font-bold text-heading block">{t.ticket_number || t.id}</span>
+                <span className="text-[10px] text-muted-color">Dev: {t.assigned_dev_name || 'Marcus Vance'}</span>
+              </div>
+            ))}
+
+            {tickets.filter(t => t.sla_remaining_minutes != null && t.sla_remaining_minutes < 30 && t.status !== 'RESOLVED').map(t => (
+              <div key={t.id} className="p-3 rounded-xl border border-rose-500/30 bg-rose-500/10 space-y-1">
+                <span className="text-rose-500 font-extrabold block">SLA BREACH RISK</span>
+                <span className="font-bold text-heading block">{t.ticket_number || t.id}</span>
+                <span className="text-[10px] text-muted-color">{t.sla_remaining_minutes} min remaining</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 2-col charts */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         <div className="lg:col-span-7">

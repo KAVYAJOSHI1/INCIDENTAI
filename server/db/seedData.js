@@ -1,5 +1,6 @@
 /**
- * Seed data mirrors src/store/mockDatabase.js schema so the backend can later replace the frontend mocks 1:1.
+ * Seed data for Smart Manufacturing ERP & IncidentAI Platform.
+ * Mirroring enterprise schema with realistic connected seed records.
  */
 
 export const developers = [
@@ -9,7 +10,7 @@ export const developers = [
     role: "Senior SAP ABAP Specialist",
     avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Alex",
     skills: ["SAP ABAP", "PostgreSQL", "Accounting Logic", "General Ledger"],
-    erp_modules: ["INVOICING", "GENERAL_LEDGER"],
+    erp_modules: ["INVOICING", "GENERAL_LEDGER", "ORDERS"],
     active_tickets: 3,
     max_capacity: 5,
     historical_mttr_hours: 2.8,
@@ -21,8 +22,8 @@ export const developers = [
     name: "Sarah Jenkins",
     role: "Python / Odoo ERP Lead",
     avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah",
-    skills: ["Python", "Odoo ORM", "Payroll Engine", "Tax Engine"],
-    erp_modules: ["PAYROLL", "INVOICING"],
+    skills: ["Python", "Odoo ORM", "Payroll Engine", "Tax Engine", "Telemetry"],
+    erp_modules: ["PAYROLL", "INVOICING", "PRODUCTION"],
     active_tickets: 1,
     max_capacity: 5,
     historical_mttr_hours: 1.9,
@@ -34,8 +35,8 @@ export const developers = [
     name: "Marcus Vance",
     role: "Database & NetSuite Architect",
     avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Marcus",
-    skills: ["PostgreSQL", "SQL Tuning", "Inventory Indexing", "NetSuite SuiteScript"],
-    erp_modules: ["INVENTORY", "PROCUREMENT"],
+    skills: ["PostgreSQL", "SQL Tuning", "Inventory Indexing", "NetSuite SuiteScript", "Auth"],
+    erp_modules: ["INVENTORY", "PROCUREMENT", "AUTH"],
     active_tickets: 4,
     max_capacity: 5,
     historical_mttr_hours: 3.5,
@@ -57,174 +58,335 @@ export const developers = [
   }
 ];
 
+export const erpInventory = [
+  {
+    warehouse: "WH-A",
+    bin: "W2",
+    product: "Industrial Motor Assembly",
+    sku: "SK-902",
+    available_qty: 84,
+    reserved_qty: 12,
+    reorder_level: 25,
+    status: "HEALTHY",
+    last_movement: "2026-08-26T09:30:00Z"
+  },
+  {
+    warehouse: "WH-A",
+    bin: "W1",
+    product: "Li-Ion Battery Cell 21700",
+    sku: "CELL-21700",
+    available_qty: 340,
+    reserved_qty: 60,
+    reorder_level: 100,
+    status: "HEALTHY",
+    last_movement: "2026-08-26T10:15:00Z"
+  },
+  {
+    warehouse: "WH-B",
+    bin: "B4",
+    product: "Turbine Controller PCB",
+    sku: "PCB-TURB-01",
+    available_qty: 18,
+    reserved_qty: 15,
+    reorder_level: 20,
+    status: "LOW_STOCK_ALERT",
+    last_movement: "2026-08-26T08:45:00Z"
+  }
+];
+
+export const erpOrders = [
+  {
+    order_id: "SO-1092",
+    customer: "Acme Corp",
+    type: "SALES_ORDER",
+    amount: 14500.00,
+    status: "SYNC_FAILED",
+    created_at: "2026-08-26T09:10:00Z"
+  },
+  {
+    order_id: "SO-1093",
+    customer: "Tesla Energy Supply",
+    type: "SALES_ORDER",
+    amount: 48900.00,
+    status: "PROCESSING",
+    created_at: "2026-08-26T10:00:00Z"
+  }
+];
+
+export const erpProduction = [
+  {
+    line_id: "LINE-01",
+    line_name: "Assembly Line 1",
+    machine: "CNC-Rotary-04",
+    status: "TELEMETRY_CRITICAL",
+    temperature: "94.2°C",
+    vibration_hz: 184,
+    active_work_order: "WO-4402"
+  },
+  {
+    line_id: "LINE-02",
+    line_name: "SMT Surface Mount Line",
+    machine: "SMT-PickPlace-01",
+    status: "RUNNING",
+    temperature: "42.0°C",
+    vibration_hz: 12,
+    active_work_order: "WO-4405"
+  }
+];
+
+export const erpProcurement = [
+  {
+    po_id: "PO-9041",
+    supplier: "Apex Engineering Ltd",
+    items_count: 5,
+    total: 125000.00,
+    status: "VALIDATION_FAILED",
+    submitted_by: "David Kim"
+  },
+  {
+    po_id: "PO-9042",
+    supplier: "Global Silicon Supplies",
+    items_count: 12,
+    total: 34000.00,
+    status: "APPROVED",
+    submitted_by: "Sarah Connor"
+  }
+];
+
 export const tickets = [
   {
-    id: "INC-2026-8901",
-    ticket_number: "INC-8901",
-    title: "[INVOICING] ERR_TAX_VAL_402: Customer GSTIN Exemption Code Missing on Post",
-    reporter: "John Doe (Finance Operator)",
-    assigned_dev_id: "dev_01",
-    assigned_dev_name: "Alex Mercer",
-    erp_module: "INVOICING",
-    severity: "P1_HIGH",
-    status: "IN_PROGRESS",
-    vague_user_input: "The billing button turned red when posting invoice for Customer #904!",
-    structured_description: "Invoice posting pipeline thrown exception `ERR_TAX_VAL_402`. Missing required GSTIN exemption mapping in customer master records table `cust_master_tax`.",
-    reproduction_steps: [
-      "Navigate to Invoicing -> Outstanding Billing",
-      "Select Customer Record #904 (Acme Corp)",
-      "Click 'Post Invoice & Generate PDF'"
-    ],
-    expected_behavior: "Invoice generates PDF and creates journal entry in General Ledger.",
-    actual_behavior: "Validation fails with error pop-up: ERR_TAX_VAL_402.",
-    ocr_findings: {
-      extracted_error_code: "ERR_TAX_VAL_402",
-      detected_component: "PostInvoiceButton",
-      annotated_screenshot_text: "ERROR 402: Tax Exemption Code null for Cust ID 904 in SAP Post Engine."
-    },
-    duplicate_check: { is_duplicate: false, similarity_score: 0.12 },
-    ai_root_cause: "Missing `tax_exempt_code` constraint in `cust_master_tax` table for non-taxable corporate accounts.",
-    ai_suggested_patch: "UPDATE cust_master_tax SET tax_exempt_code = 'GST_EXEMPT_A1' WHERE cust_id = 904;",
-    sla_remaining_minutes: 42,
-    created_at: "2026-07-26T09:15:00Z"
-  },
-  {
-    id: "INC-2026-8902",
-    ticket_number: "INC-8902",
-    title: "[PAYROLL] ERR_PAYROLL_DEADLOCK: Thread Timeout During Gross Salary Calculation",
-    reporter: "Sarah Connor (HR Admin)",
-    assigned_dev_id: "dev_02",
-    assigned_dev_name: "Sarah Jenkins",
-    erp_module: "PAYROLL",
-    severity: "P0_CRITICAL",
-    status: "TRIAGED",
-    vague_user_input: "Payroll batch run froze at employee 450 and crashed!",
-    structured_description: "Batch payroll calculation process timed out due to row lock contention on table `emp_tax_deductions_2026` during tax bracket recalculation.",
-    reproduction_steps: [
-      "Open HR -> Monthly Payroll Run",
-      "Select Batch #2026-Q3-JULY",
-      "Execute Batch Processing"
-    ],
-    expected_behavior: "Batch payroll completes for 2,400 employees in under 3 minutes.",
-    actual_behavior: "Process hangs for 120 seconds and terminates with DB deadlock exception.",
-    ocr_findings: {
-      extracted_error_code: "ERR_PAYROLL_DEADLOCK",
-      detected_component: "BatchRunProgressModal",
-      annotated_screenshot_text: "FATAL: Deadlock detected on PG process 4102 locked by process 4108."
-    },
-    duplicate_check: { is_duplicate: true, duplicate_of: "INC-2026-8840", similarity_score: 0.89 },
-    ai_root_cause: "Unindexed bulk update on `emp_tax_deductions_2026` causing table locks during parallel batch threads.",
-    ai_suggested_patch: "CREATE INDEX CONCURRENTLY idx_tax_deduct_emp ON emp_tax_deductions_2026 (emp_id, tax_year);",
-    sla_remaining_minutes: 15,
-    created_at: "2026-07-26T10:40:00Z"
-  },
-  {
-    id: "INC-2026-8903",
-    ticket_number: "INC-8903",
-    title: "[INVENTORY] ERR_STOCK_NEG: Negative Quantity Violation on Warehouse #4 Transfer",
-    reporter: "Mike Ross (Logistics Supervisor)",
+    id: "INC-79613-6322",
+    ticket_number: "INC-79613-6322",
+    correlation_id: "ERP-INV-W2-20260826-1042",
+    title: "[INVENTORY] ERR_STOCK_NEG: Negative quantity violation during bin transfer",
+    reporter: "ERP Operator (Mike Ross)",
     assigned_dev_id: "dev_03",
     assigned_dev_name: "Marcus Vance",
+    reviewer_name: "Sarah Chen",
+    resolution_owner: "Marcus Vance",
     erp_module: "INVENTORY",
-    severity: "P2_MEDIUM",
-    status: "ASSIGNED",
-    vague_user_input: "Warehouse stock item SK-902 shows wrong count when moving bins.",
+    severity: "P3_LOW",
+    status: "IN_PROGRESS",
+    vague_user_input: "Warehouse operator attempted to transfer 100 units from W1 to W2, but only 84 units were available. ERP validation failed with ERR_STOCK_NEG.",
     structured_description: "Bin transfer validation failed due to cached inventory balance mismatch between Redis cache node and PostgreSQL source of truth.",
     reproduction_steps: [
-      "Open Inventory -> Bin Transfers",
-      "Select SKU SK-902",
-      "Transfer 50 units from Bin A1 to Bin B4"
+      "Open ERP Workspace → Inventory Module → Bin Transfer",
+      "Select Product: Industrial Motor Assembly (SKU: SK-902)",
+      "Set From: Bin W1 (Available: 84 units), To: Bin W2",
+      "Enter Transfer Quantity: 100 units",
+      "Click Submit Bin Transfer → Observe ERR_STOCK_NEG exception"
     ],
-    expected_behavior: "Bin balance updates seamlessly.",
-    actual_behavior: "System rejects transfer claiming stock count is -5.",
+    expected_behavior: "ERP validates transfer quantity against real-time DB inventory stock prior to committing transfer.",
+    actual_behavior: "Stale Redis cache read leads to negative quantity constraint failure during SQL commit.",
     ocr_findings: {
       extracted_error_code: "ERR_STOCK_NEG",
       detected_component: "BinTransferGrid",
-      annotated_screenshot_text: "ERROR: Constraint violation stock_qty >= 0 breached for SKU SK-902."
+      annotated_screenshot_text: "ERROR: Constraint violation stock_qty >= 0 breached for SKU SK-902 in bin W2."
     },
-    duplicate_check: { is_duplicate: false, similarity_score: 0.24 },
-    ai_root_cause: "Stale Redis cache key `inv_stock:SK-902` not invalidated during previous PO receipt.",
+    duplicate_check: { is_duplicate: false, similarity_score: 0.14 },
+    ai_confidence: 0.65,
+    ai_root_cause: "Stale cache read before transfer validation (Redis key `inv_stock:SK-902` out of sync with DB balance).",
     ai_suggested_patch: "EXEC redis-cli DEL inv_stock:SK-902 && SELECT sync_inventory_cache('SK-902');",
-    sla_remaining_minutes: 110,
-    created_at: "2026-07-26T11:05:00Z"
+    business_impact_score: 6,
+    affected_warehouse: "WH-A / W2",
+    affected_process: "Warehouse stock movement",
+    sla_remaining_minutes: 240,
+    created_at: "2026-08-26T10:42:00Z"
   },
   {
-    id: "INC-2026-8850",
-    ticket_number: "INC-8850",
-    title: "[GENERAL_LEDGER] ERR_GL_UNBALANCED: Multi-Currency Journal Batch Mismatch",
-    reporter: "Elena Petrova (Controller)",
-    assigned_dev_id: "dev_04",
-    assigned_dev_name: "Priya Sharma",
-    erp_module: "GENERAL_LEDGER",
+    id: "INC-2026-8904",
+    ticket_number: "INC-8904",
+    correlation_id: "ERP-ORD-SO1092-20260826-0915",
+    title: "[ORDERS] ERR_ORDER_SYNC: Order synchronization timeout for Sales Order #SO-1092",
+    reporter: "Sales Desk (Emma Watson)",
+    assigned_dev_id: "dev_01",
+    assigned_dev_name: "Alex Mercer",
+    reviewer_name: "Marcus Vance",
+    resolution_owner: "Alex Mercer",
+    erp_module: "ORDERS",
     severity: "P1_HIGH",
-    status: "RESOLVED",
-    vague_user_input: "The ledger won't close, it says numbers don't add up.",
-    structured_description: "Journal entry batch posted with mismatched debit/credit totals due to currency rounding in multi-currency conversion.",
+    status: "REMEDIATION_PENDING",
+    vague_user_input: "Customer Acme Corp sales order #SO-1092 timed out while syncing to the fulfillment gateway.",
+    structured_description: "Order processing service failed to receive socket acknowledgment from fulfillment gateway within 3000ms SLA window.",
     reproduction_steps: [
-      "Open General Ledger -> Period Close",
-      "Run trial balance for FY2026-Q2",
-      "Attempt to post closing journal batch"
+      "Open Sales Orders → Select SO-1092",
+      "Click Sync Order to Warehouse",
+      "Observe 3000ms HTTP gateway timeout ERR_ORDER_SYNC"
     ],
-    expected_behavior: "Trial balance closes with debit/credit totals equal.",
-    actual_behavior: "System rejects close with ERR_GL_UNBALANCED across 3 currency pairs.",
+    expected_behavior: "Order payload propagates to warehouse queue in < 500ms.",
+    actual_behavior: "Gateway connection socket hangs and drops connection.",
     ocr_findings: {
-      extracted_error_code: "ERR_GL_UNBALANCED",
-      detected_component: "JournalPostingForm",
-      annotated_screenshot_text: "ERROR: Batch totals unbalanced by 0.03 across EUR/USD/INR conversion."
+      extracted_error_code: "ERR_ORDER_SYNC",
+      detected_component: "OrderSyncGateway",
+      annotated_screenshot_text: "HTTP 504: Gateway Timeout for Sales Order SO-1092 Sync Endpoint."
     },
     duplicate_check: { is_duplicate: false, similarity_score: 0.08 },
-    ai_root_cause: "Journal entry batch posted with mismatched debit/credit totals due to currency rounding in multi-currency conversion.",
-    ai_suggested_patch: "UPDATE gl_journal_lines SET amount = ROUND(amount, 2) WHERE batch_id = 'FY2026Q2-CLOSE';",
-    sla_remaining_minutes: 0,
-    created_at: "2026-07-24T08:00:00Z",
-    resolved_at: "2026-07-24T09:54:00Z"
+    ai_confidence: 0.88,
+    ai_root_cause: "Missing connection pool retry policy on OrderSyncGateway HTTP client.",
+    ai_suggested_patch: "UPDATE erp_gateway_config SET retry_attempts = 3, timeout_ms = 5000 WHERE service = 'OrderSync';",
+    business_impact_score: 8,
+    affected_warehouse: "WH-A / Delivery Queue",
+    affected_process: "Sales Order Fulfillment",
+    sla_remaining_minutes: 45,
+    created_at: "2026-08-26T09:15:00Z"
+  },
+  {
+    id: "INC-2026-8905",
+    ticket_number: "INC-8905",
+    correlation_id: "ERP-PRD-CNC04-20260826-0830",
+    title: "[PRODUCTION] ERR_MACHINE_HEALTH: Machine telemetry unavailable for CNC-Rotary-04",
+    reporter: "Shop Floor Supervisor (Carlos Ruiz)",
+    assigned_dev_id: "dev_02",
+    assigned_dev_name: "Sarah Jenkins",
+    reviewer_name: "Priya Sharma",
+    resolution_owner: "Sarah Jenkins",
+    erp_module: "PRODUCTION",
+    severity: "P0_CRITICAL",
+    status: "VERIFICATION",
+    vague_user_input: "Assembly Line 1 CNC machine telemetry stopped responding and temperature metric spiked to 94.2°C!",
+    structured_description: "MQTT sensor telemetry stream disconnected due to buffer overflow on edge IoT collector node.",
+    reproduction_steps: [
+      "Open Shop Floor Monitor → Line 1 Assembly",
+      "Check telemetry node CNC-Rotary-04",
+      "Observe offline status & ERR_MACHINE_HEALTH alert"
+    ],
+    expected_behavior: "Telemetry collector streams 10Hz sensor metrics back to ERP Digital Twin.",
+    actual_behavior: "Collector service drops buffer and raises critical alarm.",
+    ocr_findings: {
+      extracted_error_code: "ERR_MACHINE_HEALTH",
+      detected_component: "IoTCollectorDaemon",
+      annotated_screenshot_text: "CRITICAL: Telemetry buffer overrun on socket port 1883 for CNC-Rotary-04."
+    },
+    duplicate_check: { is_duplicate: false, similarity_score: 0.05 },
+    ai_confidence: 0.92,
+    ai_root_cause: "IoT collector ring buffer size exceeded during high-frequency vibration sampling.",
+    ai_suggested_patch: "ALTER SYSTEM SET iot_buffer_size_mb = 128; SELECT pg_reload_conf();",
+    business_impact_score: 9,
+    affected_warehouse: "Plant 1 / Assembly Line 1",
+    affected_process: "Automated Machining & Line Safety",
+    sla_remaining_minutes: 18,
+    created_at: "2026-08-26T08:30:00Z"
+  },
+  {
+    id: "INC-2026-8906",
+    ticket_number: "INC-8906",
+    correlation_id: "ERP-PROC-PO9041-20260826-1010",
+    title: "[PROCUREMENT] ERR_PO_VALIDATION: Purchase order validation failure for PO #PO-9041",
+    reporter: "Procurement Officer (David Kim)",
+    assigned_dev_id: "dev_04",
+    assigned_dev_name: "Priya Sharma",
+    reviewer_name: "Alex Mercer",
+    resolution_owner: "Priya Sharma",
+    erp_module: "PROCUREMENT",
+    severity: "P2_MEDIUM",
+    status: "TRIAGED",
+    vague_user_input: "Purchase order PO-9041 for Apex Engineering failed vendor tax validation.",
+    structured_description: "Procurement approval workflow rejected PO commit due to missing vendor VAT identification number in schema check.",
+    reproduction_steps: [
+      "Open Procurement → Purchase Orders → PO-9041",
+      "Click Submit for Approval",
+      "Observe ERR_PO_VALIDATION error popup"
+    ],
+    expected_behavior: "Validation checks vendor master record and routes to Procurement Manager.",
+    actual_behavior: "Validation throws null reference exception on optional vendor VAT field.",
+    ocr_findings: {
+      extracted_error_code: "ERR_PO_VALIDATION",
+      detected_component: "POApprovalForm",
+      annotated_screenshot_text: "ERROR: Vendor VAT ID null for Vendor ID Apex-01 in PO schema validator."
+    },
+    duplicate_check: { is_duplicate: false, similarity_score: 0.10 },
+    ai_confidence: 0.82,
+    ai_root_cause: "Strict non-null assertion on optional foreign vendor VAT ID in schema `po_schema_v2`.",
+    ai_suggested_patch: "ALTER TABLE vendor_master ALTER COLUMN vat_id DROP NOT NULL;",
+    business_impact_score: 5,
+    affected_warehouse: "Procurement Office",
+    affected_process: "Vendor Raw Material Purchasing",
+    sla_remaining_minutes: 180,
+    created_at: "2026-08-26T10:10:00Z"
+  },
+  {
+    id: "INC-2026-8907",
+    ticket_number: "INC-8907",
+    correlation_id: "ERP-SYS-AUTH-20260826-0745",
+    title: "[AUTH] ERR_AUTH_SERVICE: Authentication service timeout on SSO token refresh",
+    reporter: "IT Operations (System Monitor)",
+    assigned_dev_id: "dev_03",
+    assigned_dev_name: "Marcus Vance",
+    reviewer_name: "Sarah Jenkins",
+    resolution_owner: "Marcus Vance",
+    erp_module: "AUTH",
+    severity: "P1_HIGH",
+    status: "ASSIGNED",
+    vague_user_input: "Users experienced login delays and 504 Gateway errors when renewing JWT session tokens.",
+    structured_description: "Auth service redis connection pool exhausted during shift change peak login traffic.",
+    reproduction_steps: [
+      "Simulate 50 concurrent user token refresh requests",
+      "Observe latency spike > 5000ms",
+      "Receive ERR_AUTH_SERVICE gateway failure"
+    ],
+    expected_behavior: "JWT refresh executes in < 50ms per session.",
+    actual_behavior: "Redis pool max limit reached, blocking worker threads.",
+    ocr_findings: {
+      extracted_error_code: "ERR_AUTH_SERVICE",
+      detected_component: "AuthServiceGateway",
+      annotated_screenshot_text: "ERR 504: Auth Service connection pool timeout."
+    },
+    duplicate_check: { is_duplicate: false, similarity_score: 0.11 },
+    ai_confidence: 0.90,
+    ai_root_cause: "Max connections setting in auth redis client configured to default 10 instead of 200.",
+    ai_suggested_patch: "UPDATE auth_config SET redis_max_connections = 200 WHERE service = 'auth';",
+    business_impact_score: 8,
+    affected_warehouse: "All Facilities",
+    affected_process: "Enterprise Identity & Single Sign-On",
+    sla_remaining_minutes: 90,
+    created_at: "2026-08-26T07:45:00Z"
   }
 ];
 
 export const knowledgeBase = [
   {
     id: "kb_101",
-    title: "Resolving ERR_TAX_VAL_402 Exemption Code Missing in SAP Billing",
-    erp_module: "INVOICING",
-    error_code: "ERR_TAX_VAL_402",
-    solution: "Ensure non-taxable customers have `tax_exempt_code` populated in `cust_master_tax`. Execute update statement or check Master Data configuration in Finance settings.",
+    title: "Resolving ERR_STOCK_NEG Negative Quantity Violation during Bin Transfers",
+    erp_module: "INVENTORY",
+    error_code: "ERR_STOCK_NEG",
+    solution: "Invalidate stale Redis stock cache key `inv_stock:<SKU>` and trigger database balance sync function `sync_inventory_cache(sku)` before executing transfer validation.",
     confidence: 0.96,
-    tags: ["SAP", "Invoicing", "Tax", "GSTIN"]
+    tags: ["Inventory", "Redis", "Bin Transfer", "Cache Sync"]
   },
   {
     id: "kb_102",
-    title: "Handling PostgreSQL Deadlocks during Large Payroll Batches",
-    erp_module: "PAYROLL",
-    error_code: "ERR_PAYROLL_DEADLOCK",
-    solution: "Add composite index on `(emp_id, tax_year)` to avoid full table lock during tax recalculation batch updates. Set `statement_timeout = 30000ms`.",
+    title: "Handling ERR_ORDER_SYNC Timeout on Fulfillment Gateway",
+    erp_module: "ORDERS",
+    error_code: "ERR_ORDER_SYNC",
+    solution: "Increase gateway HTTP socket timeout to 5000ms and configure exponential backoff retry policy for outbound sales order synchronization payloads.",
     confidence: 0.94,
-    tags: ["PostgreSQL", "Payroll", "Lock Contention", "Index"]
+    tags: ["Orders", "Gateway", "Timeout", "HTTP Retry"]
   },
   {
     id: "kb_103",
-    title: "Redis Inventory Cache Sync for Negative Quantity Violations",
-    erp_module: "INVENTORY",
-    error_code: "ERR_STOCK_NEG",
-    solution: "Flush invalid Redis SKU key and trigger database cache sync function `sync_inventory_cache(sku_code)`.",
-    confidence: 0.91,
-    tags: ["Inventory", "Redis", "Cache Invalidating", "Odoo"]
+    title: "Fixing ERR_MACHINE_HEALTH IoT Telemetry Buffer Overrun",
+    erp_module: "PRODUCTION",
+    error_code: "ERR_MACHINE_HEALTH",
+    solution: "Expand MQTT daemon ring buffer allocation to 128MB and restart IoT collector daemon to clear backpressured sensor streams.",
+    confidence: 0.92,
+    tags: ["Production", "IoT", "Telemetry", "MQTT"]
   },
   {
     id: "kb_104",
-    title: "Fixing Multi-Currency Rounding Mismatches on GL Period Close",
-    erp_module: "GENERAL_LEDGER",
-    error_code: "ERR_GL_UNBALANCED",
-    solution: "Round journal line amounts to 2 decimal places before batch posting and reconcile FX conversion rate snapshot at time of entry.",
+    title: "Resolving ERR_PO_VALIDATION Null Reference in Procurement Approval",
+    erp_module: "PROCUREMENT",
+    error_code: "ERR_PO_VALIDATION",
+    solution: "Mark optional vendor fields (VAT ID / tax registration) as nullable in purchase order schema validator `po_schema_v2`.",
     confidence: 0.89,
-    tags: ["Oracle", "General Ledger", "Currency", "Rounding"]
+    tags: ["Procurement", "Purchase Order", "Validation", "Schema"]
   },
   {
     id: "kb_105",
-    title: "Reconciling PO vs Goods Receipt Quantity Mismatches",
-    erp_module: "PROCUREMENT",
-    error_code: "ERR_PO_MISMATCH",
-    solution: "Mark purchase order as PARTIALLY_RECEIVED when goods receipt quantity is less than ordered quantity, then re-trigger the 3-way match.",
-    confidence: 0.87,
-    tags: ["NetSuite", "Procurement", "3-Way Match"]
+    title: "Handling ERR_AUTH_SERVICE Connection Pool Exhaustion",
+    erp_module: "AUTH",
+    error_code: "ERR_AUTH_SERVICE",
+    solution: "Increase auth service Redis connection pool limit to 200 connections and enable connection idle timeout recycling.",
+    confidence: 0.95,
+    tags: ["Auth", "Redis", "Connection Pool", "JWT"]
   }
 ];

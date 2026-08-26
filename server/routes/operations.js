@@ -12,7 +12,7 @@ export function registerOperationsRoutes(router) {
   );
   router.get(
     "/api/digital-twin",
-    requireRole(EXECUTIVE_ROLES, async ({ res }) => sendJson(res, 200, { twin: await buildDigitalTwin() }))
+    requireRole(OPS_ROLES, async ({ res }) => sendJson(res, 200, { twin: await buildDigitalTwin() }))
   );
   router.get(
     "/api/mission-control",

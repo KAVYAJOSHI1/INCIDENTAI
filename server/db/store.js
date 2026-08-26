@@ -18,7 +18,12 @@ import { embedDocuments, toVectorLiteral } from "../services/embeddingService.js
       ADD COLUMN IF NOT EXISTS ai_diagnosis JSONB NOT NULL DEFAULT '{}',
       ADD COLUMN IF NOT EXISTS correlation_id TEXT,
       ADD COLUMN IF NOT EXISTS resolution_type TEXT,
-      ADD COLUMN IF NOT EXISTS requires_human_review BOOLEAN DEFAULT TRUE;
+      ADD COLUMN IF NOT EXISTS requires_human_review BOOLEAN DEFAULT TRUE,
+      ADD COLUMN IF NOT EXISTS reviewer_name TEXT,
+      ADD COLUMN IF NOT EXISTS resolution_owner TEXT,
+      ADD COLUMN IF NOT EXISTS business_impact_score NUMERIC,
+      ADD COLUMN IF NOT EXISTS affected_warehouse TEXT,
+      ADD COLUMN IF NOT EXISTS affected_process TEXT;
     `);
   } catch (err) {
     // Ignore migration error if DB connecting later
@@ -58,6 +63,8 @@ function rowToTicket(row) {
     ticket_number: row.ticket_number,
     title: row.title,
     reporter: row.reporter,
+    reviewer_name: row.reviewer_name || row.reviewer || 'Sarah Chen',
+    resolution_owner: row.resolution_owner || row.assigned_dev_name || 'Marcus Vance',
     erp_context: row.erp_context,
     assigned_dev_id: row.assigned_dev_id,
     assigned_dev_name: row.assigned_dev_name,
@@ -84,6 +91,9 @@ function rowToTicket(row) {
     correlation_id: row.correlation_id || null,
     resolution_type: row.resolution_type || null,
     requires_human_review: row.requires_human_review ?? true,
+    business_impact_score: row.business_impact_score != null ? Number(row.business_impact_score) : 6,
+    affected_warehouse: row.affected_warehouse || null,
+    affected_process: row.affected_process || null,
     sla_remaining_minutes: row.sla_remaining_minutes,
     pipeline_timings_ms: row.pipeline_timings_ms,
     created_at: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
@@ -203,10 +213,10 @@ export async function addTicket(ticket) {
 
 const TICKET_JSON_COLUMNS = new Set(["reproduction_steps", "ocr_findings", "severity_analysis", "duplicate_check", "rag_kb_matches", "developer_routing", "pipeline_timings_ms", "mcp_evidence", "rag_evidence", "ai_diagnosis"]);
 const TICKET_COLUMNS = new Set([
-  "ticket_number", "title", "reporter", "assigned_dev_id", "assigned_dev_name", "erp_module", "severity", "status",
+  "ticket_number", "title", "reporter", "reviewer_name", "resolution_owner", "assigned_dev_id", "assigned_dev_name", "erp_module", "severity", "status",
   "vague_user_input", "structured_description", "expected_behavior", "actual_behavior",
   "ai_root_cause", "ai_suggested_patch", "ai_confidence", "sla_remaining_minutes", "resolved_at",
-  "correlation_id", "resolution_type", "requires_human_review",
+  "correlation_id", "resolution_type", "requires_human_review", "business_impact_score", "affected_warehouse", "affected_process",
   ...TICKET_JSON_COLUMNS
 ]);
 
