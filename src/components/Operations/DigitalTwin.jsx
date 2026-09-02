@@ -197,6 +197,19 @@ export default function DigitalTwin({ onSelectTicket }) {
         {/* Right 1 Col: Live ERP Incident Trigger Form */}
         <div className="surface p-5 space-y-5 flex flex-col justify-between">
           <div>
+            {/* DEMO ONLY Banner */}
+            <div
+              className="mb-4 px-3 py-2 rounded-lg text-xs font-mono font-bold flex items-center justify-between"
+              style={{
+                background: 'rgba(245,158,11,0.08)',
+                border: '1px solid rgba(245,158,11,0.3)',
+                color: '#f59e0b'
+              }}
+            >
+              <span>🎬 DEMO SCENARIO CONTROLS</span>
+              <span className="text-[10px] font-normal text-amber-400/70">Triggers real IncidentAI ingestion</span>
+            </div>
+
             <div className="flex items-center gap-2 mb-2">
               <AlertTriangle className="w-4 h-4 text-amber-500" />
               <h3 className="text-sm font-extrabold text-heading">Interactive ERP Incident Trigger</h3>
@@ -318,7 +331,12 @@ export default function DigitalTwin({ onSelectTicket }) {
                 <span className="text-xs font-bold text-accent-color flex items-center gap-1">
                   <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Incident Ingested to IncidentAI
                 </span>
-                <span className="badge-p3">{latestIncidentCard.severity}</span>
+                <span className={`${
+                  latestIncidentCard.severity === 'P0_CRITICAL' ? 'badge-p0'
+                  : latestIncidentCard.severity === 'P1_HIGH' ? 'badge-p1'
+                  : latestIncidentCard.severity === 'P2_MEDIUM' ? 'badge-p2'
+                  : 'badge-p3'
+                }`}>{latestIncidentCard.severity?.split('_')[0]}</span>
               </div>
               <p className="text-xs font-extrabold text-heading line-clamp-1">{latestIncidentCard.title}</p>
               <div className="text-[11px] text-muted-color space-y-1 font-mono">
@@ -326,12 +344,21 @@ export default function DigitalTwin({ onSelectTicket }) {
                 <div>Assigned Dev: <strong>{latestIncidentCard.assigned_dev_name || 'Marcus Vance'}</strong></div>
                 <div>Status: <strong className="text-amber-600">{latestIncidentCard.status}</strong></div>
               </div>
-              <button
-                onClick={() => onSelectTicket && onSelectTicket(latestIncidentCard.id)}
-                className="btn-primary text-xs w-full py-1.5 justify-center mt-2"
-              >
-                Open in IncidentAI <ExternalLink className="w-3.5 h-3.5 ml-1" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => onSelectTicket && onSelectTicket(latestIncidentCard.id)}
+                  className="btn-primary text-xs flex-1 py-1.5 justify-center"
+                >
+                  Open in IncidentAI <ExternalLink className="w-3.5 h-3.5 ml-1" />
+                </button>
+                <button
+                  onClick={() => setLatestIncidentCard(null)}
+                  className="btn-secondary text-xs py-1.5 px-2"
+                  title="Clear"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
           )}
         </div>

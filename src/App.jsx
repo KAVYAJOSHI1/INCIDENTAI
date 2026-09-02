@@ -15,12 +15,34 @@ import MissionControl from './components/Operations/MissionControl';
 import IntegrationHub from './components/Integrations/IntegrationHub';
 
 import * as api from './services/apiClient';
-import { ShieldAlert, Loader2, Inbox, RefreshCw } from 'lucide-react';
+import { ShieldAlert, Loader2, Inbox, RefreshCw, X } from 'lucide-react';
 import EmptyState from './components/Common/EmptyState';
 import LoginScreen from './components/Auth/LoginScreen';
 import { useAuth } from './context/AuthContext';
 import { useTheme } from './hooks/useTheme';
 import { VIEWS_BY_ROLE, DEFAULT_VIEW_BY_ROLE } from './constants/roles';
+
+// Human-readable labels for ticket status values
+const STATUS_LABELS = {
+  NEW: 'New',
+  TRIAGED: 'Triaged',
+  ASSIGNED: 'Assigned',
+  IN_PROGRESS: 'In Progress',
+  REMEDIATION_PENDING: 'Awaiting Approval',
+  VERIFICATION: 'Verifying',
+  VERIFICATION_FAILED: 'Verify Failed',
+  ROLLBACK_REQUIRED: 'Rollback Needed',
+  ROLLED_BACK: 'Rolled Back',
+  RESOLVED: 'Resolved',
+  SELF_SERVICE_RESOLVED: 'Self-Resolved',
+  VERIFIED: 'Verified',
+  KNOWLEDGE_CAPTURED: 'Resolved + KB',
+  ESCALATED: 'Escalated',
+  BLOCKED: 'Blocked',
+  REOPENED: 'Reopened',
+  RESOLVED_DUPLICATE_MERGED: 'Duplicate',
+  APPROVED: 'Approved',
+};
 
 export default function App() {
   const { user, isLoading: isAuthLoading, logout } = useAuth();
@@ -34,6 +56,9 @@ export default function App() {
   const [filterModule, setFilterModule] = useState('ALL');
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
+
+  const showError = (msg) => { setErrorMessage(msg); setTimeout(() => setErrorMessage(null), 5000); };
 
   const selectedTicket = tickets.find((t) => t.id === selectedTicketId) || tickets[0];
 
@@ -97,7 +122,7 @@ export default function App() {
         setDevelopers(refreshedDevelopers);
       }
     } catch (err) {
-      alert(`Failed to ingest incident: ${err.message}`);
+      showError(`Failed to ingest incident: ${err.message}`);
     }
   };
 
@@ -116,9 +141,9 @@ export default function App() {
       const updated = await api.patchTicket(sourceTicketId, { status: 'RESOLVED_DUPLICATE_MERGED' });
       setTickets((prev) => prev.map((t) => (t.id === sourceTicketId ? updated : t)));
       const targetLabel = targetTicketId || 'parent incident';
-      alert(`Ticket ${sourceTicketId} merged into ${targetLabel}!`);
+      showError(`✓ Ticket ${sourceTicketId} merged into ${targetLabel}.`);
     } catch (err) {
-      alert(`Failed to merge ticket: ${err.message}`);
+      showError(`Failed to merge ticket: ${err.message}`);
     }
   };
 
@@ -131,7 +156,7 @@ export default function App() {
         setDevelopers(refreshedDevelopers);
       }
     } catch (err) {
-      alert(`Failed to assign developer: ${err.message}`);
+      showError(`Failed to assign developer: ${err.message}`);
     }
   };
 
@@ -158,7 +183,7 @@ export default function App() {
         setDevelopers(refreshedDevelopers);
       }
     } catch (err) {
-      alert(`Failed to resolve ticket: ${err.message}`);
+      showError(`Failed to resolve ticket: ${err.message}`);
     }
   };
 
@@ -167,7 +192,7 @@ export default function App() {
       const saved = await api.addKnowledgeArticle(article);
       setKnowledgeBase((prev) => [saved, ...prev]);
     } catch (err) {
-      alert(`Failed to save knowledge article: ${err.message}`);
+      showError(`Failed to save knowledge article: ${err.message}`);
     }
   };
 
@@ -236,6 +261,23 @@ export default function App() {
           onTriggerPreset={handleTriggerPreset}
           onOpenMobileNav={() => setIsMobileNavOpen(true)}
         />
+
+        {/* Error Toast Banner */}
+        {errorMessage && (
+          <div
+            className="mx-4 mt-2 px-4 py-3 rounded-xl border text-xs font-medium flex items-center justify-between gap-3"
+            style={{
+              background: errorMessage.startsWith('✓') ? 'var(--bg-surface)' : 'rgba(239,68,68,0.08)',
+              borderColor: errorMessage.startsWith('✓') ? 'var(--border)' : 'rgba(239,68,68,0.3)',
+              color: errorMessage.startsWith('✓') ? 'var(--text-body)' : '#f87171'
+            }}
+          >
+            <span>{errorMessage}</span>
+            <button onClick={() => setErrorMessage(null)} style={{ color: 'inherit', opacity: 0.6 }}>
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
         {/* ── TRIAGE: edge-to-edge split panel, no outer padding ── */}
         {isTriage && (
@@ -341,13 +383,15 @@ export default function App() {
                         <div className="flex items-center gap-1 shrink-0">
                           {t.status && (
                             <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                              t.status === 'RESOLVED' || t.status === 'VERIFIED'
+                              t.status === 'RESOLVED' || t.status === 'VERIFIED' || t.status === 'KNOWLEDGE_CAPTURED'
                                 ? 'bg-emerald-500/10 text-emerald-400'
                                 : t.status === 'VERIFICATION_FAILED'
                                 ? 'bg-rose-500/10 text-rose-400'
+                                : t.status === 'ROLLED_BACK'
+                                ? 'bg-amber-500/10 text-amber-400'
                                 : 'bg-blue-500/10 text-blue-400'
                             }`}>
-                              {t.status}
+                              {STATUS_LABELS[t.remediation_status || t.status] || t.status}
                             </span>
                           )}
                           <span

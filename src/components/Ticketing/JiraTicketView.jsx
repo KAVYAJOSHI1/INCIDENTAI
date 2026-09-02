@@ -130,6 +130,7 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
     : rawSeverity;
 
   const erpModule = ticket.erp_module || 'INVENTORY';
+  // Priority: remediation_status (persisted lifecycle) > ticket.status > fallback
   const status = ticket.remediation_status || ticket.status || 'IN_PROGRESS';
   const slaMinutes = ticket.sla_remaining_minutes != null ? ticket.sla_remaining_minutes : 240;
   const isSlaAtRisk = slaMinutes < 30 && status !== 'RESOLVED';
@@ -687,10 +688,11 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
       {/* Rollback Modal */}
       {isRollbackModalOpen && (
         <RollbackModal
-          ticket={ticket}
-          remediation={remediation}
+          isOpen={isRollbackModalOpen}
           onClose={() => setIsRollbackModalOpen(false)}
-          onRollback={handleRollbackConfirm}
+          onConfirmRollback={handleRollbackConfirm}
+          currentVersion={remediation?.current_version || remediation?.target_version || 'v1.4.9'}
+          previousVersion={remediation?.current_version === 'v1.4.9' ? 'v1.4.8' : (remediation?.current_version || 'v1.4.8')}
         />
       )}
     </div>

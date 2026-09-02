@@ -22,15 +22,9 @@ export default function VerificationPanel({
     }
   };
 
-  const checks = verificationResult?.checks || [
-    { name: "Syntax validation", status: "PASS", detail: "ESLint & AST syntax check clean" },
-    { name: "Unit test", status: "PASS", detail: "binTransfer.test.js 8/8 passed" },
-    { name: "Inventory validation", status: "PASS", detail: "Quantity constraint assertion validated" },
-    { name: "Regression check", status: "PASS", detail: "Zero side-effect regressions across 14 modules" },
-    { name: "Incident reproduction check", status: "PASS", detail: "ERR_STOCK_NEG no longer reproduces" }
-  ];
+  const checks = verificationResult?.checks || [];
 
-  const overallStatus = verificationResult?.status || "PASS";
+  const overallStatus = verificationResult?.status || null;
 
   return (
     <div className="surface p-6 rounded-xl border border-[var(--border)] shadow-sm space-y-5">

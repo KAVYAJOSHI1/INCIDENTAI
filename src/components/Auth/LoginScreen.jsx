@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShieldAlert, LogIn, UserPlus, Loader2, Zap, CheckCircle2 } from 'lucide-react';
+import { ShieldAlert, LogIn, UserPlus, Loader2, Zap, CheckCircle2, Users } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { ROLES, ROLE_LABELS } from '../../constants/roles';
 
@@ -10,10 +10,34 @@ const FEATURES = [
 ];
 
 const DEMO_ACCOUNTS = [
-  { role: 'End User',      email: 'enduser@incidentai.demo',   badge: 'bg-slate-100 text-slate-600' },
-  { role: 'Support Triage',email: 'triage@incidentai.demo',    badge: 'bg-blue-50 text-blue-700' },
-  { role: 'Developer',     email: 'developer@incidentai.demo', badge: 'bg-purple-50 text-purple-700' },
-  { role: 'Executive',     email: 'executive@incidentai.demo', badge: 'bg-amber-50 text-amber-700' },
+  {
+    role: 'End User',
+    email: 'enduser@incidentai.demo',
+    badge: 'bg-slate-100 text-slate-600',
+    description: 'Submit incidents & track status',
+    icon: '👤'
+  },
+  {
+    role: 'Support Triage',
+    email: 'triage@incidentai.demo',
+    badge: 'bg-blue-50 text-blue-700',
+    description: 'Classify, assign & manage queue',
+    icon: '🎯'
+  },
+  {
+    role: 'Developer',
+    email: 'developer@incidentai.demo',
+    badge: 'bg-purple-50 text-purple-700',
+    description: 'Full remediation & patch workflow',
+    icon: '💻'
+  },
+  {
+    role: 'Executive',
+    email: 'executive@incidentai.demo',
+    badge: 'bg-amber-50 text-amber-700',
+    description: 'Analytics, KPIs & war room',
+    icon: '📊'
+  },
 ];
 
 export default function LoginScreen() {
@@ -103,7 +127,10 @@ export default function LoginScreen() {
               onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
               onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.04)'}
             >
-              <span>{acc.email}</span>
+              <span className="flex items-center gap-2">
+                <span>{acc.icon}</span>
+                <span>{acc.email}</span>
+              </span>
               <span className={`text-xs px-2 py-0.5 rounded font-medium ${acc.badge}`}>{acc.role}</span>
             </button>
           ))}
@@ -236,8 +263,40 @@ export default function LoginScreen() {
               Role is self-selected for this demo. End User can submit incidents; other roles access the full console.
             </p>
           )}
+
+          {/* Mobile-only demo credentials panel */}
+          <div className="lg:hidden mt-8 pt-6" style={{ borderTop: '1px solid var(--border)' }}>
+            <div className="flex items-center gap-2 mb-3">
+              <Users className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
+              <span className="text-xs font-bold text-heading uppercase tracking-wider">Demo Credentials</span>
+              <span className="text-[10px] text-muted-color font-mono ml-auto">pw: demopass123</span>
+            </div>
+            <div className="space-y-2">
+              {DEMO_ACCOUNTS.map(acc => (
+                <button
+                  key={acc.email}
+                  type="button"
+                  onClick={() => quickFill(acc)}
+                  className="w-full flex items-center gap-3 text-left rounded-lg px-3 py-2.5 text-xs transition-colors"
+                  style={{
+                    background: 'var(--bg-surface)',
+                    border: '1px solid var(--border)',
+                    color: 'var(--text-body)'
+                  }}
+                >
+                  <span className="text-base">{acc.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-heading">{acc.role}</div>
+                    <div className="text-[10px] text-muted-color truncate">{acc.description}</div>
+                  </div>
+                  <span className="text-[10px] font-mono text-accent-color shrink-0">Quick Fill →</span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
 }
+

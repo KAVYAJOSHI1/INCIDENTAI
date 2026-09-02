@@ -8,7 +8,7 @@
 import { query } from "./postgres.js";
 import { embedDocuments, toVectorLiteral } from "../services/embeddingService.js";
 
-// Ensure Phase 6 evidence columns exist on database startup
+// Ensure Phase 6 + remediation lifecycle columns exist on database startup
 (async function migrateSchema() {
   try {
     await query(`
@@ -23,7 +23,9 @@ import { embedDocuments, toVectorLiteral } from "../services/embeddingService.js
       ADD COLUMN IF NOT EXISTS resolution_owner TEXT,
       ADD COLUMN IF NOT EXISTS business_impact_score NUMERIC,
       ADD COLUMN IF NOT EXISTS affected_warehouse TEXT,
-      ADD COLUMN IF NOT EXISTS affected_process TEXT;
+      ADD COLUMN IF NOT EXISTS affected_process TEXT,
+      ADD COLUMN IF NOT EXISTS remediation_status TEXT,
+      ADD COLUMN IF NOT EXISTS patch_version TEXT;
     `);
   } catch (err) {
     // Ignore migration error if DB connecting later
@@ -71,6 +73,8 @@ function rowToTicket(row) {
     erp_module: row.erp_module,
     severity: row.severity,
     status: row.status,
+    remediation_status: row.remediation_status || null,
+    patch_version: row.patch_version || null,
     vague_user_input: row.vague_user_input,
     structured_description: row.structured_description,
     reproduction_steps: row.reproduction_steps,
@@ -217,6 +221,7 @@ const TICKET_COLUMNS = new Set([
   "vague_user_input", "structured_description", "expected_behavior", "actual_behavior",
   "ai_root_cause", "ai_suggested_patch", "ai_confidence", "sla_remaining_minutes", "resolved_at",
   "correlation_id", "resolution_type", "requires_human_review", "business_impact_score", "affected_warehouse", "affected_process",
+  "remediation_status", "patch_version",
   ...TICKET_JSON_COLUMNS
 ]);
 

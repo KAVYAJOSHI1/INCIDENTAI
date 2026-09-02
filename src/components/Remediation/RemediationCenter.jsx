@@ -130,11 +130,17 @@ export default function RemediationCenter({
             </div>
             <div>
               <span className="text-muted-color block text-[9px] uppercase">Top RAG KB Match</span>
-              <strong className="text-amber-400">GENERAL_LEDGER</strong>
+              <strong className="text-amber-400">
+                {ticket.rag_kb_matches?.[0]?.article?.erp_module || 'GENERAL_LEDGER'}
+              </strong>
             </div>
             <div>
               <span className="text-muted-color block text-[9px] uppercase">RAG Similarity</span>
-              <strong className="text-rose-400">25% (Low Relevance)</strong>
+              <strong className="text-rose-400">
+                {ticket.rag_kb_matches?.[0]?.score != null
+                  ? `${Math.round(ticket.rag_kb_matches[0].score * 100)}% (Low Relevance)`
+                  : '25% (Low Relevance)'}
+              </strong>
             </div>
           </div>
 

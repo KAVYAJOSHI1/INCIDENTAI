@@ -42,6 +42,8 @@ export default function RemediationTimeline({ auditLogs = [], ticket }) {
 
   const allEvents = [...defaultEvents, ...logEvents];
 
+  const hasRealAuditLogs = logEvents.length > 0;
+
   return (
     <div className="surface p-6 rounded-xl border border-[var(--border)] shadow-sm space-y-4">
       <div className="flex items-center justify-between pb-3" style={{ borderBottom: '1px solid var(--border)' }}>
@@ -51,25 +53,71 @@ export default function RemediationTimeline({ auditLogs = [], ticket }) {
         <span className="text-[10px] font-mono text-faint-color">AUDIT TRAIL</span>
       </div>
 
-      <div className="relative pl-6 space-y-4 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-[var(--border)]">
-        {allEvents.map((evt, idx) => {
-          const EvtIcon = evt.icon;
-          return (
-            <div key={idx} className="relative flex items-start gap-3 text-xs font-mono">
-              <div className={`absolute -left-6 top-0.5 p-1 rounded-full bg-[var(--bg-page)] border border-[var(--border)] ${evt.color}`}>
-                <EvtIcon className="w-3 h-3" />
-              </div>
-              <div className="flex-1 surface-muted p-3 rounded-lg border border-[var(--border)]">
-                <div className="flex items-center justify-between gap-2 mb-1">
-                  <span className="font-bold text-heading">{evt.title}</span>
-                  <span className="text-[10px] text-muted-color">{evt.time}</span>
+      {/* Pre-incident synthetic events */}
+      <div className="space-y-1">
+        <div className="flex items-center gap-2 px-1 pb-1">
+          <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">
+            SIMULATED DEMO — PRE-INCIDENT CONTEXT
+          </span>
+          <span className="text-[9px] text-muted-color">These events represent the incident detection & AI analysis phase</span>
+        </div>
+        <div className="relative pl-6 space-y-3 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-[var(--border)]">
+          {defaultEvents.map((evt, idx) => {
+            const EvtIcon = evt.icon;
+            return (
+              <div key={`default-${idx}`} className="relative flex items-start gap-3 text-xs font-mono opacity-70">
+                <div className={`absolute -left-6 top-0.5 p-1 rounded-full bg-[var(--bg-page)] border border-[var(--border)] ${evt.color}`}>
+                  <EvtIcon className="w-3 h-3" />
                 </div>
-                <p className="text-[11px] text-muted-color font-sans leading-relaxed">{evt.detail}</p>
+                <div className="flex-1 surface-muted p-3 rounded-lg border border-[var(--border)] border-dashed">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="font-bold text-heading">{evt.title}</span>
+                    <span className="text-[10px] text-muted-color">{evt.time}</span>
+                  </div>
+                  <p className="text-[11px] text-muted-color font-sans leading-relaxed">{evt.detail}</p>
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
+
+      {/* Real audit events (from server) */}
+      {hasRealAuditLogs && (
+        <div className="space-y-1 pt-2" style={{ borderTop: '1px solid var(--border)' }}>
+          <div className="flex items-center gap-2 px-1 pb-1 pt-2">
+            <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              LIVE AUDIT TRAIL
+            </span>
+            <span className="text-[9px] text-muted-color">Real lifecycle events recorded by IncidentAI</span>
+          </div>
+          <div className="relative pl-6 space-y-3 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-emerald-500/20">
+            {logEvents.map((evt, idx) => {
+              const EvtIcon = evt.icon;
+              return (
+                <div key={`log-${idx}`} className="relative flex items-start gap-3 text-xs font-mono">
+                  <div className={`absolute -left-6 top-0.5 p-1 rounded-full bg-[var(--bg-page)] border border-[var(--border)] ${evt.color}`}>
+                    <EvtIcon className="w-3 h-3" />
+                  </div>
+                  <div className="flex-1 surface-muted p-3 rounded-lg border border-[var(--border)]">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span className="font-bold text-heading">{evt.title}</span>
+                      <span className="text-[10px] text-muted-color">{evt.time}</span>
+                    </div>
+                    <p className="text-[11px] text-muted-color font-sans leading-relaxed">{evt.detail}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {!hasRealAuditLogs && (
+        <p className="text-[11px] text-muted-color text-center font-mono py-2">
+          Live audit events will appear here as you progress through the remediation workflow.
+        </p>
+      )}
     </div>
   );
 }
