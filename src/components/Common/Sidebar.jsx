@@ -17,7 +17,7 @@ const NAV_SECTIONS = [
     label: 'Analytics & AI',
     items: [
       { id: 'ADMIN',    label: 'Executive Dashboard',    icon: BarChart3   },
-      { id: 'PIPELINE', label: 'AI Pipeline',            icon: GitFork     },
+      { id: 'PIPELINE', label: 'Incident Lifecycle',     icon: GitFork     },
     ]
   },
   {

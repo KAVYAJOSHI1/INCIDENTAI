@@ -14,6 +14,7 @@ import PatchPreviewModal from '../Remediation/PatchPreviewModal';
 import VerificationPanel from '../Remediation/VerificationPanel';
 import RollbackModal from '../Remediation/RollbackModal';
 import RemediationTimeline from '../Remediation/RemediationTimeline';
+import IncidentLifecycleVisualizer from '../Pipeline/IncidentLifecycleVisualizer';
 import * as api from '../../services/apiClient';
 
 const SEV_BADGE = {
@@ -152,7 +153,17 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
   const userReportText = ticket.vague_user_input || ticket.structured_description ||
     "ERR_STOCK_NEG: Negative quantity violation during stock transfer in warehouse bin W2";
 
-  const suspectedRootCauseText = ticket.ai_root_cause || "Stale inventory cache read before transfer validation";
+  const suspectedRootCauseText = (() => {
+    const diagRoot = ticket?.ai_diagnosis?.root_cause;
+    const aiRoot = ticket?.ai_root_cause;
+    if (diagRoot && !diagRoot.includes("Unexpected validation or execution exception")) {
+      return diagRoot;
+    }
+    if (aiRoot && !aiRoot.includes("Unexpected validation or execution exception")) {
+      return aiRoot;
+    }
+    return diagRoot || aiRoot || "Stale inventory cache read before transfer validation";
+  })();
   const suggestedPatchText = ticket.ai_suggested_patch || "EXEC redis-cli DEL inv_stock:SK-902 && SELECT sync_inventory_cache('SK-902');";
 
   const getStatusColor = (st) => {
@@ -315,83 +326,17 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
       </div>
 
       {/* ==========================================
-          2. DYNAMIC "WHAT HAPPENS NEXT?" PROMPT BOX
+          2. INCIDENT RESOLUTION LIFECYCLE & ACTION ENGINE
           ========================================== */}
-      <div className="surface p-5 rounded-2xl border border-accent-color/30 bg-accent-subtle-bg/30 space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <ArrowRight className="w-4 h-4 text-accent-color" />
-            <h3 className="text-xs font-extrabold uppercase tracking-wider text-heading">
-              CURRENT SITUATION & WHAT HAPPENS NEXT?
-            </h3>
-          </div>
-          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-accent-color text-white">
-            RECOMMENDED NEXT ACTION
-          </span>
-        </div>
-
-        {/* Context Prompt Text based on Status */}
-        <p className="text-xs font-medium text-body-color leading-relaxed">
-          {status === 'VERIFICATION_FAILED' ? (
-            <>
-              ❌ <strong className="text-rose-500">Post-patch verification suite failed.</strong> Stock constraint race condition detected during concurrency check. Action required: Developer <strong>{assignedDev}</strong> must review rollback options and initiate controlled rollback.
-            </>
-          ) : status === 'APPROVED' || status === 'REMEDIATION_PENDING' ? (
-            <>
-              ✓ <strong className="text-emerald-500">Remediation plan approved by {assignedDev}.</strong> Action required: Execute automated verification suite to validate syntax, unit tests, and regression constraints.
-            </>
-          ) : status === 'VERIFICATION' || status === 'VERIFIED' ? (
-            <>
-              ✓ <strong className="text-emerald-500">Verification suite passed 5/5 checks.</strong> Action required: Apply verified patch v1.4.9 to target environment and resolve incident.
-            </>
-          ) : status === 'RESOLVED' || status === 'APPLIED' ? (
-            <>
-              ✓ <strong className="text-emerald-500">Incident successfully resolved and verified.</strong> Knowledge article written back to RAG Knowledge Base.
-            </>
-          ) : (
-            <>
-              ⚠ <strong className="text-amber-500">Incident is currently in progress.</strong> AI has generated a proposed fix with <strong>{confidencePercent} confidence</strong>. Action required: Developer <strong>{assignedDev}</strong> must review and approve the remediation plan.
-            </>
-          )}
-        </p>
-
-        {/* Dynamic CTA Button */}
-        <div className="pt-2 flex items-center justify-end gap-3 border-t border-[var(--border)]">
-          {status === 'VERIFICATION_FAILED' ? (
-            <button
-              onClick={() => setIsRollbackModalOpen(true)}
-              className="btn-primary text-xs bg-rose-600 hover:bg-rose-500"
-            >
-              <RotateCcw className="w-3.5 h-3.5" /> Initiate Controlled Rollback
-            </button>
-          ) : status === 'APPROVED' || status === 'REMEDIATION_PENDING' ? (
-            <button
-              onClick={() => handleRunVerification(false)}
-              className="btn-primary text-xs"
-            >
-              <Terminal className="w-3.5 h-3.5" /> Start Automated Verification Engine
-            </button>
-          ) : status === 'VERIFICATION' || status === 'VERIFIED' ? (
-            <button
-              onClick={handleApplyPatch}
-              className="btn-primary text-xs bg-emerald-600 hover:bg-emerald-500"
-            >
-              <CheckCircle2 className="w-3.5 h-3.5" /> Apply Patch & Resolve Incident
-            </button>
-          ) : status === 'RESOLVED' || status === 'APPLIED' ? (
-            <span className="text-xs font-mono font-bold text-emerald-500 flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4" /> Incident Fully Resolved
-            </span>
-          ) : (
-            <button
-              onClick={() => setActiveTab('REMEDIATION')}
-              className="btn-primary text-xs"
-            >
-              <ShieldCheck className="w-3.5 h-3.5" /> Review & Approve Remediation Plan
-            </button>
-          )}
-        </div>
-      </div>
+      <IncidentLifecycleVisualizer
+        ticket={ticket}
+        verificationResult={verificationResult}
+        onApprove={handleApproveRemediation}
+        onRunVerification={() => handleRunVerification(false)}
+        onApplyPatch={handleApplyPatch}
+        onRollback={() => setIsRollbackModalOpen(true)}
+        onOpenRemediationTab={() => setActiveTab('REMEDIATION')}
+      />
 
       {/* ==========================================
           3. TRANSPARENT OWNERSHIP & RESPONSIBILITY GRID

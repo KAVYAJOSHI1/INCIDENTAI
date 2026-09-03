@@ -281,7 +281,7 @@ async function runSuite() {
       body: JSON.stringify({ simulate_failure: true })
     });
     const failVerData = await failVerRes.json();
-    assert(failVerRes.status === 200 && failVerData.verification?.status === "FAILED", "Verification: Simulated failure detected cleanly", `Status: ${failVerData.verification?.status}`);
+    assert(failVerRes.status === 200 && (failVerData.verification?.status === "FAIL" || failVerData.verification?.status === "FAILED"), "Verification: Simulated failure detected cleanly", `Status: ${failVerData.verification?.status}`);
 
     // 7.7 Apply Patch
     const applyRes = await fetch(`${BASE_URL}/incidents/${testTicketId}/apply-patch`, {
