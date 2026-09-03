@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import Sidebar from './components/Common/Sidebar';
 import Header from './components/Common/Header';
-import SmartReporter from './components/Reporter/SmartReporter';
-import EndUserPortal from './components/Reporter/EndUserPortal';
 import JiraTicketView from './components/Ticketing/JiraTicketView';
 import DeveloperLoadBalancer from './components/LoadBalancer/DeveloperLoadBalancer';
 import DeveloperWorkbench from './components/Workbench/DeveloperWorkbench';
@@ -60,15 +58,18 @@ export default function App() {
 
   const showError = (msg) => { setErrorMessage(msg); setTimeout(() => setErrorMessage(null), 5000); };
 
-  const selectedTicket = tickets.find((t) => t.id === selectedTicketId) || tickets[0];
+  // Derive the selected incident strictly from the id — never silently fall back to
+  // another incident's record (that would leak cross-incident data into every panel).
+  const selectedTicket = selectedTicketId
+    ? tickets.find((t) => t.id === selectedTicketId || t.ticket_number === selectedTicketId) || null
+    : tickets[0] || null;
 
   const loadInitialData = React.useCallback(async ({ signal, isInitial = false } = {}) => {
     if (isInitial) setIsLoading(true);
     try {
-      const isStaff = user && user.role !== 'END_USER';
       const [ticketsData, developersData, kbData] = await Promise.all([
         api.fetchTickets(),
-        isStaff ? api.fetchDevelopers().catch(() => []) : Promise.resolve([]),
+        api.fetchDevelopers().catch(() => []),
         api.fetchKnowledgeBase().catch(() => [])
       ]);
       if (signal?.cancelled) return;
@@ -105,36 +106,11 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
     const allowed = VIEWS_BY_ROLE[user.role] || [];
-    const defaultView = DEFAULT_VIEW_BY_ROLE[user.role] || 'MY_INCIDENTS';
+    const defaultView = DEFAULT_VIEW_BY_ROLE[user.role] || 'TRIAGE';
     if (!currentView || !allowed.includes(currentView)) {
       setCurrentView(defaultView);
     }
   }, [user, currentView]);
-
-  const handleSubmitIncident = async (inputPayload) => {
-    try {
-      const newTicket = await api.ingestIncident(inputPayload);
-      setTickets((prev) => [newTicket, ...prev]);
-      setSelectedTicketId(newTicket.id);
-      if (allowedViews.includes('TRIAGE')) setCurrentView('TRIAGE');
-      if (user?.role !== 'END_USER') {
-        const refreshedDevelopers = await api.fetchDevelopers();
-        setDevelopers(refreshedDevelopers);
-      }
-    } catch (err) {
-      showError(`Failed to ingest incident: ${err.message}`);
-    }
-  };
-
-  const handleTriggerPreset = (moduleName) => {
-    let text = "The billing button turned red when posting invoice for Customer #904 with ERR_TAX_VAL_402.";
-    if (moduleName === 'PAYROLL') {
-      text = "Payroll batch processing frozen at employee 450 with ERR_PAYROLL_DEADLOCK timeout!";
-    } else if (moduleName === 'INVENTORY') {
-      text = "Negative quantity violation ERR_STOCK_NEG when transferring SKU SK-902 in warehouse bin B4.";
-    }
-    handleSubmitIncident({ text, reporter: "Sample Scenario" });
-  };
 
   const handleMergeDuplicate = async (sourceTicketId, targetTicketId) => {
     try {
@@ -151,10 +127,8 @@ export default function App() {
     try {
       const updated = await api.patchTicket(ticketId, { assigned_dev_id: devId, status: 'ASSIGNED' });
       setTickets((prev) => prev.map((t) => (t.id === ticketId ? updated : t)));
-      if (user?.role !== 'END_USER') {
-        const refreshedDevelopers = await api.fetchDevelopers();
-        setDevelopers(refreshedDevelopers);
-      }
+      const refreshedDevelopers = await api.fetchDevelopers();
+      setDevelopers(refreshedDevelopers);
     } catch (err) {
       showError(`Failed to assign developer: ${err.message}`);
     }
@@ -178,10 +152,8 @@ export default function App() {
     try {
       const updated = await api.patchTicket(ticketId, { status: 'RESOLVED' });
       setTickets((prev) => prev.map((t) => (t.id === ticketId ? updated : t)));
-      if (user?.role !== 'END_USER') {
-        const refreshedDevelopers = await api.fetchDevelopers();
-        setDevelopers(refreshedDevelopers);
-      }
+      const refreshedDevelopers = await api.fetchDevelopers();
+      setDevelopers(refreshedDevelopers);
     } catch (err) {
       showError(`Failed to resolve ticket: ${err.message}`);
     }
@@ -258,7 +230,6 @@ export default function App() {
           theme={theme}
           onToggleTheme={toggleTheme}
           activeIncidentsCount={tickets.filter((t) => t.status !== 'RESOLVED').length}
-          onTriggerPreset={handleTriggerPreset}
           onOpenMobileNav={() => setIsMobileNavOpen(true)}
         />
 
@@ -335,7 +306,7 @@ export default function App() {
                     title={tickets.length === 0 ? 'No Incidents Yet' : 'No Matches'}
                     description={
                       tickets.length === 0
-                        ? 'Submit one from the Reporter to get started.'
+                        ? 'Trigger an ERP transaction from the Digital Twin console to create one.'
                         : `No tickets for module "${filterModule}".`
                     }
                     compact
@@ -446,6 +417,17 @@ export default function App() {
                 onMergeDuplicate={handleMergeDuplicate}
                 onAssignDeveloper={handleAssignDeveloper}
                 onNavigateToErp={() => setCurrentView('DIGITALTWIN')}
+                onTicketUpdated={async (updatedTicket) => {
+                  // Optimistically merge the fresh incident the action returned, then
+                  // re-fetch the authoritative list so every panel re-renders from the
+                  // backend's current state (action -> backend -> refresh -> UI).
+                  if (updatedTicket && typeof updatedTicket === 'object' && updatedTicket.id) {
+                    setTickets((prev) => prev.map((t) => (t.id === updatedTicket.id ? updatedTicket : t)));
+                    setSelectedTicketId(updatedTicket.id);
+                  }
+                  const refreshed = await api.fetchTickets().catch(() => null);
+                  if (refreshed) setTickets(refreshed);
+                }}
               />
             </div>
           </div>
@@ -455,12 +437,7 @@ export default function App() {
         {!isTriage && (
           <main className="flex-1 px-6 py-6 pb-16 overflow-y-auto">
 
-            {/* View 1: End User Self-Service Portal */}
-            {currentView === 'MY_INCIDENTS' && (
-              <EndUserPortal tickets={tickets} />
-            )}
-
-            {/* View 3: Developer Workbench & Copilot */}
+            {/* Developer Workbench & Copilot */}
             {currentView === 'DEVELOPER' && (
               <DeveloperWorkbench
                 ticket={selectedTicket}

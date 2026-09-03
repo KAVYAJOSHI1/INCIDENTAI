@@ -233,86 +233,54 @@ async function runSuite() {
     const intData = await intRes.json();
     assert(intRes.status === 200 && Array.isArray(intData.connectors), "Platform: Integration Hub connector data returned", `Connectors: ${intData.connectors?.length}`);
 
-    // 7.2 Retrieve Remediation Plan
-    const remRes = await fetch(`${BASE_URL}/incidents/${testTicketId}/remediation`, {
-      headers: { "Authorization": `Bearer ${authToken}` }
+    // Section 7 runs the remediation lifecycle on its OWN fresh incidents so it is
+    // not coupled to the already-resolved ticket from section 5, and honours the
+    // authoritative state machine (approve -> verify -> apply / rollback).
+    const authHeaders = { "Content-Type": "application/json", "Authorization": `Bearer ${authToken}` };
+    const ingestBody = JSON.stringify({
+      text: "ERR_STOCK_NEG negative on-hand during bin transfer, warehouse zone A",
+      reporter: "erp_operator@smartfactory.demo",
+      erp_context: { erp: "Smart Manufacturing ERP", module: "INVENTORY", record_id: "e2e-sec7" }
     });
-    const remData = await remRes.json();
-    assert(remRes.status === 200 && Boolean(remData.remediation), "Remediation: Plan generated for incident", `Risk: ${remData.remediation?.risk_level}`);
+    const lc1 = (await (await fetch(`${BASE_URL}/incidents/ingest`, { method: "POST", headers: authHeaders, body: ingestBody })).json()).ticket?.id;
+    const lc2 = (await (await fetch(`${BASE_URL}/incidents/ingest`, { method: "POST", headers: authHeaders, body: ingestBody })).json()).ticket?.id;
+
+    // 7.2 Retrieve Remediation Plan
+    const remData = await (await fetch(`${BASE_URL}/incidents/${lc1}/remediation`, { headers: authHeaders })).json();
+    assert(Boolean(remData.remediation), "Remediation: Plan generated for incident", `Risk: ${remData.remediation?.risk_level}`);
 
     // 7.3 Approve Remediation
-    const appRes = await fetch(`${BASE_URL}/incidents/${testTicketId}/remediation/approve`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${authToken}`
-      },
-      body: JSON.stringify({ actor: "Marcus Vance (Test)" })
-    });
-    const appData = await appRes.json();
-    assert(appRes.status === 200 && appData.remediation?.status === "APPROVED", "Remediation: Developer approval registered", `Status: ${appData.remediation?.status}`);
+    const appData = await (await fetch(`${BASE_URL}/incidents/${lc1}/remediation/approve`, { method: "POST", headers: authHeaders, body: JSON.stringify({ actor: "E2E Developer" }) })).json();
+    assert(appData.remediation?.status === "APPROVED" && Boolean(appData.remediation?.approved_by), "Remediation: Developer approval registered + approver persisted", `By: ${appData.remediation?.approved_by}`);
 
     // 7.4 Fetch Patch Preview
-    const patchPrevRes = await fetch(`${BASE_URL}/incidents/${testTicketId}/patch`, {
-      headers: { "Authorization": `Bearer ${authToken}` }
-    });
-    const patchPrevData = await patchPrevRes.json();
-    assert(patchPrevRes.status === 200 && Array.isArray(patchPrevData.patch?.diff_lines), "Patch: Diff preview generated with line diffs", `File: ${patchPrevData.patch?.file}`);
+    const patchPrevData = await (await fetch(`${BASE_URL}/incidents/${lc1}/patch`, { headers: authHeaders })).json();
+    assert(Array.isArray(patchPrevData.patch?.diff_lines), "Patch: Diff preview generated with line diffs", `File: ${patchPrevData.patch?.file}`);
 
-    // 7.5 Verification Suite (PASS)
-    const verRes = await fetch(`${BASE_URL}/incidents/${testTicketId}/verify-patch`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${authToken}`
-      },
-      body: JSON.stringify({ actor: "Verification Runner" })
-    });
-    const verData = await verRes.json();
-    assert(verRes.status === 200 && verData.verification?.status === "PASS", "Verification: All 5 validation checks passed", `Duration: ${verData.verification?.total_duration_ms}ms`);
+    // 7.5 Verification Suite (PASS) on lc1
+    const verData = await (await fetch(`${BASE_URL}/incidents/${lc1}/verify-patch`, { method: "POST", headers: authHeaders, body: JSON.stringify({ actor: "Verification Runner" }) })).json();
+    assert(verData.verification?.status === "PASS" && verData.verification?.checks_total === 5, "Verification: All 5 validation checks passed", `Duration: ${verData.verification?.total_duration_ms}ms`);
 
-    // 7.6 Verification Suite (Simulated Failure)
-    const failVerRes = await fetch(`${BASE_URL}/incidents/${testTicketId}/verify-patch`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${authToken}`
-      },
-      body: JSON.stringify({ simulate_failure: true })
-    });
-    const failVerData = await failVerRes.json();
-    assert(failVerRes.status === 200 && (failVerData.verification?.status === "FAIL" || failVerData.verification?.status === "FAILED"), "Verification: Simulated failure detected cleanly", `Status: ${failVerData.verification?.status}`);
+    // 7.6 Verification Suite (Simulated Failure) on lc2
+    await fetch(`${BASE_URL}/incidents/${lc2}/remediation/approve`, { method: "POST", headers: authHeaders, body: JSON.stringify({ actor: "E2E Developer" }) });
+    const failVerData = await (await fetch(`${BASE_URL}/incidents/${lc2}/verify-patch`, { method: "POST", headers: authHeaders, body: JSON.stringify({ simulate_failure: true }) })).json();
+    assert(failVerData.verification?.status === "FAIL", "Verification: Simulated failure detected cleanly", `Status: ${failVerData.verification?.status}`);
 
-    // 7.7 Apply Patch
-    const applyRes = await fetch(`${BASE_URL}/incidents/${testTicketId}/apply-patch`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${authToken}`
-      },
-      body: JSON.stringify({ actor: "Marcus Vance" })
-    });
-    const applyData = await applyRes.json();
-    assert(applyRes.status === 200 && applyData.patch_result?.status === "APPLIED", "Apply: Patch applied successfully (v1.4.9)", `Version: ${applyData.patch_result?.current_version}`);
+    // 7.7 Apply Patch on the PASSED incident (lc1) — version is derived, not hardcoded
+    const applyData = await (await fetch(`${BASE_URL}/incidents/${lc1}/apply-patch`, { method: "POST", headers: authHeaders, body: JSON.stringify({ actor: "E2E Developer" }) })).json();
+    assert(applyData.patch_result?.status === "APPLIED" && /^v\d+\.\d+\.\d+/.test(applyData.patch_result?.current_version || ""), "Apply: Patch applied with derived version", `Version: ${applyData.patch_result?.current_version}`);
 
-    // 7.8 Patch Rollback
-    const rollRes = await fetch(`${BASE_URL}/incidents/${testTicketId}/rollback`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${authToken}`
-      },
-      body: JSON.stringify({ reason: "Test rollback execution", actor: "Marcus Vance" })
-    });
-    const rollData = await rollRes.json();
-    assert(rollRes.status === 200 && rollData.rollback?.status === "ROLLBACK_SUCCESSFUL", "Rollback: Patch reverted cleanly to v1.4.8", `Restored Version: ${rollData.rollback?.restored_version}`);
+    // 7.8 Patch Rollback on the FAILED incident (lc2)
+    const rollData = await (await fetch(`${BASE_URL}/incidents/${lc2}/rollback`, { method: "POST", headers: authHeaders, body: JSON.stringify({ reason: "Test rollback execution" }) })).json();
+    assert(rollData.rollback?.status === "ROLLBACK_SUCCESSFUL" && rollData.ticket?.status === "ROLLED_BACK", "Rollback: Patch reverted cleanly", `Restored: ${rollData.rollback?.restored_version}`);
 
-    // 7.9 Audit Logs Retrieval
-    const auditRes = await fetch(`${BASE_URL}/incidents/${testTicketId}/audit-logs`, {
-      headers: { "Authorization": `Bearer ${authToken}` }
-    });
-    const auditData = await auditRes.json();
-    assert(auditRes.status === 200 && Array.isArray(auditData.audit_logs) && auditData.audit_logs.length > 0, "Audit: Structured audit logs recorded for incident actions", `Log Entries: ${auditData.audit_logs?.length}`);
+    // 7.9 Audit Logs Retrieval (persisted in Postgres)
+    const auditData = await (await fetch(`${BASE_URL}/incidents/${lc1}/audit-logs`, { headers: authHeaders })).json();
+    assert(Array.isArray(auditData.audit_logs) && auditData.audit_logs.length >= 3, "Audit: Structured audit logs persisted for incident actions", `Log Entries: ${auditData.audit_logs?.length}`);
+
+    // 7.10 Guard: invalid transition rejected by backend
+    const badApply = await fetch(`${BASE_URL}/incidents/${lc2}/apply-patch`, { method: "POST", headers: authHeaders });
+    assert(badApply.status === 409, "State machine: apply-patch on ROLLED_BACK incident rejected (409)", `Status: ${badApply.status}`);
 
   } catch (err) {
     console.error("❌ Test suite encountered unexpected error:", err);

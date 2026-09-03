@@ -3,7 +3,7 @@ import React from 'react';
 /**
  * Shared page-level header used by every view.
  * Eliminates copy-paste banner pattern across ExecutiveDashboard,
- * DeveloperLoadBalancer, KnowledgeHub, SmartReporter.
+ * DeveloperLoadBalancer, KnowledgeHub.
  */
 export default function PageHeader({ badge, title, description, action, children }) {
   return (

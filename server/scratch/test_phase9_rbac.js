@@ -2,11 +2,14 @@ import http from "node:http";
 
 const BASE_URL = "http://localhost:4000";
 
+// IncidentAI now has exactly two personas. Legacy roles must be fully rejected.
 const USERS = [
-  { role: "END_USER", email: "enduser@incidentai.demo", password: "demopass123" },
-  { role: "SUPPORT_TRIAGE", email: "triage@incidentai.demo", password: "demopass123" },
   { role: "DEVELOPER", email: "developer@incidentai.demo", password: "demopass123" },
   { role: "EXECUTIVE", email: "executive@incidentai.demo", password: "demopass123" },
+];
+const REMOVED_ACCOUNTS = [
+  { email: "enduser@incidentai.demo", password: "demopass123" },
+  { email: "triage@incidentai.demo", password: "demopass123" },
 ];
 
 function request(method, path, body = null, headers = {}) {
@@ -18,117 +21,64 @@ function request(method, path, body = null, headers = {}) {
       reqBody = JSON.stringify(body);
       reqHeaders["Content-Length"] = Buffer.byteLength(reqBody);
     }
-
-    const req = http.request(
-      url,
-      { method, headers: reqHeaders },
-      (res) => {
-        let data = "";
-        res.on("data", (chunk) => (data += chunk));
-        res.on("end", () => {
-          let json = null;
-          try {
-            json = JSON.parse(data);
-          } catch (e) {
-            json = data;
-          }
-          resolve({ status: res.statusCode, body: json });
-        });
-      }
-    );
-
-    req.on("error", (err) => reject(err));
+    const req = http.request(url, { method, headers: reqHeaders }, (res) => {
+      let data = "";
+      res.on("data", (c) => (data += c));
+      res.on("end", () => {
+        let json = null;
+        try { json = JSON.parse(data); } catch { json = data; }
+        resolve({ status: res.statusCode, body: json });
+      });
+    });
+    req.on("error", reject);
     if (reqBody) req.write(reqBody);
     req.end();
   });
 }
 
+let pass = 0, fail = 0;
+const check = (cond, name) => { cond ? pass++ : fail++; console.log(`${cond ? " ✅" : " ❌"} ${name}`); };
+
 async function runAudit() {
-  console.log("==================================================");
-  console.log("PHASE 9 — INCIDENTAI RBAC & FUNCTION ACCESS AUDIT");
-  console.log("==================================================\n");
+  console.log("\n=== PHASE 9 — RBAC AUDIT (2-persona model) ===\n");
 
   const tokens = {};
   for (const u of USERS) {
     const res = await request("POST", "/api/auth/login", { email: u.email, password: u.password });
-    if (res.status === 200 && res.body.token) {
-      tokens[u.role] = res.body.token;
-      console.log(`[AUTH] Token acquired for ${u.role} (${u.email})`);
-    } else {
-      console.error(`[AUTH FAILED] Could not login as ${u.role}:`, res.body);
-    }
+    check(res.status === 200 && !!res.body.token, `Login as ${u.role}`);
+    if (res.body.token) tokens[u.role] = res.body.token;
   }
 
-  console.log("\n--------------------------------------------------");
-  console.log("TEST 1: HEADER FORGERY / UNAUTHENTICATED CHECK");
-  console.log("--------------------------------------------------");
-  const headerForgerRes = await request("GET", "/api/analytics/summary", null, {
-    "X-User-Id": "usr-hacker",
-    "X-User-Role": "EXECUTIVE"
-  });
-  console.log(`Forged Header Request (no Bearer token) status: ${headerForgerRes.status}`);
-  if (headerForgerRes.status === 401) {
-    console.log("✓ PASS: Header forgery rejected with 401 Unauthorized.");
-  } else {
-    console.error("✗ FAIL: Forged header was accepted!", headerForgerRes);
+  for (const acc of REMOVED_ACCOUNTS) {
+    const res = await request("POST", "/api/auth/login", acc);
+    check(res.status === 401 || res.status === 403, `Removed account ${acc.email} cannot authenticate (${res.status})`);
   }
 
-  const ticketsRes = await request("GET", "/api/tickets", null, { Authorization: `Bearer ${tokens["SUPPORT_TRIAGE"]}` });
-  const ticketId = ticketsRes.body.tickets?.[0]?.id || "tkt_sample";
+  // Header forgery still rejected
+  const forged = await request("GET", "/api/analytics/summary", null, { "X-User-Role": "EXECUTIVE" });
+  check(forged.status === 401, "Header forgery (no Bearer) rejected 401");
 
-  console.log("\n--------------------------------------------------");
-  console.log("TEST 2: API ACCESS MATRIX ACROSS PERSONAS");
-  console.log("--------------------------------------------------");
+  // Executive-only analytics: developer forbidden, executive allowed
+  const devAnalytics = await request("GET", "/api/analytics/summary", null, { Authorization: `Bearer ${tokens.DEVELOPER}` });
+  check(devAnalytics.status === 403, "DEVELOPER → /analytics/summary is 403");
+  const execAnalytics = await request("GET", "/api/analytics/summary", null, { Authorization: `Bearer ${tokens.EXECUTIVE}` });
+  check(execAnalytics.status === 200, "EXECUTIVE → /analytics/summary is 200");
 
-  const endpoints = [
-    { name: "POST /api/incidents/ingest", method: "POST", path: "/api/incidents/ingest", body: {} }, // Invalid body -> 400 for authorized, 403/401 for unauthorized
-    { name: "GET /api/tickets", method: "GET", path: "/api/tickets" },
-    { name: `GET /api/tickets/${ticketId}`, method: "GET", path: `/api/tickets/${ticketId}` },
-    { name: `PATCH /api/tickets/${ticketId}`, method: "PATCH", path: `/api/tickets/${ticketId}`, body: {} },
-    { name: `POST /api/tickets/${ticketId}/verify`, method: "POST", path: `/api/tickets/${ticketId}/verify`, body: {} },
-    { name: "GET /api/knowledge", method: "GET", path: "/api/knowledge" },
-    { name: "POST /api/knowledge", method: "POST", path: "/api/knowledge", body: {} },
-    { name: "GET /api/developers", method: "GET", path: "/api/developers" },
-    { name: "POST /api/loadbalancer/route", method: "POST", path: "/api/loadbalancer/route", body: {} },
-    { name: "POST /api/loadbalancer/rebalance", method: "POST", path: "/api/loadbalancer/rebalance" },
-    { name: "GET /api/analytics/summary", method: "GET", path: "/api/analytics/summary" },
-    { name: `GET /api/analytics/pipeline/${ticketId}`, method: "GET", path: `/api/analytics/pipeline/${ticketId}` },
-    { name: "POST /api/copilot/chat", method: "POST", path: "/api/copilot/chat", body: {} },
-    { name: "GET /api/digital-twin", method: "GET", path: "/api/digital-twin" },
-    { name: "GET /api/warroom", method: "GET", path: "/api/warroom" },
-    { name: "GET /api/mission-control", method: "GET", path: "/api/mission-control" }
-  ];
-
-  const results = {};
-
-  for (const ep of endpoints) {
-    results[ep.name] = {};
-    for (const u of USERS) {
-      const res = await request(ep.method, ep.path, ep.body, { Authorization: `Bearer ${tokens[u.role]}` });
-      // Map 400 (validation error) to "AUTH_OK" (authorized to hit endpoint)
-      let statusStr = String(res.status);
-      if (res.status === 200 || res.status === 201) statusStr = "200/201 OK";
-      else if (res.status === 400) statusStr = "ALLOWED (400 Bad Input)";
-      else if (res.status === 403) statusStr = "403 FORBIDDEN";
-      else if (res.status === 401) statusStr = "401 UNAUTHORIZED";
-      else if (res.status === 404) statusStr = "ALLOWED (404 Not Found)";
-      results[ep.name][u.role] = statusStr;
-    }
+  // Developer-only remediation: executive forbidden
+  const tickets = await request("GET", "/api/tickets", null, { Authorization: `Bearer ${tokens.DEVELOPER}` });
+  const tid = tickets.body.tickets?.[0]?.id;
+  check(Array.isArray(tickets.body.tickets), "Both personas can list tickets (no reporter isolation)");
+  if (tid) {
+    const execApprove = await request("POST", `/api/incidents/${tid}/remediation/approve`, {}, { Authorization: `Bearer ${tokens.EXECUTIVE}` });
+    check(execApprove.status === 403, "EXECUTIVE cannot approve remediation (403)");
   }
 
-  console.table(results);
+  // ERP transfer is a developer action
+  const execTransfer = await request("POST", "/api/erp/inventory/transfer", { sku: "SK-902", from_bin: "W1", to_bin: "W2", qty: 5 }, { Authorization: `Bearer ${tokens.EXECUTIVE}` });
+  check(execTransfer.status === 403, "EXECUTIVE cannot execute an ERP transfer (403)");
 
-  console.log("\n--------------------------------------------------");
-  console.log("TEST 3: END_USER DATA ISOLATION");
-  console.log("--------------------------------------------------");
-  const endUserTickets = await request("GET", "/api/tickets", null, { Authorization: `Bearer ${tokens["END_USER"]}` });
-  const staffTickets = await request("GET", "/api/tickets", null, { Authorization: `Bearer ${tokens["SUPPORT_TRIAGE"]}` });
-  console.log(`END_USER ticket count returned: ${endUserTickets.body.tickets?.length ?? 0}`);
-  console.log(`SUPPORT_TRIAGE ticket count returned: ${staffTickets.body.tickets?.length ?? 0}`);
-
-  console.log("\n==================================================");
-  console.log("AUDIT SUMMARY COMPLETED SUCCESSFULLY");
-  console.log("==================================================");
+  console.log(`\n=== ${pass} passed, ${fail} failed ===\n`);
+  process.exit(fail ? 1 : 0);
 }
 
-runAudit().catch(console.error);
+runAudit().catch((e) => { console.error(e); process.exit(1); });

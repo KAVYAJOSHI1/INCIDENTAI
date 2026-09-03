@@ -12,8 +12,11 @@ import Anthropic from "@anthropic-ai/sdk";
 import Groq from "groq-sdk";
 
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || "claude-3-5-sonnet-20241022";
-const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
-const GROQ_MODELS = ["llama-3.3-70b-versatile"];
+// Groq deprecated the llama-3.x hosted models; the currently-available production
+// models on this account are the OpenAI gpt-oss family. GROQ_MODEL / GROQ_MODELS
+// can still be overridden via env.
+const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
+const GROQ_MODELS = (process.env.GROQ_MODELS || "openai/gpt-oss-120b,openai/gpt-oss-20b").split(",").map((m) => m.trim()).filter(Boolean);
 
 let anthropicClient = null;
 let groqClient = null;
@@ -89,7 +92,10 @@ export async function completeJson({ system, prompt, schema, maxTokens = 1024, e
         const completion = await getGroqClient().chat.completions.create(
           {
             model,
-            max_tokens: maxTokens,
+            // gpt-oss reasoning models spend tokens on hidden reasoning before the
+            // final JSON — give them headroom and keep reasoning minimal.
+            max_tokens: Math.max(maxTokens, 2048),
+            reasoning_effort: "low",
             response_format: { type: "json_object" },
             messages: [
               {
@@ -141,7 +147,8 @@ export async function completeText({ system, messages, maxTokens = 1024, effort 
     try {
       const completion = await getGroqClient().chat.completions.create({
         model: GROQ_MODEL,
-        max_tokens: maxTokens,
+        max_tokens: Math.max(maxTokens, 2048),
+        reasoning_effort: "low",
         messages: [{ role: "system", content: system }, ...messages]
       });
 
@@ -191,7 +198,8 @@ export async function streamText({ system, messages, maxTokens = 768, effort = "
     try {
       const stream = await getGroqClient().chat.completions.create({
         model: GROQ_MODEL,
-        max_tokens: maxTokens,
+        max_tokens: Math.max(maxTokens, 2048),
+        reasoning_effort: "low",
         stream: true,
         messages: [{ role: "system", content: system }, ...messages]
       });

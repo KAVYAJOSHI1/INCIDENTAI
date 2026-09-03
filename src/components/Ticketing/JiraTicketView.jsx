@@ -24,7 +24,7 @@ const SEV_BADGE = {
   P3_LOW:      'badge-p3',
 };
 
-export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDeveloper, onNavigateToErp }) {
+export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDeveloper, onNavigateToErp, onTicketUpdated }) {
   const [activeTab, setActiveTab] = useState('OVERVIEW');
   const [isReproduceOpen, setIsReproduceOpen] = useState(true);
   const [copiedPatch, setCopiedPatch] = useState(false);
@@ -33,81 +33,109 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
   const [remediation, setRemediation] = useState(null);
   const [patchData, setPatchData] = useState(null);
   const [verificationResult, setVerificationResult] = useState(null);
+  const [rcTree, setRcTree] = useState(null);
   const [auditLogs, setAuditLogs] = useState([]);
   const [isPatchModalOpen, setIsPatchModalOpen] = useState(false);
   const [isRollbackModalOpen, setIsRollbackModalOpen] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(false);
+  const [actionInFlight, setActionInFlight] = useState(null); // 'approve' | 'reject' | 'verify' | 'apply' | 'rollback' | 'return'
+  const [actionError, setActionError] = useState(null);
 
   useEffect(() => {
+    // Reset all sub-state immediately on ticket change to prevent cross-incident data leakage
+    setRemediation(null);
+    setPatchData(null);
+    setVerificationResult(null);
+    setRcTree(null);
+    setAuditLogs([]);
+    setActionError(null);
+    setActionInFlight(null);
+
     if (ticket?.id) {
       loadTicketData(ticket.id);
     }
   }, [ticket?.id]);
 
   const loadTicketData = async (id) => {
+    setIsLoadingData(true);
     try {
-      const [rem, pt, logs] = await Promise.all([
+      const [rem, pt, logs, tree] = await Promise.all([
         api.fetchRemediation(id).catch(() => null),
         api.fetchPatch(id).catch(() => null),
-        api.fetchAuditLogs(id).catch(() => [])
+        api.fetchAuditLogs(id).catch(() => []),
+        api.fetchRootCauseTree(id).catch(() => null)
       ]);
-      if (rem) setRemediation(rem);
+      if (rem) {
+        setRemediation(rem);
+        setVerificationResult(rem.verification_result || null);
+      }
       if (pt) setPatchData(pt);
-      if (logs) setAuditLogs(logs);
+      if (tree) setRcTree(tree);
+      setAuditLogs(Array.isArray(logs) ? logs : []);
     } catch (err) {
       console.error("Failed to load remediation data for ticket:", err);
+    } finally {
+      setIsLoadingData(false);
     }
   };
 
-  const handleApproveRemediation = async () => {
-    if (!ticket?.id) return;
-    try {
-      const updated = await api.approveRemediation(ticket.id, "Marcus Vance");
-      setRemediation(updated);
-      await loadTicketData(ticket.id);
-    } catch (err) {
-      console.error("Approve failed:", err);
+  const refreshTicketAndState = async (id, updatedTicketFromApi = null) => {
+    const freshTicket = updatedTicketFromApi || (await api.fetchTicket(id).catch(() => null));
+    await loadTicketData(id);
+    if (onTicketUpdated) {
+      onTicketUpdated(freshTicket || id);
     }
   };
 
-  const handleRejectRemediation = async (reason) => {
-    if (!ticket?.id) return;
+  // Every workflow action: block double-submit, surface backend errors, and only
+  // advance the UI once the backend has confirmed + we have re-read fresh state.
+  const runAction = async (key, fn, { onSuccessTab } = {}) => {
+    if (!ticket?.id || actionInFlight) return null;
+    setActionInFlight(key);
+    setActionError(null);
     try {
-      const updated = await api.rejectRemediation(ticket.id, reason, "Marcus Vance");
-      setRemediation(updated);
-      await loadTicketData(ticket.id);
+      const res = await fn(ticket.id);
+      await refreshTicketAndState(ticket.id, res?.ticket);
+      if (onSuccessTab) setActiveTab(onSuccessTab);
+      return res;
     } catch (err) {
-      console.error("Reject failed:", err);
+      setActionError(err?.message || `${key} failed`);
+      return null;
+    } finally {
+      setActionInFlight(null);
     }
   };
 
-  const handleRunVerification = async (simulateFail = false) => {
-    if (!ticket?.id) return;
-    try {
-      const res = await api.verifyPatch(ticket.id, { simulate_failure: simulateFail });
-      setVerificationResult(res);
-      await loadTicketData(ticket.id);
-      setActiveTab('VERIFICATION');
-    } catch (err) {
-      console.error("Verification failed:", err);
-    }
-  };
+  const handleApproveRemediation = () =>
+    runAction('approve', async (id) => {
+      const res = await api.approveRemediation(id);
+      if (res?.remediation) setRemediation(res.remediation);
+      return res;
+    });
 
-  const handleApplyPatch = async () => {
-    if (!ticket?.id) return;
-    try {
-      await api.applyPatch(ticket.id, "Marcus Vance");
-      await loadTicketData(ticket.id);
-      setActiveTab('TIMELINE');
-    } catch (err) {
-      console.error("Apply patch failed:", err);
-    }
-  };
+  const handleRejectRemediation = (reason) =>
+    runAction('reject', async (id) => {
+      const res = await api.rejectRemediation(id, reason);
+      if (res?.remediation) setRemediation(res.remediation);
+      return res;
+    });
+
+  const handleRunVerification = (simulateFail = false) =>
+    runAction('verify', async (id) => {
+      const res = await api.verifyPatch(id, { simulate_failure: simulateFail });
+      if (res?.verification) setVerificationResult(res.verification);
+      return res;
+    }, { onSuccessTab: 'VERIFICATION' });
+
+  const handleApplyPatch = () =>
+    runAction('apply', (id) => api.applyPatch(id), { onSuccessTab: 'TIMELINE' });
+
+  const handleReturnToRemediation = () =>
+    runAction('return', (id) => api.returnToRemediation(id), { onSuccessTab: 'REMEDIATION' });
 
   const handleRollbackConfirm = async (reason) => {
-    if (!ticket?.id) return;
-    const res = await api.rollbackPatch(ticket.id, reason, "Marcus Vance");
-    await loadTicketData(ticket.id);
-    return res;
+    const res = await runAction('rollback', (id) => api.rollbackPatch(id, reason));
+    return res?.rollback || res;
   };
 
   if (!ticket) {
@@ -115,14 +143,15 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
       <EmptyState
         icon={FileSearch}
         title="No Incident Selected"
-        description="Select an incident from the Triage Feed to view its investigation dashboard."
+        description="Select an incident from the Incident Queue to view its investigation dashboard."
       />
     );
   }
 
-  // Ticket fields normalization
-  const ticketId = ticket.ticket_number || ticket.id || 'INC-79613-6322';
-  const correlationId = ticket.correlation_id || `ERP-${ticket.erp_module || 'INV'}-W2-20260826-1042`;
+  // ── Ticket field normalization — every value comes from THIS incident, with an
+  //    honest empty marker ("—" / "Unavailable") where the record has no data. ──
+  const ticketId = ticket.ticket_number || ticket.id;
+  const correlationId = ticket.correlation_id || '—';
 
   const rawSeverity = ticket.severity || 'P3_LOW';
   const sevBadgeClass = SEV_BADGE[rawSeverity] || 'badge-p3';
@@ -130,41 +159,58 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
     ? `${rawSeverity.split('_')[0]} · ${rawSeverity.split('_')[1]}`
     : rawSeverity;
 
-  const erpModule = ticket.erp_module || 'INVENTORY';
-  // Priority: remediation_status (persisted lifecycle) > ticket.status > fallback
-  const status = ticket.remediation_status || ticket.status || 'IN_PROGRESS';
-  const slaMinutes = ticket.sla_remaining_minutes != null ? ticket.sla_remaining_minutes : 240;
-  const isSlaAtRisk = slaMinutes < 30 && status !== 'RESOLVED';
+  const erpModule = ticket.erp_module || 'Unknown module';
+  // Authoritative workflow status is ticket.status; remediation_status is the sub-state mirror.
+  const status = ticket.status || ticket.remediation_status || 'NEW';
+  const slaMinutes = ticket.sla_remaining_minutes != null ? ticket.sla_remaining_minutes : null;
+  const isSlaAtRisk = slaMinutes != null && slaMinutes < 30 && status !== 'RESOLVED';
 
-  const confidenceScore = ticket.ai_confidence ?? 0.65;
-  const confidencePercent = `${Math.round(confidenceScore * 100)}%`;
+  const confidenceScore = ticket.ai_confidence;
+  const hasConfidence = confidenceScore != null;
+  const confidencePercent = hasConfidence ? `${Math.round(confidenceScore * 100)}%` : 'Confidence unavailable';
 
-  const reporter = ticket.reporter || 'ERP Operator (John Doe)';
-  const assignedDev = ticket.assigned_dev_name || 'Marcus Vance';
-  const reviewerName = ticket.reviewer_name || 'Sarah Chen';
-  const resolutionOwner = ticket.resolution_owner || assignedDev;
+  // The incident source is the ERP system, not a person — IncidentAI ownership is
+  // Assigned Developer (operational owner) → Reviewer → Resolution Owner.
+  const incidentSource = ticket.erp_context?.erp || 'Smart Manufacturing ERP';
+  const isAssigned = Boolean(ticket.assigned_dev_name || ticket.assigned_dev_id);
+  const assignedDev = ticket.assigned_dev_name || 'Unassigned';
+  const reviewerName = ticket.reviewer_name || '—';
+  const resolutionOwner = ticket.resolution_owner || (isAssigned ? assignedDev : '—');
 
-  const errorCode = ticket.ocr_findings?.extracted_error_code || ticket.error_code || 'ERR_STOCK_NEG';
-  const uiComponent = ticket.ocr_findings?.detected_component || ticket.ui_component || 'BinTransferGrid';
-  const businessImpact = ticket.business_impact_score || 6;
-  const affectedWarehouse = ticket.affected_warehouse || (erpModule === 'INVENTORY' ? 'WH-A / Bin W2' : 'Primary Operations Center');
-  const affectedProcess = ticket.affected_process || (erpModule === 'INVENTORY' ? 'Warehouse Stock Movement' : 'ERP Transaction Workflow');
+  const errorCode = ticket.ocr_findings?.extracted_error_code || ticket.error_code || '—';
+  const uiComponent = ticket.ocr_findings?.detected_component || ticket.ocr_findings?.detected_ui_component || ticket.ui_component || '—';
+  const businessImpact = ticket.business_impact_score ?? null;
+  const affectedWarehouse = ticket.affected_warehouse || ticket.erp_context?.warehouse || '—';
+  const affectedProcess = ticket.affected_process || ticket.erp_context?.process || '—';
 
-  const userReportText = ticket.vague_user_input || ticket.structured_description ||
-    "ERR_STOCK_NEG: Negative quantity violation during stock transfer in warehouse bin W2";
+  const userReportText = ticket.vague_user_input || ticket.structured_description || ticket.title || '—';
 
-  const suspectedRootCauseText = (() => {
-    const diagRoot = ticket?.ai_diagnosis?.root_cause;
-    const aiRoot = ticket?.ai_root_cause;
-    if (diagRoot && !diagRoot.includes("Unexpected validation or execution exception")) {
-      return diagRoot;
-    }
-    if (aiRoot && !aiRoot.includes("Unexpected validation or execution exception")) {
-      return aiRoot;
-    }
-    return diagRoot || aiRoot || "Stale inventory cache read before transfer validation";
-  })();
-  const suggestedPatchText = ticket.ai_suggested_patch || "EXEC redis-cli DEL inv_stock:SK-902 && SELECT sync_inventory_cache('SK-902');";
+  const suspectedRootCauseText =
+    ticket?.ai_diagnosis?.root_cause || ticket?.ai_root_cause || 'Diagnosis pending';
+  const suggestedPatchText = ticket.ai_diagnosis?.recommended_resolution || ticket.ai_suggested_patch || 'No remediation proposed yet';
+
+  const reproSteps = Array.isArray(ticket.reproduction_steps) && ticket.reproduction_steps.length
+    ? ticket.reproduction_steps
+    : null;
+
+  // RAG evidence — from this incident's own retrieval
+  const topKb = ticket.rag_kb_matches?.[0];
+  const topKbTitle = topKb?.article?.title || ticket.rag_evidence?.[0]?.title || null;
+  const topKbModule = topKb?.article?.erp_module || null;
+  const topKbScore = topKb?.score ?? topKb?.confidence_percentage ?? null;
+  const isKbMismatch = Boolean(topKbModule && topKbModule !== ticket.erp_module);
+  const grFacts = Array.isArray(ticket.ai_diagnosis?.evidence) ? ticket.ai_diagnosis.evidence : [];
+  const liveFacts = Array.isArray(ticket.mcp_evidence) ? ticket.mcp_evidence : [];
+
+  // Dependency tree for THIS incident (fetched from /root-cause-tree) — drives the
+  // technical stack diagnostic + execution-chain, no hardcoded inventory scenario.
+  const treeNodes = Array.isArray(rcTree?.nodes) ? rcTree.nodes : [];
+  const nodeLabel = (type) => treeNodes.find((n) => n.type === type)?.label || null;
+  const suspectedService = nodeLabel('service') || (ticket.erp_module ? `${ticket.erp_module}Service` : '—');
+  const suspectedFile = nodeLabel('file') || '—';
+  const suspectedFunc = nodeLabel('function') || '—';
+  const suspectedTable = nodeLabel('database_table') || '—';
+  const suspectedTrigger = rcTree?.suspected_trigger || null;
 
   const getStatusColor = (st) => {
     if (st === 'RESOLVED' || st === 'VERIFIED' || st === 'APPLIED') return { bg: 'bg-emerald-100 dark:bg-emerald-950', text: 'text-emerald-700 dark:text-emerald-300', border: 'border-emerald-300', dot: 'bg-emerald-500' };
@@ -249,7 +295,9 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
               <span className="text-muted-color flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5 text-accent-color" /> SLA Target Countdown
               </span>
-              {isSlaAtRisk ? (
+              {slaMinutes == null ? (
+                <span className="font-bold text-muted-color">Not tracked</span>
+              ) : isSlaAtRisk ? (
                 <span className="text-rose-500 font-extrabold flex items-center gap-1">
                   <AlertTriangle className="w-3 h-3" /> SLA AT RISK ({slaMinutes}m)
                 </span>
@@ -260,7 +308,7 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
             <div className="w-full bg-[var(--bg-page)] h-2 rounded-full overflow-hidden p-0.5 border border-[var(--border)]">
               <div
                 className={`h-full rounded-full transition-all ${isSlaAtRisk ? 'bg-rose-500' : 'bg-accent-color'}`}
-                style={{ width: `${Math.max(10, Math.min(100, (slaMinutes / 240) * 100))}%` }}
+                style={{ width: slaMinutes == null ? '0%' : `${Math.max(6, Math.min(100, (slaMinutes / 240) * 100))}%` }}
               />
             </div>
           </div>
@@ -269,13 +317,10 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
           <div className="surface-muted p-3.5 rounded-xl border border-[var(--border)] flex items-center justify-between">
             <div>
               <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-muted-color block">Assigned Developer</span>
-              <span className="text-xs font-extrabold text-heading flex items-center gap-1.5 mt-0.5">
+              <span className={`text-xs font-extrabold flex items-center gap-1.5 mt-0.5 ${isAssigned ? 'text-heading' : 'text-amber-500'}`}>
                 <UserCheck className="w-3.5 h-3.5 text-accent-color" /> {assignedDev}
               </span>
             </div>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold">
-              Active: 4/5
-            </span>
           </div>
 
           {/* AI Confidence Meter */}
@@ -284,16 +329,24 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
               <span className="text-muted-color flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-amber-500" /> AI Diagnostic Confidence
               </span>
-              <span className="font-extrabold text-amber-500">{confidencePercent}</span>
+              <span className="font-extrabold text-amber-500">{hasConfidence ? confidencePercent : 'N/A'}</span>
             </div>
             <div className="w-full bg-[var(--bg-page)] h-2 rounded-full overflow-hidden p-0.5 border border-[var(--border)]">
               <div
                 className="h-full rounded-full bg-amber-500 transition-all"
-                style={{ width: confidencePercent }}
+                style={{ width: hasConfidence ? `${Math.round(confidenceScore * 100)}%` : '0%' }}
               />
             </div>
           </div>
         </div>
+
+        {/* Workflow action error banner */}
+        {actionError && (
+          <div className="px-4 py-2.5 rounded-xl border border-rose-500/40 bg-rose-500/10 text-xs font-medium text-rose-600 dark:text-rose-300 flex items-center justify-between gap-3">
+            <span className="flex items-center gap-2"><AlertOctagon className="w-3.5 h-3.5 shrink-0" /> {actionError}</span>
+            <button onClick={() => setActionError(null)} className="opacity-60 hover:opacity-100">✕</button>
+          </div>
+        )}
 
         {/* Navigation Tabs */}
         <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-[var(--border)] overflow-x-auto">
@@ -331,10 +384,12 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
       <IncidentLifecycleVisualizer
         ticket={ticket}
         verificationResult={verificationResult}
+        actionInFlight={actionInFlight}
         onApprove={handleApproveRemediation}
         onRunVerification={() => handleRunVerification(false)}
         onApplyPatch={handleApplyPatch}
         onRollback={() => setIsRollbackModalOpen(true)}
+        onReturnToRemediation={handleReturnToRemediation}
         onOpenRemediationTab={() => setActiveTab('REMEDIATION')}
       />
 
@@ -348,21 +403,21 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs font-mono">
           <div className="p-3 rounded-xl bg-subtle border border-[var(--border)] space-y-1">
-            <span className="text-muted-color text-[10px] uppercase font-bold block">Incident Reporter</span>
-            <span className="font-bold text-heading block truncate">{reporter}</span>
-            <span className="text-[10px] text-muted-color">Role: ERP Operator</span>
+            <span className="text-muted-color text-[10px] uppercase font-bold block">Incident Source</span>
+            <span className="font-bold text-heading block truncate">{incidentSource}</span>
+            <span className="text-[10px] text-muted-color">{ticket.erp_module || 'ERP'} · {correlationId}</span>
           </div>
 
           <div className="p-3 rounded-xl bg-subtle border border-[var(--border)] space-y-1">
-            <span className="text-muted-color text-[10px] uppercase font-bold block">Assigned Developer</span>
-            <span className="font-bold text-accent-color block truncate">{assignedDev}</span>
-            <span className="text-[10px] text-muted-color">Capacity: 4/5 tickets</span>
+            <span className="text-muted-color text-[10px] uppercase font-bold block">Assigned Developer · Owner</span>
+            <span className={`font-bold block truncate ${isAssigned ? 'text-accent-color' : 'text-amber-500'}`}>{assignedDev}</span>
+            <span className="text-[10px] text-muted-color">Operational owner — investigates &amp; remediates</span>
           </div>
 
           <div className="p-3 rounded-xl bg-subtle border border-[var(--border)] space-y-1">
             <span className="text-muted-color text-[10px] uppercase font-bold block">Code Reviewer</span>
             <span className="font-bold text-heading block truncate">{reviewerName}</span>
-            <span className="text-[10px] text-muted-color">Role: Senior Architect</span>
+            <span className="text-[10px] text-muted-color">Reviews the patch</span>
           </div>
 
           <div className="p-3 rounded-xl bg-subtle border border-[var(--border)] space-y-1">
@@ -415,15 +470,15 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
                 </div>
                 <div>
                   <span className="text-muted-color block text-[10px]">Service:</span>
-                  <code className="text-heading font-bold">{erpModule}Service</code>
+                  <code className="text-heading font-bold">{suspectedService}</code>
                 </div>
                 <div>
                   <span className="text-muted-color block text-[10px]">Suspected File:</span>
-                  <code className="text-accent-subtle-text font-bold">inventory/binTransfer.js</code>
+                  <code className="text-accent-subtle-text font-bold">{suspectedFile}</code>
                 </div>
                 <div>
                   <span className="text-muted-color block text-[10px]">Function:</span>
-                  <code className="text-amber-400 font-bold">validateStockQuantity()</code>
+                  <code className="text-amber-400 font-bold">{suspectedFunc}</code>
                 </div>
               </div>
               <div className="pt-2 border-t border-[var(--border)] text-xs font-mono">
@@ -433,18 +488,20 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
             </div>
           </div>
 
-          {/* Reproduction Steps Card */}
+          {/* Reproduction Steps Card — from this incident's own generated steps */}
           <div className="surface p-5 rounded-2xl border border-[var(--border)] space-y-3">
             <h3 className="text-xs font-bold uppercase tracking-wider text-heading flex items-center gap-1.5">
-              <Terminal className="w-3.5 h-3.5 text-accent-color" /> EXACT REPRODUCTION STEPS
+              <Terminal className="w-3.5 h-3.5 text-accent-color" /> REPRODUCTION STEPS
             </h3>
-            <ol className="list-decimal list-inside space-y-2 text-xs text-body-color font-mono pl-1">
-              <li className="p-2 rounded bg-subtle border border-[var(--border)]">Open ERP Workspace → {erpModule} Module</li>
-              <li className="p-2 rounded bg-subtle border border-[var(--border)]">Navigate to Bin Transfers → Select SKU SK-902 (Industrial Motor Assembly)</li>
-              <li className="p-2 rounded bg-subtle border border-[var(--border)]">Select From Bin W1 (Available: 84 units) → To Bin W2</li>
-              <li className="p-2 rounded bg-subtle border border-[var(--border)]">Enter Transfer Quantity: 100 units (&gt; 84 available balance)</li>
-              <li className="p-2 rounded bg-subtle border border-[var(--border)]">Click Submit Transfer → Observe exception pop-up <code className="text-rose-500 font-bold">{errorCode}</code></li>
-            </ol>
+            {reproSteps ? (
+              <ol className="list-decimal list-inside space-y-2 text-xs text-body-color font-mono pl-1">
+                {reproSteps.map((step, i) => (
+                  <li key={i} className="p-2 rounded bg-subtle border border-[var(--border)]">{step}</li>
+                ))}
+              </ol>
+            ) : (
+              <p className="text-xs text-muted-color font-mono">No reproduction steps recorded for this incident.</p>
+            )}
           </div>
         </div>
       )}
@@ -459,21 +516,21 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
               <ShieldAlert className="w-4 h-4 text-amber-500" /> WHAT IS THE IMPACT? (BUSINESS & OPERATIONAL)
             </h3>
             <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">
-              Impact Score: {businessImpact} / 10
+              Impact Score: {businessImpact != null ? `${businessImpact} / 10` : 'Not scored'}
             </span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 font-mono text-xs">
             <div className="p-4 rounded-xl bg-subtle border border-[var(--border)] space-y-1">
-              <span className="text-muted-color text-[10px] uppercase font-bold block">Affected Facility / Bin</span>
+              <span className="text-muted-color text-[10px] uppercase font-bold block">Affected Facility</span>
               <strong className="text-heading text-sm block">{affectedWarehouse}</strong>
-              <span className="text-muted-color text-[10px]">Warehouse Zone WH-A</span>
+              <span className="text-muted-color text-[10px]">Module: {erpModule}</span>
             </div>
 
             <div className="p-4 rounded-xl bg-subtle border border-[var(--border)] space-y-1">
               <span className="text-muted-color text-[10px] uppercase font-bold block">Affected Business Process</span>
               <strong className="text-heading text-sm block">{affectedProcess}</strong>
-              <span className="text-muted-color text-[10px]">Stock Movements & Fulfillment</span>
+              <span className="text-muted-color text-[10px]">Severity: {severityFormatted}</span>
             </div>
 
             <div className="p-4 rounded-xl bg-subtle border border-[var(--border)] space-y-1">
@@ -496,26 +553,48 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
                 <Sparkles className="w-4 h-4 text-amber-500" /> WHAT DID AI FIND & WHY?
               </h3>
               <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                Confidence: {confidencePercent} (MEDIUM CONFIDENCE)
+                {hasConfidence
+                  ? `Confidence: ${confidencePercent} (${confidenceScore >= 0.85 ? 'HIGH' : confidenceScore >= 0.6 ? 'MEDIUM' : 'LOW'})`
+                  : 'Confidence unavailable'}
               </span>
             </div>
 
-            {/* Technical Execution Path Chain */}
+            {/* KB mismatch guardrail banner */}
+            {isKbMismatch && (
+              <div className="p-3 rounded-lg border border-amber-500/40 bg-amber-500/10 text-xs font-mono text-amber-600 dark:text-amber-300 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Potential Knowledge Base Mismatch:</strong> the top historical match is from module{' '}
+                  <code className="font-bold">{topKbModule}</code> but this incident is <code className="font-bold">{erpModule}</code>.
+                  Low-relevance evidence is not treated as authoritative — human approval required before deployment.
+                </span>
+              </div>
+            )}
+
+            {/* Technical Execution Path Chain — from this incident's dependency tree */}
             <div className="p-4 rounded-xl surface-muted border border-[var(--border)] space-y-2">
               <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-muted-color block">
                 Technical Path Hierarchy & Execution Chain
               </span>
-              <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
-                <span className="px-2 py-1 rounded bg-accent-subtle-bg text-accent-subtle-text font-bold">INVENTORY</span>
-                <span className="text-muted-color">&rarr;</span>
-                <span className="px-2 py-1 rounded surface border border-[var(--border)] font-bold text-heading">InventoryService</span>
-                <span className="text-muted-color">&rarr;</span>
-                <span className="px-2 py-1 rounded surface border border-[var(--border)] font-bold text-purple-400">inventory/binTransfer.js</span>
-                <span className="text-muted-color">&rarr;</span>
-                <span className="px-2 py-1 rounded surface border border-[var(--border)] font-bold text-amber-400">validateStockQuantity()</span>
-                <span className="text-muted-color">&rarr;</span>
-                <span className="px-2 py-1 rounded surface border border-[var(--border)] font-bold text-rose-400">inv_stock_cache</span>
-              </div>
+              {treeNodes.length ? (
+                <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
+                  {treeNodes.map((n, i) => (
+                    <React.Fragment key={n.id}>
+                      {i > 0 && <span className="text-muted-color">&rarr;</span>}
+                      <span className={`px-2 py-1 rounded font-bold border border-[var(--border)] ${
+                        n.type === 'erp_module' ? 'bg-accent-subtle-bg text-accent-subtle-text'
+                        : n.type === 'file' ? 'surface text-purple-400'
+                        : n.type === 'function' ? 'surface text-amber-400'
+                        : n.type === 'database_table' ? 'surface text-rose-400'
+                        : 'surface text-heading'
+                      }`}>{n.label}</span>
+                    </React.Fragment>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-color font-mono">Dependency tree not available for this incident.</p>
+              )}
+              {suspectedTrigger && <p className="text-[10px] font-mono text-muted-color pt-1">Suspected trigger: {suspectedTrigger}</p>}
             </div>
 
             {/* Grounding Categories & Badges Grid */}
@@ -523,56 +602,60 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
               {/* FACT */}
               <div className="p-3.5 rounded-xl surface-muted border border-[var(--border)] space-y-1.5">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    FACT
-                  </span>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">FACT</span>
                   <span className="text-xs font-bold text-heading">Grounded ERP Facts</span>
                 </div>
                 <ul className="text-xs font-mono text-muted-color space-y-1 pl-1">
                   <li>• Error Code: <code className="text-rose-500 font-bold">{errorCode}</code></li>
-                  <li>• Bin Location: <code className="text-heading font-bold">{affectedWarehouse}</code></li>
-                  <li>• Transfer Requested: <code className="text-rose-400 font-bold">100 units &gt; 84 available</code></li>
+                  <li>• Module: <code className="text-heading font-bold">{erpModule}</code></li>
+                  {grFacts.slice(0, 3).map((fct, i) => (
+                    <li key={i}>• {typeof fct === 'string' ? fct : fct.fact || fct.detail || JSON.stringify(fct)}</li>
+                  ))}
+                  {liveFacts.slice(0, 2).map((lf, i) => (
+                    <li key={`l${i}`}>• {lf.fact || lf.summary || lf.tool || JSON.stringify(lf)}</li>
+                  ))}
+                  {grFacts.length === 0 && liveFacts.length === 0 && (
+                    <li className="text-muted-color/70">No additional grounded facts recorded.</li>
+                  )}
                 </ul>
               </div>
 
               {/* AI INFERENCE */}
               <div className="p-3.5 rounded-xl surface-muted border border-[var(--border)] space-y-1.5">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                    AI INFERENCE
-                  </span>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">AI INFERENCE</span>
                   <span className="text-xs font-bold text-heading">Probabilistic Root Cause</span>
                 </div>
-                <p className="text-xs text-body-color leading-relaxed font-sans">
-                  {suspectedRootCauseText}
-                </p>
-                <span className="text-[10px] font-mono text-muted-color block">Note: AI Inference is probabilistic and requires human review.</span>
+                <p className="text-xs text-body-color leading-relaxed font-sans">{suspectedRootCauseText}</p>
+                <span className="text-[10px] font-mono text-muted-color block">Note: AI inference is probabilistic and requires human review — it is not a confirmed fact.</span>
               </div>
 
               {/* HISTORICAL EVIDENCE */}
               <div className="p-3.5 rounded-xl surface-muted border border-[var(--border)] space-y-1.5">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">
-                    HISTORICAL EVIDENCE
-                  </span>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">HISTORICAL EVIDENCE</span>
                   <span className="text-xs font-bold text-heading">Vector Knowledge Match</span>
                 </div>
-                <p className="text-xs text-muted-color font-mono">
-                  Matched Article <strong className="text-heading">KB-802 (Concurrency Stock Lock)</strong> with <strong>88% RAG similarity score</strong>.
-                </p>
+                {topKbTitle ? (
+                  <p className="text-xs text-muted-color font-mono">
+                    Matched <strong className="text-heading">{topKbTitle}</strong>
+                    {topKbModule && <> ({topKbModule})</>}
+                    {topKbScore != null && <> · <strong>{typeof topKbScore === 'number' && topKbScore <= 1 ? `${Math.round(topKbScore * 100)}%` : topKbScore} similarity</strong></>}
+                    {isKbMismatch && <span className="text-amber-500 font-bold"> — module mismatch</span>}
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-color font-mono">No historical knowledge-base match retrieved for this incident.</p>
+                )}
               </div>
 
               {/* RECOMMENDATION */}
               <div className="p-3.5 rounded-xl surface-muted border border-[var(--border)] space-y-1.5">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                    RECOMMENDATION
-                  </span>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">RECOMMENDATION</span>
                   <span className="text-xs font-bold text-heading">Proposed Fix</span>
                 </div>
-                <p className="text-xs text-muted-color font-mono line-clamp-2">
-                  {suggestedPatchText}
-                </p>
+                <p className="text-xs text-muted-color font-mono line-clamp-3">{suggestedPatchText}</p>
+                <span className="text-[10px] font-mono text-amber-500 font-bold block pt-1">Requires human developer approval before deployment.</span>
               </div>
             </div>
 
@@ -635,9 +718,13 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
         <RollbackModal
           isOpen={isRollbackModalOpen}
           onClose={() => setIsRollbackModalOpen(false)}
-          onConfirmRollback={handleRollbackConfirm}
-          currentVersion={remediation?.current_version || remediation?.target_version || 'v1.4.9'}
-          previousVersion={remediation?.current_version === 'v1.4.9' ? 'v1.4.8' : (remediation?.current_version || 'v1.4.8')}
+          onConfirmRollback={async (reason) => {
+            const res = await handleRollbackConfirm(reason);
+            setIsRollbackModalOpen(false);
+            return res;
+          }}
+          currentVersion={remediation?.current_version || patchData?.current_version || ticket.patch_version || '—'}
+          previousVersion={remediation?.baseline_version || '—'}
         />
       )}
     </div>

@@ -99,7 +99,7 @@ export default function AIPipelineVisualizer({ ticket, verificationResult }) {
             <p className="text-body-color text-sm mt-1">
               {ticket
                 ? <>Actual backend execution trace for <span className="text-accent-color font-mono">{ticket.ticket_number || ticket.id}</span> — showing microservice execution latency.</>
-                : 'Select a ticket from the Support Triage Feed to view execution trace data.'}
+                : 'Select a ticket from the Incident Queue to view execution trace data.'}
             </p>
           </div>
 

@@ -49,6 +49,11 @@ export function registerAuthRoutes(router) {
     if (!user || !(await comparePassword(input.password, user.password_hash))) {
       throw new ApiError(401, "Invalid email or password");
     }
+    // Only the two supported personas may authenticate. Legacy roles are rejected
+    // even if a stale row survived (they are also removed by the startup migration).
+    if (!ROLES.includes(user.role)) {
+      throw new ApiError(403, "This account role is no longer supported by IncidentAI.");
+    }
 
     sendJson(res, 200, { token: issueToken(user), user: sanitizeUser(user) });
   });

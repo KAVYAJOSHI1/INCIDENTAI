@@ -37,7 +37,7 @@ export default function DeveloperWorkbench({ ticket, onResolveTicket }) {
       <div className="surface flex flex-col items-center justify-center p-16 text-center max-w-lg mx-auto">
         <Code2 className="w-10 h-10 mb-4" style={{ color: 'var(--accent)' }} />
         <h3 className="text-base font-semibold text-heading mb-1">No Ticket Selected</h3>
-        <p className="text-sm text-muted-color">Select a ticket from the Triage Feed to open the Developer Workbench.</p>
+        <p className="text-sm text-muted-color">Select a ticket from the Incident Queue to open the Developer Workbench.</p>
       </div>
     );
   }

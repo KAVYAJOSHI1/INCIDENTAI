@@ -22,17 +22,19 @@ export function requireAuth(handler) {
     const token = extractToken(ctx.req);
     let payload = verifyToken(token);
 
-    if (!payload && ctx.body && (ctx.body.reporter || ctx.body.erp_context)) {
+    // Unauthenticated ERP-originated events (webhook / embedded Digital Twin) are
+    // accepted as the ERP source system itself — not as an interactive user role.
+    if (!payload && ctx.body && ctx.body.erp_context) {
       payload = {
-        sub: ctx.body.erp_context?.user_id || "erp_operator",
-        email: ctx.body.reporter || ctx.body.erp_context?.user_email || "operator@smart-erp.io",
-        role: ctx.body.erp_context?.user_role || "END_USER",
-        name: ctx.body.reporter || "ERP Operator"
+        sub: "erp_system",
+        email: ctx.body.erp_context?.user_email || "system@smart-manufacturing-erp",
+        role: "ERP_SYSTEM",
+        name: "Smart Manufacturing ERP"
       };
     }
 
     if (payload) {
-      ctx.user = { id: payload.sub || payload.id, email: payload.email, role: payload.role || "END_USER", name: payload.name || payload.email };
+      ctx.user = { id: payload.sub || payload.id, email: payload.email, role: payload.role || "ERP_SYSTEM", name: payload.name || payload.email };
       return handler(ctx);
     }
 

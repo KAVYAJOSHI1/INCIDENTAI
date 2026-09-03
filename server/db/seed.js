@@ -18,9 +18,8 @@ const force = process.argv.includes("--force");
 // One demo login per role, all sharing the same password, so a fresh checkout can be
 // logged into immediately without registering. Never use these for a real deployment.
 const DEMO_PASSWORD = "demopass123";
+// IncidentAI has exactly two personas. The real business user works in the separate ERP.
 const DEMO_USERS = [
-  { id: "user_demo_enduser", email: "enduser@incidentai.demo", name: "Dana Reporter", role: "END_USER" },
-  { id: "user_demo_triage", email: "triage@incidentai.demo", name: "Tariq Triage", role: "SUPPORT_TRIAGE" },
   { id: "user_demo_developer", email: "developer@incidentai.demo", name: "Devi Developer", role: "DEVELOPER" },
   { id: "user_demo_executive", email: "executive@incidentai.demo", name: "Erin Executive", role: "EXECUTIVE" }
 ];

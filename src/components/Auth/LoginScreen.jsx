@@ -4,38 +4,24 @@ import { useAuth } from '../../context/AuthContext';
 import { ROLES, ROLE_LABELS } from '../../constants/roles';
 
 const FEATURES = [
-  'Multimodal OCR + Vision AI triage',
-  'AI-powered severity classification & routing',
-  'Real-time SLA tracking & executive analytics',
+  'Real ERP transaction validation & incident ingestion',
+  'AI diagnosis with RAG evidence & safety guardrails',
+  'State-machine remediation: approve → verify → rollback',
 ];
 
 const DEMO_ACCOUNTS = [
   {
-    role: 'End User',
-    email: 'enduser@incidentai.demo',
-    badge: 'bg-slate-100 text-slate-600',
-    description: 'Submit incidents & track status',
-    icon: '👤'
-  },
-  {
-    role: 'Support Triage',
-    email: 'triage@incidentai.demo',
-    badge: 'bg-blue-50 text-blue-700',
-    description: 'Classify, assign & manage queue',
-    icon: '🎯'
-  },
-  {
     role: 'Developer',
     email: 'developer@incidentai.demo',
     badge: 'bg-purple-50 text-purple-700',
-    description: 'Full remediation & patch workflow',
+    description: 'Investigate, approve, remediate, verify, rollback',
     icon: '💻'
   },
   {
     role: 'Executive',
     email: 'executive@incidentai.demo',
     badge: 'bg-amber-50 text-amber-700',
-    description: 'Analytics, KPIs & war room',
+    description: 'Monitor incidents, impact, SLA, risk & system status',
     icon: '📊'
   },
 ];
@@ -46,7 +32,7 @@ export default function LoginScreen() {
   const [email, setEmail]             = useState('');
   const [password, setPassword]       = useState('');
   const [name, setName]               = useState('');
-  const [role, setRole]               = useState('END_USER');
+  const [role, setRole]               = useState('DEVELOPER');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError]             = useState(null);
 
@@ -98,7 +84,7 @@ export default function LoginScreen() {
               Resolve ERP incidents<br />10× faster with AI.
             </h1>
             <p className="mt-3 text-sm leading-relaxed" style={{ color: '#8B949E' }}>
-              From vague bug report to structured ticket, developer assignment, and patch preview — fully automated.
+              From an ERP operational failure to AI diagnosis, developer approval, verified remediation and controlled rollback — every state change real and persisted.
             </p>
           </div>
 
@@ -260,7 +246,7 @@ export default function LoginScreen() {
 
           {mode === 'register' && (
             <p className="mt-4 text-xs text-muted-color text-center leading-relaxed">
-              Role is self-selected for this demo. End User can submit incidents; other roles access the full console.
+              IncidentAI has two personas: <strong>Developer</strong> (incident remediation) and <strong>Executive</strong> (monitoring &amp; analytics). Business users work in the separate Smart Manufacturing ERP.
             </p>
           )}
 

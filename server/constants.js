@@ -5,6 +5,7 @@ export const INCIDENT_STATUSES = [
   "ASSIGNED",
   "IN_PROGRESS",
   "REMEDIATION_PENDING",
+  "APPROVED",
   "VERIFICATION",
   "VERIFICATION_FAILED",
   "ROLLBACK_REQUIRED",
@@ -18,12 +19,13 @@ export const INCIDENT_STATUSES = [
   "REOPENED"
 ];
 export const ERP_MODULES = ["INVENTORY", "ORDERS", "PRODUCTION", "PROCUREMENT", "INVOICING", "PAYROLL", "GENERAL_LEDGER", "AUTH"];
-export const ROLES = ["END_USER", "SUPPORT_TRIAGE", "DEVELOPER", "EXECUTIVE"];
-export const STAFF_ROLES = ["SUPPORT_TRIAGE", "DEVELOPER", "EXECUTIVE"];
-export const TRIAGE_ROLES = ["SUPPORT_TRIAGE"];
+
+// IncidentAI has exactly two authenticated personas.
+//  - DEVELOPER  → investigate, approve, remediate, verify, rollback
+//  - EXECUTIVE  → monitor incidents, business impact, SLA, risk, system status
+// The real business user operates through the separate Smart Manufacturing ERP, not here.
+export const ROLES = ["DEVELOPER", "EXECUTIVE"];
+export const STAFF_ROLES = ["DEVELOPER", "EXECUTIVE"];
 export const DEVELOPER_ROLES = ["DEVELOPER"];
 export const EXECUTIVE_ROLES = ["EXECUTIVE"];
-export const TRIAGE_AND_DEV_ROLES = ["SUPPORT_TRIAGE", "DEVELOPER"];
-export const OPS_ROLES = ["SUPPORT_TRIAGE", "DEVELOPER", "EXECUTIVE"];
-
-
+export const OPS_ROLES = ["DEVELOPER", "EXECUTIVE"];

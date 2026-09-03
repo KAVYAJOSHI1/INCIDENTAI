@@ -63,7 +63,7 @@ export default function VerificationPanel({
       {!verificationResult && (
         <div className="surface-muted p-5 rounded-xl border border-[var(--border)] text-center space-y-3">
           <p className="text-xs text-muted-color">
-            Patch has been approved. Execute the automated verification suite to validate syntax, unit tests, inventory constraints, and regression checks before production deployment.
+            Patch has been approved. Execute the automated verification suite (syntax, unit tests, module-constraint validation, cross-module regression, and incident reproduction) before production deployment.
           </p>
 
           <div className="flex items-center justify-center gap-3">
@@ -92,7 +92,7 @@ export default function VerificationPanel({
         <div className="space-y-3">
           <div className="flex items-center justify-between text-xs font-mono text-muted-color">
             <span>Validation Checks Executed</span>
-            <span>Duration: {verificationResult.total_duration_ms || 1700}ms</span>
+            <span>Duration: {verificationResult.total_duration_ms ?? 0}ms</span>
           </div>
 
           <div className="space-y-2">

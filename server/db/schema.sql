@@ -94,3 +94,68 @@ CREATE TABLE IF NOT EXISTS users (
   role TEXT NOT NULL CHECK (role IN ('END_USER', 'SUPPORT_TRIAGE', 'DEVELOPER', 'EXECUTIVE')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Persisted remediation plan + lifecycle sub-state (one row per incident).
+CREATE TABLE IF NOT EXISTS remediation (
+  ticket_id TEXT PRIMARY KEY,
+  ticket_number TEXT,
+  plan JSONB NOT NULL DEFAULT '{}',
+  status TEXT NOT NULL DEFAULT 'PROPOSED',
+  approved_by TEXT,
+  approved_at TIMESTAMPTZ,
+  rejected_at TIMESTAMPTZ,
+  rejection_reason TEXT,
+  verification_result JSONB,
+  applied_by TEXT,
+  applied_at TIMESTAMPTZ,
+  reverted_at TIMESTAMPTZ,
+  rollback_reason TEXT,
+  current_version TEXT,
+  target_version TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Immutable append-only audit trail for every meaningful lifecycle transition.
+CREATE TABLE IF NOT EXISTS audit_log (
+  id TEXT PRIMARY KEY,
+  incident_id TEXT NOT NULL,
+  actor TEXT,
+  action TEXT NOT NULL,
+  previous_state TEXT,
+  new_state TEXT,
+  patch_version TEXT,
+  verification_result TEXT,
+  rollback_status TEXT,
+  details TEXT,
+  synthetic BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_incident ON audit_log (incident_id);
+CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log (created_at DESC);
+
+-- Embedded Smart Manufacturing ERP — real, mutable operational state.
+CREATE TABLE IF NOT EXISTS erp_inventory (
+  id TEXT PRIMARY KEY,
+  warehouse TEXT NOT NULL,
+  bin TEXT NOT NULL,
+  sku TEXT NOT NULL,
+  product_name TEXT NOT NULL,
+  available_qty INTEGER NOT NULL DEFAULT 0,
+  reserved_qty INTEGER NOT NULL DEFAULT 0,
+  reorder_threshold INTEGER NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (warehouse, bin, sku)
+);
+
+CREATE TABLE IF NOT EXISTS erp_transactions (
+  id TEXT PRIMARY KEY,
+  type TEXT NOT NULL,
+  sku TEXT, from_bin TEXT, to_bin TEXT, warehouse TEXT, qty INTEGER,
+  status TEXT NOT NULL,
+  reason TEXT,
+  incident_id TEXT,
+  actor TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

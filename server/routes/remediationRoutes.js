@@ -3,13 +3,13 @@
  */
 
 import { getIntegrations, getIntegrationById } from "../services/integrationService.js";
-import { getRemediationForTicket, approveRemediation, rejectRemediation } from "../services/remediationService.js";
+import { getRemediationForTicket, approveRemediation, rejectRemediation, returnToRemediation } from "../services/remediationService.js";
 import { getPatchPreviewForTicket } from "../services/patchService.js";
 import { runPatchVerification, applyPatch } from "../services/verificationService.js";
 import { executePatchRollback } from "../services/rollbackService.js";
 import { getAuditLogsForIncident, getAllAuditLogs } from "../services/auditService.js";
 import { requireAuth, requireRole } from "../middleware/authMiddleware.js";
-import { TRIAGE_AND_DEV_ROLES, DEVELOPER_ROLES } from "../constants.js";
+import { DEVELOPER_ROLES } from "../constants.js";
 import { sendJson, ApiError } from "../utils/http.js";
 
 export function registerRemediationRoutes(router) {
@@ -41,23 +41,33 @@ export function registerRemediationRoutes(router) {
   router.get("/api/tickets/:id/remediation", requireAuth(handleGetRemediation));
 
   const handleApproveRemediation = async ({ res, params, body, user }) => {
-    const actor = user?.name || body?.actor || "Marcus Vance";
-    const remediation = await approveRemediation(params.id, actor);
-    if (!remediation) throw new ApiError(404, `Ticket ${params.id} not found`);
-    sendJson(res, 200, { success: true, message: "Remediation approved", remediation });
+    const actor = user?.name || body?.actor || "Developer";
+    const resObj = await approveRemediation(params.id, actor);
+    if (!resObj) throw new ApiError(404, `Ticket ${params.id} not found`);
+    sendJson(res, 200, { success: true, message: "Remediation approved", remediation: resObj.remediation, ticket: resObj.ticket });
   };
   router.post("/api/incidents/:id/remediation/approve", requireRole(DEVELOPER_ROLES, handleApproveRemediation));
   router.post("/api/tickets/:id/remediation/approve", requireRole(DEVELOPER_ROLES, handleApproveRemediation));
 
   const handleRejectRemediation = async ({ res, params, body, user }) => {
-    const actor = user?.name || body?.actor || "Marcus Vance";
+    const actor = user?.name || body?.actor || "Developer";
     const reason = body?.reason || "Developer rejected proposed remediation";
-    const remediation = await rejectRemediation(params.id, reason, actor);
-    if (!remediation) throw new ApiError(404, `Ticket ${params.id} not found`);
-    sendJson(res, 200, { success: true, message: "Remediation rejected", remediation });
+    const resObj = await rejectRemediation(params.id, reason, actor);
+    if (!resObj) throw new ApiError(404, `Ticket ${params.id} not found`);
+    sendJson(res, 200, { success: true, message: "Remediation rejected", remediation: resObj.remediation, ticket: resObj.ticket });
   };
   router.post("/api/incidents/:id/remediation/reject", requireRole(DEVELOPER_ROLES, handleRejectRemediation));
   router.post("/api/tickets/:id/remediation/reject", requireRole(DEVELOPER_ROLES, handleRejectRemediation));
+
+  // Return a rolled-back / failed incident to the remediation loop (failure-path edge).
+  const handleReturnToRemediation = async ({ res, params, body, user }) => {
+    const actor = user?.name || body?.actor || "Developer";
+    const resObj = await returnToRemediation(params.id, actor);
+    if (!resObj) throw new ApiError(404, `Ticket ${params.id} not found`);
+    sendJson(res, 200, { success: true, message: "Incident returned to remediation", remediation: resObj.remediation, ticket: resObj.ticket });
+  };
+  router.post("/api/incidents/:id/remediation/return", requireRole(DEVELOPER_ROLES, handleReturnToRemediation));
+  router.post("/api/tickets/:id/remediation/return", requireRole(DEVELOPER_ROLES, handleReturnToRemediation));
 
   // Patch Preview
   const handleGetPatch = async ({ res, params }) => {
@@ -70,32 +80,32 @@ export function registerRemediationRoutes(router) {
 
   // Verification Engine
   const handleVerifyPatch = async ({ res, params, body, user }) => {
-    const actor = user?.name || body?.actor || "Developer (Marcus Vance)";
+    const actor = user?.name || body?.actor || "Verification Engine";
     const options = { ...body, actor };
-    const result = await runPatchVerification(params.id, options);
-    if (!result) throw new ApiError(404, `Ticket ${params.id} not found`);
-    sendJson(res, 200, { success: true, verification: result });
+    const resObj = await runPatchVerification(params.id, options);
+    if (!resObj) throw new ApiError(404, `Ticket ${params.id} not found`);
+    sendJson(res, 200, { success: true, verification: resObj.verification, ticket: resObj.ticket });
   };
   router.post("/api/incidents/:id/verify-patch", requireRole(DEVELOPER_ROLES, handleVerifyPatch));
   router.post("/api/tickets/:id/verify-patch", requireRole(DEVELOPER_ROLES, handleVerifyPatch));
 
   // Apply Patch
   const handleApplyPatch = async ({ res, params, body, user }) => {
-    const actor = user?.name || body?.actor || "Marcus Vance";
-    const result = await applyPatch(params.id, actor);
-    if (!result) throw new ApiError(404, `Ticket ${params.id} not found`);
-    sendJson(res, 200, { success: true, patch_result: result });
+    const actor = user?.name || body?.actor || "Developer";
+    const resObj = await applyPatch(params.id, actor);
+    if (!resObj) throw new ApiError(404, `Ticket ${params.id} not found`);
+    sendJson(res, 200, { success: true, patch_result: resObj.patch_result, ticket: resObj.ticket });
   };
   router.post("/api/incidents/:id/apply-patch", requireRole(DEVELOPER_ROLES, handleApplyPatch));
   router.post("/api/tickets/:id/apply-patch", requireRole(DEVELOPER_ROLES, handleApplyPatch));
 
   // Revert / Rollback
   const handleRollback = async ({ res, params, body, user }) => {
-    const actor = user?.name || body?.actor || "Marcus Vance";
+    const actor = user?.name || body?.actor || "Developer";
     const reason = body?.reason || "Rollback after unsuccessful remediation";
-    const result = await executePatchRollback(params.id, reason, actor);
-    if (!result) throw new ApiError(404, `Ticket ${params.id} not found`);
-    sendJson(res, 200, { success: true, rollback: result });
+    const resObj = await executePatchRollback(params.id, reason, actor);
+    if (!resObj) throw new ApiError(404, `Ticket ${params.id} not found`);
+    sendJson(res, 200, { success: true, rollback: resObj.rollback, ticket: resObj.ticket });
   };
   router.post("/api/incidents/:id/rollback", requireRole(DEVELOPER_ROLES, handleRollback));
   router.post("/api/tickets/:id/rollback", requireRole(DEVELOPER_ROLES, handleRollback));

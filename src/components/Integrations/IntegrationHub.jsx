@@ -90,14 +90,18 @@ export default function IntegrationHub() {
     }
   ];
 
+  // ERP → Integration/API/Webhooks → IncidentAI → AI Diagnosis → RAG/Evidence →
+  // Remediation → Verification → Rollback (on fail) → Audit
   const archNodes = [
-    { id: 'erp_source', name: 'ERP Platform', subtitle: 'Inventory, Finance, Orders', type: 'source', icon: Server, color: 'var(--accent)', endpoint: '/api/v1/events' },
-    { id: 'ingestion', name: 'Incident Ingestion', subtitle: 'OCR & Context Parser', type: 'pipeline', icon: Radio, color: 'var(--purple)', endpoint: '/api/incidents/ingest' },
-    { id: 'ai_engine', name: 'AI Intelligence', subtitle: 'Diagnosis & Root Cause', type: 'ai', icon: Cpu, color: 'var(--accent-subtle-text)', endpoint: '/api/diagnosis' },
-    { id: 'patch_mgr', name: 'Patch Manager', subtitle: 'Diff & Risk Assessment', type: 'patch', icon: FileCode, color: '#f59e0b', endpoint: '/api/incidents/:id/patch' },
-    { id: 'verification', name: 'Verification Engine', subtitle: 'Automated Test Runner', type: 'verify', icon: ShieldCheck, color: '#3b82f6', endpoint: '/api/incidents/:id/verify-patch' },
-    { id: 'resolved', name: 'Resolved / Applied', subtitle: 'PASS Execution Path', type: 'pass', icon: CheckCircle2, color: '#10b981', endpoint: '/api/incidents/:id/apply-patch' },
-    { id: 'rollback', name: 'Rollback Recovery', subtitle: 'FAIL Revert Path', type: 'fail', icon: AlertTriangle, color: '#ef4444', endpoint: '/api/incidents/:id/rollback' },
+    { id: 'erp_source', name: 'ERP Platform', subtitle: 'Inventory, Finance, Orders', type: 'source', icon: Server, color: 'var(--accent)', endpoint: '/api/erp' },
+    { id: 'ingestion', name: 'Integration / Webhooks', subtitle: 'API & context parser', type: 'pipeline', icon: Radio, color: 'var(--purple)', endpoint: '/api/incidents/ingest' },
+    { id: 'ai_engine', name: 'AI Diagnosis', subtitle: 'Root cause inference', type: 'ai', icon: Cpu, color: 'var(--accent-subtle-text)', endpoint: '/api/diagnosis' },
+    { id: 'rag', name: 'RAG / Evidence', subtitle: 'Local vector KB retrieval', type: 'rag', icon: BookOpen, color: '#8b5cf6', endpoint: '/api/knowledge/search' },
+    { id: 'remediation', name: 'Remediation', subtitle: 'Plan + human approval', type: 'remediation', icon: FileCode, color: '#f59e0b', endpoint: '/api/incidents/:id/remediation' },
+    { id: 'verification', name: 'Verification', subtitle: 'Simulated test runner', type: 'verify', icon: ShieldCheck, color: '#3b82f6', endpoint: '/api/incidents/:id/verify-patch' },
+    { id: 'resolved', name: 'Resolved / Applied', subtitle: 'PASS execution path', type: 'pass', icon: CheckCircle2, color: '#10b981', endpoint: '/api/incidents/:id/apply-patch' },
+    { id: 'rollback', name: 'Rollback', subtitle: 'FAIL → revert → remediation', type: 'fail', icon: AlertTriangle, color: '#ef4444', endpoint: '/api/incidents/:id/rollback' },
+    { id: 'audit', name: 'Audit Trail', subtitle: 'Persisted in Postgres', type: 'audit', icon: Activity, color: 'var(--accent)', endpoint: '/api/incidents/:id/audit-logs' },
   ];
 
   const getStatusBadge = (status) => {
@@ -252,7 +256,7 @@ export default function IntegrationHub() {
         </div>
 
         {/* Node Flow Visualizer */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-9 gap-3">
           {archNodes.map((node) => {
             const NodeIcon = node.icon;
             const isSelected = selectedNode?.id === node.id;

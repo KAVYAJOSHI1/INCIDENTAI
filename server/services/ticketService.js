@@ -10,6 +10,7 @@ import { findDuplicateTickets, findDuplicateTicketsWithAI, findDuplicateTicketsW
 import { searchKnowledgeBase, searchKnowledgeBaseWithAI, searchKnowledgeBaseWithVector, captureVerifiedKnowledge } from "./knowledgeService.js";
 import { recommendDeveloperForTicket } from "./loadBalancerService.js";
 import { performEvidenceGroundedDiagnosis } from "./diagnosisService.js";
+import { recordAuditEvent } from "./auditService.js";
 import { listTickets, listKnowledgeBase, listDevelopers, addTicket, updateDeveloper, getTicketById, getDeveloperById, updateTicket } from "../db/store.js";
 import { CLOSED_STATUSES } from "../constants.js";
 
@@ -148,7 +149,7 @@ export async function runIncidentIngestPipeline(inputPayload) {
     id: initialTicketDraft.id,
     ticket_number: generateTicketNumber(),
     title,
-    reporter: inputPayload.reporter || "ERP Operator User",
+    reporter: inputPayload.reporter || "Smart Manufacturing ERP",
     erp_context: initialTicketDraft.erp_context,
     assigned_dev_id: routing.recommended.id,
     assigned_dev_name: routing.recommended.name,
@@ -191,7 +192,7 @@ export async function runIncidentIngestPipeline(inputPayload) {
     ai_diagnosis: diagnosisResult.ai_diagnosis,
     resolution_type: diagnosisResult.ai_diagnosis.resolution_type,
     requires_human_review: diagnosisResult.ai_diagnosis.requires_human_review,
-    correlation_id: diagnosisResult.correlation_id,
+    correlation_id: inputPayload.erp_context?.correlation_id || diagnosisResult.correlation_id,
     ai_generated: Boolean(rootCause.ai_generated || severityResult.ai_generated || duplicateResult.ai_generated || process.env.GROQ_API_KEY || process.env.ANTHROPIC_API_KEY),
     sla_remaining_minutes: severityResult.sla_remaining_minutes,
     created_at: new Date().toISOString(),
@@ -200,6 +201,15 @@ export async function runIncidentIngestPipeline(inputPayload) {
 
   const savedTicket = await addTicket(ticket);
   await updateDeveloper(routing.recommended.id, { active_tickets: routing.recommended.active_tickets + 1 });
+
+  await recordAuditEvent({
+    incident_id: savedTicket.id,
+    actor: inputPayload.erp_context?.erp || savedTicket.reporter || "Smart Manufacturing ERP",
+    action: "INCIDENT_CREATED",
+    previous_state: null,
+    new_state: savedTicket.status,
+    details: `Incident ingested from ${savedTicket.erp_module} — ${title}. Correlation ${savedTicket.correlation_id || "n/a"}.`
+  }).catch(() => {});
 
   return savedTicket;
 }

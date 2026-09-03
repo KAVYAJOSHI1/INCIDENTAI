@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  ShieldAlert, UserCheck, Code2, BarChart3, GitFork,
+  ShieldAlert, Code2, BarChart3, GitFork,
   Radio, Map, Gauge, X, Zap, Server
 } from 'lucide-react';
 
@@ -8,16 +8,15 @@ const NAV_SECTIONS = [
   {
     label: 'Incident Management',
     items: [
-      { id: 'MY_INCIDENTS', label: 'My Incidents',         icon: UserCheck  },
-      { id: 'TRIAGE',       label: 'Triage Feed',          icon: ShieldAlert },
+      { id: 'TRIAGE',       label: 'Incident Queue',       icon: ShieldAlert },
       { id: 'DEVELOPER',    label: 'Developer Workbench',  icon: Code2      },
+      { id: 'PIPELINE',     label: 'Incident Lifecycle',   icon: GitFork    },
     ]
   },
   {
     label: 'Analytics & AI',
     items: [
       { id: 'ADMIN',    label: 'Executive Dashboard',    icon: BarChart3   },
-      { id: 'PIPELINE', label: 'Incident Lifecycle',     icon: GitFork     },
     ]
   },
   {

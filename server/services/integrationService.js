@@ -9,14 +9,15 @@ const INTEGRATION_STATUS = {
     name: "Smart Manufacturing ERP",
     type: "ERP Platform",
     status: "CONNECTED", // CONNECTED | DEGRADED | NOT_CONNECTED
-    protocol: "REST API / Events",
+    protocol: "REST API / Webhooks",
+    integration_badge: "LIVE INTEGRATION",
     health: "Healthy",
     last_sync: "Just now",
     incidents_received: 142,
     events_processed: 8920,
     modules: ["Inventory", "Finance", "Orders", "Warehouse", "Payroll"],
     is_demo: false,
-    endpoint: "http://localhost:3002/api/v1/events"
+    endpoint: "/api/erp"
   },
   GIT: {
     id: "git",
@@ -30,6 +31,7 @@ const INTEGRATION_STATUS = {
     verification_capability: "ENABLED",
     commit_sha: "a7f39b2",
     is_demo: true,
+    integration_badge: "SIMULATED / DEMO CONNECTOR",
     endpoint: "https://api.github.com/repos/smartfactory/erp-core"
   },
   MONITORING: {
@@ -42,6 +44,7 @@ const INTEGRATION_STATUS = {
     error_signals_detected: 14,
     last_sync: "1 min ago",
     is_demo: true,
+    integration_badge: "SIMULATED / DEMO CONNECTOR",
     endpoint: "http://localhost:9090/api/v1/alerts"
   },
   KNOWLEDGE_BASE: {
@@ -54,6 +57,7 @@ const INTEGRATION_STATUS = {
     match_quality_score: "94.8%",
     last_indexed: "5 mins ago",
     is_demo: false,
+    integration_badge: "LOCAL RAG INDEX",
     endpoint: "http://localhost:4000/api/knowledge"
   }
 };

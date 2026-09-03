@@ -11,11 +11,14 @@ export default function RemediationTimeline({ auditLogs = [], ticket }) {
     }
   };
 
+  // Pre-incident context reconstructed from THIS incident's own record. Clearly
+  // labelled "SIMULATED DEMO" below so it is never confused with the live audit trail.
+  const diagConfidence = ticket?.ai_confidence != null ? `${Math.round(ticket.ai_confidence * 100)}%` : 'unavailable';
   const defaultEvents = [
-    { time: '15:02:10', title: 'Incident detected', detail: `Received error payload in ${ticket?.erp_module || 'INVENTORY'} module`, icon: ShieldAlert, color: 'text-amber-400' },
-    { time: '15:03:05', title: 'AI diagnosis generated', detail: `Confidence: ${Math.round((ticket?.ai_confidence || 0.65) * 100)}%`, icon: Sparkles, color: 'text-purple-400' },
-    { time: '15:03:22', title: 'Root cause identified', detail: ticket?.ai_root_cause || 'Stale cache read before transfer validation', icon: Terminal, color: 'text-accent-subtle-text' },
-    { time: '15:04:15', title: 'Remediation proposed', detail: 'Invalidate inventory cache & refresh stock validation', icon: FileCode, color: 'text-blue-400' }
+    { time: '—', title: 'Incident detected', detail: `Received error payload${ticket?.erp_module ? ` in the ${ticket.erp_module} module` : ''}`, icon: ShieldAlert, color: 'text-amber-400' },
+    { time: '—', title: 'AI diagnosis generated', detail: `Confidence: ${diagConfidence}`, icon: Sparkles, color: 'text-purple-400' },
+    { time: '—', title: 'Root cause identified', detail: ticket?.ai_diagnosis?.root_cause || ticket?.ai_root_cause || 'Diagnosis pending', icon: Terminal, color: 'text-accent-subtle-text' },
+    { time: '—', title: 'Remediation proposed', detail: ticket?.ai_diagnosis?.recommended_resolution || ticket?.ai_suggested_patch || 'Awaiting remediation plan', icon: FileCode, color: 'text-blue-400' }
   ];
 
   const logEvents = (auditLogs || []).map((log) => {

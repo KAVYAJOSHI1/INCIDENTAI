@@ -37,7 +37,8 @@ function KpiCard({ icon: Icon, label, value, sub, iconColor }) {
         <span className="kpi-label">{label}</span>
         <Icon className="w-4 h-4 shrink-0" style={{ color: iconColor || 'var(--accent)' }} />
       </div>
-      <p className="kpi-value">{value}</p>
+      {/* div, not p — `value` can be a <Skeleton> block element while loading */}
+      <div className="kpi-value">{value}</div>
       {sub && <p className="kpi-sub">{sub}</p>}
     </div>
   );

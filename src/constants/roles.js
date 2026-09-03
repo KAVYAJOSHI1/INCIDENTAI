@@ -1,24 +1,21 @@
-export const ROLES = ['END_USER', 'SUPPORT_TRIAGE', 'DEVELOPER', 'EXECUTIVE'];
+// IncidentAI has exactly two authenticated personas. The real business user operates
+// through the separate Smart Manufacturing ERP — IncidentAI is the intelligence and
+// incident-management layer, not another end-user application.
+export const ROLES = ['DEVELOPER', 'EXECUTIVE'];
 
 export const ROLE_LABELS = {
-  END_USER: 'End User',
-  SUPPORT_TRIAGE: 'Support Triage',
   DEVELOPER: 'Developer',
   EXECUTIVE: 'Executive'
 };
 
 export const VIEWS_BY_ROLE = {
-  END_USER: ['MY_INCIDENTS'],
-  SUPPORT_TRIAGE: ['TRIAGE', 'DIGITALTWIN', 'INTEGRATIONS', 'PIPELINE'],
-  DEVELOPER: ['DEVELOPER', 'TRIAGE', 'DIGITALTWIN', 'INTEGRATIONS', 'PIPELINE'],
-  EXECUTIVE: ['ADMIN', 'INTEGRATIONS', 'WARROOM', 'DIGITALTWIN', 'MISSIONCONTROL']
+  // Developer: investigate, approve, remediate, verify, rollback
+  DEVELOPER: ['TRIAGE', 'DEVELOPER', 'PIPELINE', 'DIGITALTWIN', 'INTEGRATIONS'],
+  // Executive: monitor incidents, business impact, SLA, risk, overall system status
+  EXECUTIVE: ['ADMIN', 'WARROOM', 'MISSIONCONTROL', 'DIGITALTWIN', 'INTEGRATIONS']
 };
 
 export const DEFAULT_VIEW_BY_ROLE = {
-  END_USER: 'MY_INCIDENTS',
-  SUPPORT_TRIAGE: 'TRIAGE',
-  DEVELOPER: 'DEVELOPER',
+  DEVELOPER: 'TRIAGE',
   EXECUTIVE: 'ADMIN'
 };
-
-

@@ -3,7 +3,7 @@ import { Search, Bell, LogOut, Sun, Moon, Sparkles, AlertTriangle, ChevronDown, 
 import { ROLE_LABELS } from '../../constants/roles';
 import { searchKnowledge } from '../../services/apiClient';
 
-export default function Header({ user, onLogout, theme, onToggleTheme, activeIncidentsCount, onTriggerPreset, onOpenMobileNav }) {
+export default function Header({ user, onLogout, theme, onToggleTheme, activeIncidentsCount, onOpenMobileNav }) {
   const [openMenu, setOpenMenu] = useState(null); // 'scenarios' | 'notifications' | 'profile' | null
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState(null);

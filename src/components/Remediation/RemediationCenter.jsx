@@ -17,15 +17,19 @@ export default function RemediationCenter({
 
   if (!ticket) return null;
 
-  const rootCause = remediation?.root_cause || ticket.ai_root_cause || "Stale inventory cache read before transfer validation";
-  const recommendedRemediation = remediation?.recommended_remediation || ticket.ai_suggested_patch || "Invalidate or refresh inventory cache before validateStockQuantity() executes.";
-  const proposedAction = remediation?.proposed_action || "Refresh inventory cache and update validation flow in inventory/binTransfer.js.";
-  const confidenceScore = remediation?.confidence ?? ticket.ai_confidence ?? 0.65;
-  const confidencePercent = `${Math.round(confidenceScore * 100)}%`;
+  const rootCause = remediation?.root_cause || ticket.ai_diagnosis?.root_cause || ticket.ai_root_cause || "Diagnosis pending";
+  const recommendedRemediation = remediation?.recommended_remediation || ticket.ai_diagnosis?.recommended_resolution || ticket.ai_suggested_patch || "No remediation proposed yet";
+  const proposedAction = remediation?.proposed_action || "Awaiting remediation plan generation.";
+  const confidenceScore = remediation?.confidence ?? ticket.ai_confidence ?? null;
+  const hasConfidence = confidenceScore != null;
+  const confidencePercent = hasConfidence ? `${Math.round(confidenceScore * 100)}%` : "Unavailable";
+  const confidenceBand = !hasConfidence ? "UNKNOWN" : confidenceScore >= 0.85 ? "HIGH" : confidenceScore >= 0.6 ? "MEDIUM" : "LOW";
   const riskLevel = remediation?.risk_level || "MEDIUM";
   const isKbMismatch = remediation?.kb_mismatch_detected || (ticket.rag_kb_matches?.[0]?.article?.erp_module && ticket.rag_kb_matches[0].article.erp_module !== ticket.erp_module);
+  const kbMatchModule = ticket.rag_kb_matches?.[0]?.article?.erp_module || null;
+  const kbMatchScore = ticket.rag_kb_matches?.[0]?.score ?? null;
 
-  const status = remediation?.status || "PROPOSED"; // PROPOSED | APPROVED | VERIFIED | APPLIED | FAILED | REVERTED
+  const status = remediation?.status || "PROPOSED"; // PROPOSED | APPROVED | VERIFIED | APPLIED | ROLLED_BACK
 
   const handleApproveClick = async () => {
     setIsApproving(true);
@@ -97,7 +101,7 @@ export default function RemediationCenter({
             <Sparkles className="w-3.5 h-3.5 text-[var(--accent)]" /> AI Confidence Visual Meter
           </span>
           <span className="font-bold text-amber-400">
-            {confidencePercent} - MEDIUM CONFIDENCE (Human Approval Required)
+            {hasConfidence ? `${confidencePercent} — ${confidenceBand} CONFIDENCE` : 'Confidence unavailable'} (Human Approval Required)
           </span>
         </div>
 
@@ -105,7 +109,7 @@ export default function RemediationCenter({
         <div className="w-full bg-[var(--bg-page)] h-3 rounded-full overflow-hidden p-0.5 border border-[var(--border)]">
           <div
             className="h-full rounded-full bg-gradient-to-r from-amber-500 to-amber-400 transition-all duration-500"
-            style={{ width: `${Math.round(confidenceScore * 100)}%` }}
+            style={{ width: hasConfidence ? `${Math.round(confidenceScore * 100)}%` : '0%' }}
           />
         </div>
       </div>
@@ -126,20 +130,16 @@ export default function RemediationCenter({
           <div className="grid grid-cols-3 gap-2 p-2.5 rounded-lg bg-[var(--bg-page)] border border-rose-500/20 font-mono text-[11px]">
             <div>
               <span className="text-muted-color block text-[9px] uppercase">Incident Module</span>
-              <strong className="text-heading">{ticket.erp_module || 'INVENTORY'}</strong>
+              <strong className="text-heading">{ticket.erp_module || '—'}</strong>
             </div>
             <div>
               <span className="text-muted-color block text-[9px] uppercase">Top RAG KB Match</span>
-              <strong className="text-amber-400">
-                {ticket.rag_kb_matches?.[0]?.article?.erp_module || 'GENERAL_LEDGER'}
-              </strong>
+              <strong className="text-amber-400">{kbMatchModule || 'None'}</strong>
             </div>
             <div>
               <span className="text-muted-color block text-[9px] uppercase">RAG Similarity</span>
               <strong className="text-rose-400">
-                {ticket.rag_kb_matches?.[0]?.score != null
-                  ? `${Math.round(ticket.rag_kb_matches[0].score * 100)}% (Low Relevance)`
-                  : '25% (Low Relevance)'}
+                {kbMatchScore != null ? `${Math.round(kbMatchScore * 100)}% (Low Relevance)` : 'N/A'}
               </strong>
             </div>
           </div>

@@ -155,11 +155,19 @@ export const fetchMissionControl = () => request("/mission-control").then((d) =>
 // Platform Remediation Platform APIs
 export const fetchIntegrations = () => request("/integrations");
 export const fetchRemediation = (ticketId) => request(`/incidents/${ticketId}/remediation`).then((d) => d.remediation);
-export const approveRemediation = (ticketId, actor) => request(`/incidents/${ticketId}/remediation/approve`, { method: "POST", body: JSON.stringify({ actor }) }).then((d) => d.remediation);
-export const rejectRemediation = (ticketId, reason, actor) => request(`/incidents/${ticketId}/remediation/reject`, { method: "POST", body: JSON.stringify({ reason, actor }) }).then((d) => d.remediation);
+export const approveRemediation = (ticketId, actor) => request(`/incidents/${ticketId}/remediation/approve`, { method: "POST", body: JSON.stringify({ actor }) });
+export const rejectRemediation = (ticketId, reason, actor) => request(`/incidents/${ticketId}/remediation/reject`, { method: "POST", body: JSON.stringify({ reason, actor }) });
+export const returnToRemediation = (ticketId, actor) => request(`/incidents/${ticketId}/remediation/return`, { method: "POST", body: JSON.stringify({ actor }) });
 export const fetchPatch = (ticketId) => request(`/incidents/${ticketId}/patch`).then((d) => d.patch);
-export const verifyPatch = (ticketId, options = {}) => request(`/incidents/${ticketId}/verify-patch`, { method: "POST", body: JSON.stringify(options) }).then((d) => d.verification);
-export const applyPatch = (ticketId, actor) => request(`/incidents/${ticketId}/apply-patch`, { method: "POST", body: JSON.stringify({ actor }) }).then((d) => d.patch_result);
-export const rollbackPatch = (ticketId, reason, actor) => request(`/incidents/${ticketId}/rollback`, { method: "POST", body: JSON.stringify({ reason, actor }) }).then((d) => d.rollback);
+export const verifyPatch = (ticketId, options = {}) => request(`/incidents/${ticketId}/verify-patch`, { method: "POST", body: JSON.stringify(options) });
+export const applyPatch = (ticketId, actor) => request(`/incidents/${ticketId}/apply-patch`, { method: "POST", body: JSON.stringify({ actor }) });
+export const rollbackPatch = (ticketId, reason, actor) => request(`/incidents/${ticketId}/rollback`, { method: "POST", body: JSON.stringify({ reason, actor }) });
 export const fetchAuditLogs = (ticketId) => request(ticketId ? `/incidents/${ticketId}/audit-logs` : "/audit-logs").then((d) => d.audit_logs);
+
+// Embedded Smart Manufacturing ERP — real, DB-backed inventory processing
+export const fetchErpInventory = () => request("/erp/inventory");
+export const fetchErpMasterData = () => request("/erp/master-data");
+export const fetchErpTransactions = (limit = 25) => request(`/erp/transactions?limit=${limit}`).then((d) => d.transactions);
+export const executeBinTransfer = (payload) =>
+  request("/erp/inventory/transfer", { method: "POST", body: JSON.stringify(payload) });
 
