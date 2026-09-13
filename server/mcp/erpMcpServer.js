@@ -19,6 +19,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import jwt from "jsonwebtoken";
 import crypto from "node:crypto";
+import { executeLocalMcpTool } from "./localErpAdapter.js";
 
 const ERP_GATEWAY_URL = process.env.ERP_GATEWAY_URL || "http://localhost:5000";
 const JWT_SECRET = process.env.ERP_JWT_SECRET || "super_secret_jwt_key_change_me_in_production";
@@ -270,31 +271,39 @@ function formatToolResponse(result) {
   };
 }
 
+const GATEWAY_ENDPOINTS = {
+  get_invoice: (a) => (a.id ? `/api/finance/invoices?id=${encodeURIComponent(a.id)}` : `/api/finance/invoices`),
+  get_inventory: () => `/api/inventory/stock`,
+  get_product: () => `/api/inventory/products`,
+  get_purchase_order: (a) => (a.id ? `/api/procurement/po/${encodeURIComponent(a.id)}` : `/api/procurement/po`),
+  get_production_order: () => `/api/production/runs`,
+  get_transaction: () => `/api/finance/ledger`,
+  get_service_health: () => `/health/services`
+};
+
 /**
- * Direct invocation helper for testing or internal MCP tool execution
+ * Direct invocation helper for testing or internal MCP tool execution.
+ *
+ * Tries the real Smart Manufacturing ERP Gateway first; if it is unreachable or errors,
+ * falls back to the local read-only adapter backed by IncidentAI's embedded ERP state so
+ * MCP evidence stays real even without the external gateway. Every successful result is
+ * tagged `source: "gateway"` or `source: "embedded"` for honest UI labelling.
  */
 export async function executeMcpToolDirect(toolName, toolArgs = {}, correlationId = null) {
   const cid = correlationId || `mcp-direct-${crypto.randomUUID()}`;
-  switch (toolName) {
-    case "get_invoice": {
-      const endpoint = toolArgs.id ? `/api/finance/invoices?id=${encodeURIComponent(toolArgs.id)}` : `/api/finance/invoices`;
-      return fetchErpData(endpoint, cid);
-    }
-    case "get_inventory":
-      return fetchErpData(`/api/inventory/stock`, cid);
-    case "get_product":
-      return fetchErpData(`/api/inventory/products`, cid);
-    case "get_purchase_order": {
-      const endpoint = toolArgs.id ? `/api/procurement/po/${encodeURIComponent(toolArgs.id)}` : `/api/procurement/po`;
-      return fetchErpData(endpoint, cid);
-    }
-    case "get_production_order":
-      return fetchErpData(`/api/production/runs`, cid);
-    case "get_transaction":
-      return fetchErpData(`/api/finance/ledger`, cid);
-    case "get_service_health":
-      return fetchErpData(`/health/services`, cid);
-    default:
-      return { status: 400, error: `Forbidden or unknown tool: ${toolName}`, correlationId: cid };
+  const endpointFn = GATEWAY_ENDPOINTS[toolName];
+  if (!endpointFn) {
+    return { status: 400, error: `Forbidden or unknown tool: ${toolName}`, correlationId: cid };
   }
+
+  const gatewayResult = await fetchErpData(endpointFn(toolArgs), cid);
+  if (gatewayResult.status === 200) {
+    return { ...gatewayResult, source: "gateway" };
+  }
+
+  const localResult = await executeLocalMcpTool(toolName, toolArgs, cid);
+  if (localResult.status === 200) {
+    return { ...localResult, source: "embedded", gateway_error: gatewayResult.error };
+  }
+  return gatewayResult;
 }

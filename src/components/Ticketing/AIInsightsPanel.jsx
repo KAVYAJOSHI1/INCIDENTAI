@@ -110,15 +110,18 @@ export default function AIInsightsPanel({ ticket }) {
       <div className="min-h-[160px]">
         {/* Root Cause Tree */}
         {activeTab === 'rootcause' && (() => {
+          // Module-derived placeholder shown only until the real dependency tree
+          // (GET /api/tickets/:id/root-cause-tree) resolves — never module-specific hardcoding.
+          const mod = ticket.erp_module || 'ERP';
           const rootData = data.rootcause || {
             nodes: [
-              { id: "module", label: ticket.erp_module || "INVENTORY", type: "erp_module" },
-              { id: "service", label: "InventoryService", type: "service" },
-              { id: "file", label: "inventory/binTransfer.js", type: "file" },
-              { id: "function", label: "validateStockQuantity()", type: "function" },
-              { id: "table", label: "inv_stock_cache", type: "database_table" }
+              { id: "module", label: mod, type: "erp_module" },
+              { id: "service", label: `${mod.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()).replace(/ /g, '')}Service`, type: "service" },
+              { id: "file", label: `${mod.toLowerCase()}/handler.js`, type: "file" },
+              { id: "function", label: "handleTransaction()", type: "function" },
+              { id: "table", label: `${mod.toLowerCase()}_records`, type: "database_table" }
             ],
-            suspected_trigger: ticket.ai_root_cause || "Stale cache read before transfer validation",
+            suspected_trigger: ticket.ai_diagnosis?.root_cause || ticket.ai_root_cause || "Resolving dependency path…",
             confidence_score: ticket.ai_confidence ?? 0.65,
             human_error_likelihood: 0.15
           };

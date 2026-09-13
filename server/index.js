@@ -40,6 +40,7 @@ import { registerTicketInsightRoutes } from "./routes/ticketInsights.js";
 import { registerOperationsRoutes } from "./routes/operations.js";
 import { registerRemediationRoutes } from "./routes/remediationRoutes.js";
 import { registerErpRoutes } from "./routes/erp.js";
+import { registerDemoRoutes } from "./routes/demo.js";
 
 const router = new Router();
 registerAuthRoutes(router);
@@ -56,6 +57,7 @@ registerTicketInsightRoutes(router);
 registerOperationsRoutes(router);
 registerRemediationRoutes(router);
 registerErpRoutes(router);
+registerDemoRoutes(router);
 
 process.on("uncaughtException", (err) => {
   console.error("[Uncaught Exception]", err);

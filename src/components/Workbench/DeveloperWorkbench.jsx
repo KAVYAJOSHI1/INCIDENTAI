@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Code2, Play, CheckCircle2, Terminal, Sparkles, Send, Copy, Cpu } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import * as api from '../../services/apiClient';
 import { streamCopilotChat } from '../../services/apiClient';
 import { Spinner } from '../Common/Loading';
 
@@ -16,7 +17,7 @@ function greetingMessage(ticket) {
   };
 }
 
-export default function DeveloperWorkbench({ ticket, onResolveTicket }) {
+export default function DeveloperWorkbench({ ticket, currentUser, developers = [], onAssignDeveloper, onResolveTicket }) {
   const [chatMessages, setChatMessages] = useState([]);
   const [inputQuery, setInputQuery]         = useState('');
   const [isPatchExecuted, setIsPatchExecuted] = useState(false);
@@ -98,19 +99,28 @@ export default function DeveloperWorkbench({ ticket, onResolveTicket }) {
     setIsPatchExecuting(true);
     setPatchLogs(['[SYS] Initializing sandboxed SQL execution environment...']);
 
-    await new Promise(r => setTimeout(r, 400));
-    setPatchLogs(prev => [...prev, `[DB] Connected to PostgreSQL incidentai_db (Target: ${ticket.erp_module})`]);
+    try {
+      await new Promise(r => setTimeout(r, 200));
+      setPatchLogs(prev => [...prev, `[DB] Connecting to PostgreSQL incidentai_db (Target: ${ticket.erp_module})`]);
 
-    await new Promise(r => setTimeout(r, 500));
-    setPatchLogs(prev => [...prev, `[SQL] Executing: ${ticket.ai_suggested_patch || 'UPDATE erp_status SET status = OK'}`]);
+      const actorName = currentUser?.name || 'Developer';
+      const res = await api.applyPatch(ticket.id, actorName);
 
-    await new Promise(r => setTimeout(r, 600));
-    setPatchLogs(prev => [...prev, `[AUDIT] Patch verified — 1 row affected. Resolution timestamp logged.`]);
+      setPatchLogs(prev => [
+        ...prev,
+        `[SQL] Executing: ${ticket.ai_suggested_patch || 'UPDATE erp_status SET status = OK'}`,
+        `[AUDIT] Backend patch applied — version ${res.ticket?.patch_version || 'v1.0.1'} committed by ${actorName}.`,
+        `[SYS] Incident state updated to RESOLVED.`
+      ]);
 
-    setIsPatchExecuting(false);
-    setIsPatchExecuted(true);
-    confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
-    setTimeout(() => onResolveTicket(ticket.id), 1200);
+      setIsPatchExecuted(true);
+      confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
+      if (onResolveTicket) onResolveTicket(ticket.id);
+    } catch (err) {
+      setPatchLogs(prev => [...prev, `[ERROR] Failed to execute patch: ${err.message}`]);
+    } finally {
+      setIsPatchExecuting(false);
+    }
   };
 
   const handleVerifyKnowledge = async () => {
@@ -139,7 +149,7 @@ export default function DeveloperWorkbench({ ticket, onResolveTicket }) {
       {/* Workbench header bar */}
       <div className="surface px-5 py-4 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <code
               className="text-xs font-mono font-bold px-2 py-0.5 rounded"
               style={{
@@ -156,8 +166,42 @@ export default function DeveloperWorkbench({ ticket, onResolveTicket }) {
                 <CheckCircle2 className="w-3 h-3 text-emerald-400" /> VERIFIED & RAG INDEXED
               </span>
             )}
-            <span className="text-xs text-muted-color">
-              Assigned: <span className="font-semibold text-heading">{ticket.assigned_dev_name}</span>
+            <span className="text-xs text-muted-color flex items-center gap-1.5 flex-wrap">
+              Assigned:
+              {Boolean(
+                currentUser && (
+                  (ticket.assigned_dev_id && (ticket.assigned_dev_id === currentUser.id || ticket.assigned_dev_id === currentUser.devId)) ||
+                  (ticket.assigned_dev_name && currentUser.name && (
+                    ticket.assigned_dev_name.toLowerCase() === currentUser.name.toLowerCase() ||
+                    ticket.assigned_dev_name.toLowerCase().includes(currentUser.name.split(' ')[0].toLowerCase()) ||
+                    currentUser.name.toLowerCase().includes(ticket.assigned_dev_name.split(' ')[0].toLowerCase())
+                  ))
+                )
+              ) ? (
+                <span className="font-extrabold text-emerald-400 flex items-center gap-1.5">
+                  {ticket.assigned_dev_name || currentUser?.name || 'Devi Developer'}
+                  <span className="text-[9px] font-mono font-extrabold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    YOUR INCIDENT
+                  </span>
+                </span>
+              ) : (
+                <span className="font-semibold text-heading">{ticket.assigned_dev_name || 'Unassigned'}</span>
+              )}
+              {currentUser && onAssignDeveloper && !(
+                ticket.assigned_dev_id === currentUser.id ||
+                ticket.assigned_dev_name === currentUser.name ||
+                (ticket.assigned_dev_name && currentUser.name && ticket.assigned_dev_name.toLowerCase().includes(currentUser.name.split(' ')[0].toLowerCase()))
+              ) && (
+                <button
+                  onClick={() => {
+                    const devId = (currentUser?.id === 'user_demo_developer') ? 'dev_05' : (currentUser?.id || currentUser?.devId || 'dev_05');
+                    onAssignDeveloper(ticket.id, devId);
+                  }}
+                  className="btn-primary text-[10px] py-0.5 px-2 font-bold flex items-center gap-1 shadow-sm"
+                >
+                  Claim Ticket & Assign to Me
+                </button>
+              )}
             </span>
           </div>
           <h2 className="text-base font-semibold text-heading leading-snug">{ticket.title}</h2>

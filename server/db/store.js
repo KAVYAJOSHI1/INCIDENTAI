@@ -97,6 +97,11 @@ import { embedDocuments, toVectorLiteral } from "../services/embeddingService.js
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       );
     `);
+    // Scenario-specific fields (PO qty, invoice tax, GL journal balances, production BOM)
+    // live in a single JSONB column so the Demo Incident Factory can add scenarios
+    // without a migration each time.
+    await query(`ALTER TABLE erp_transactions ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}';`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_tickets_correlation ON tickets (correlation_id);`);
     // Seed operational master data (idempotent — demo values, but the rows are real).
     await query(`
       INSERT INTO erp_inventory (id, warehouse, bin, sku, product_name, available_qty, reserved_qty, reorder_threshold) VALUES
@@ -158,8 +163,8 @@ function rowToTicket(row) {
     ticket_number: row.ticket_number,
     title: row.title,
     reporter: row.reporter,
-    reviewer_name: row.reviewer_name || row.reviewer || 'Sarah Chen',
-    resolution_owner: row.resolution_owner || row.assigned_dev_name || 'Marcus Vance',
+    reviewer_name: row.reviewer_name || row.reviewer || null,
+    resolution_owner: row.resolution_owner || row.assigned_dev_name || null,
     erp_context: row.erp_context,
     assigned_dev_id: row.assigned_dev_id,
     assigned_dev_name: row.assigned_dev_name,
@@ -217,7 +222,9 @@ export async function listDevelopers() {
 }
 
 export async function getDeveloperById(id) {
-  const { rows } = await query("SELECT * FROM developers WHERE id = $1", [id]);
+  if (!id) return null;
+  const targetId = (id === 'user_demo_developer') ? 'dev_05' : id;
+  const { rows } = await query("SELECT * FROM developers WHERE id = $1 OR id = $2", [id, targetId]);
   return rows[0] ? rowToDeveloper(rows[0]) : null;
 }
 
@@ -251,6 +258,19 @@ export async function listTickets(filters = {}) {
 
 export async function getTicketById(id) {
   const { rows } = await query("SELECT * FROM tickets WHERE id = $1 OR ticket_number = $1", [id]);
+  return rows[0] ? rowToTicket(rows[0]) : null;
+}
+
+/**
+ * Correlation-ID lookup used to suppress duplicate incidents: an ERP transaction that
+ * fails twice with the same correlation id must map to one incident, not two.
+ */
+export async function getTicketByCorrelationId(correlationId) {
+  if (!correlationId) return null;
+  const { rows } = await query(
+    "SELECT * FROM tickets WHERE correlation_id = $1 ORDER BY created_at ASC LIMIT 1",
+    [correlationId]
+  );
   return rows[0] ? rowToTicket(rows[0]) : null;
 }
 
@@ -341,7 +361,12 @@ export async function addKnowledgeArticle(article) {
 
   const { rows } = await query(
     `INSERT INTO knowledge_base (id, title, erp_module, error_code, solution, confidence, tags, embedding)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+     ON CONFLICT (id) DO UPDATE SET
+       title = EXCLUDED.title, erp_module = EXCLUDED.erp_module, error_code = EXCLUDED.error_code,
+       solution = EXCLUDED.solution, confidence = EXCLUDED.confidence, tags = EXCLUDED.tags,
+       embedding = COALESCE(EXCLUDED.embedding, knowledge_base.embedding)
+     RETURNING *`,
     [article.id, article.title, article.erp_module, article.error_code, article.solution, article.confidence, JSON.stringify(article.tags || []), toVectorLiteral(embedding)]
   );
 
@@ -547,12 +572,20 @@ export async function adjustInventory(client, { warehouse, bin, sku, product_nam
 export async function recordErpTransaction(client, tx) {
   const runner = client || { query };
   const { rows } = await runner.query(
-    `INSERT INTO erp_transactions (id, type, sku, from_bin, to_bin, warehouse, qty, status, reason, incident_id, actor)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+    `INSERT INTO erp_transactions (id, type, sku, from_bin, to_bin, warehouse, qty, status, reason, incident_id, actor, metadata)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
     [tx.id, tx.type, tx.sku || null, tx.from_bin || null, tx.to_bin || null, tx.warehouse || null, tx.qty ?? null,
-     tx.status, tx.reason || null, tx.incident_id || null, tx.actor || null]
+     tx.status, tx.reason || null, tx.incident_id || null, tx.actor || null, JSON.stringify(tx.metadata || {})]
   );
   return rows[0];
+}
+
+export async function listErpTransactionsByType(type, limit = 10) {
+  const { rows } = await query(
+    "SELECT * FROM erp_transactions WHERE type = $1 ORDER BY created_at DESC LIMIT $2",
+    [type, limit]
+  );
+  return rows;
 }
 
 export async function updateErpTransaction(id, patch) {

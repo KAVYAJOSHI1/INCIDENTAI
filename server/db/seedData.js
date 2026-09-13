@@ -55,7 +55,33 @@ export const developers = [
     historical_mttr_hours: 2.4,
     on_call: true,
     performance_score: 97.5
+  },
+  {
+    id: "dev_05",
+    name: "Devi Developer",
+    role: "Fullstack & AI Automation Lead",
+    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Devi",
+    skills: ["PostgreSQL", "Node.js", "React", "AI Pipelines", "ERP Systems"],
+    erp_modules: ["INVOICING", "PAYROLL", "INVENTORY", "GENERAL_LEDGER"],
+    active_tickets: 2,
+    max_capacity: 5,
+    historical_mttr_hours: 1.5,
+    on_call: true,
+    performance_score: 99.2
   }
+];
+
+/**
+ * Canonical embedded-ERP inventory baseline. This is the single source of truth used by
+ * BOTH the startup migration (server/db/store.js) and "Reset Demo Environment"
+ * (server/services/demoResetService.js) so a reset always restores the exact state the
+ * demo scenarios were designed against.
+ */
+export const erpInventoryBaseline = [
+  { id: "inv_wha_w1_sk902", warehouse: "WH-A", bin: "W1", sku: "SK-902",      product_name: "Industrial Motor Assembly",  available_qty: 84,  reserved_qty: 12, reorder_threshold: 25 },
+  { id: "inv_wha_w2_sk902", warehouse: "WH-A", bin: "W2", sku: "SK-902",      product_name: "Industrial Motor Assembly",  available_qty: 12,  reserved_qty: 4,  reorder_threshold: 25 },
+  { id: "inv_wha_w2_cell",  warehouse: "WH-A", bin: "W2", sku: "CELL-21700",  product_name: "Li-Ion Battery Cell 21700",  available_qty: 340, reserved_qty: 60, reorder_threshold: 100 },
+  { id: "inv_whb_b4_pcb",   warehouse: "WH-B", bin: "B4", sku: "PCB-TURB-01", product_name: "Turbine Controller PCB",      available_qty: 18,  reserved_qty: 15, reorder_threshold: 20 }
 ];
 
 export const erpInventory = [
@@ -388,5 +414,49 @@ export const knowledgeBase = [
     solution: "Increase auth service Redis connection pool limit to 200 connections and enable connection idle timeout recycling.",
     confidence: 0.95,
     tags: ["Auth", "Redis", "Connection Pool", "JWT"]
+  },
+  {
+    id: "kb_106",
+    title: "Reconciling ERR_TAX_VAL_402 Invoice Tax and Amount Totals That Do Not Balance",
+    erp_module: "INVOICING",
+    error_code: "ERR_TAX_VAL_402",
+    problem: "Posting an invoice fails because the entered tax amount does not balance against the computed tax (subtotal multiplied by the applicable tax rate), so the invoice totals do not reconcile.",
+    root_cause: "The tax amount on the invoice header was entered or imported manually and drifted from the line-item subtotal multiplied by the tax rate.",
+    solution: "Recompute the tax base as subtotal * tax_rate, replace the invoice header tax amount with the computed value so header and line totals balance, and re-post the invoice.",
+    confidence: 0.93,
+    tags: ["Invoicing", "Tax", "Reconciliation", "Balance", "Amount Mismatch", "Totals"]
+  },
+  {
+    id: "kb_107",
+    title: "Resolving ERR_MATERIAL_SHORTAGE When a Production Run Cannot Be Released",
+    erp_module: "PRODUCTION",
+    error_code: "ERR_MATERIAL_SHORTAGE",
+    problem: "A production run is rejected at release because a bill-of-materials component does not have enough available stock in the issuing bin to cover the run quantity.",
+    root_cause: "Component stock in the issuing warehouse bin is below the quantity the production order needs; upstream replenishment or a goods receipt has not been posted.",
+    solution: "Post the outstanding goods receipt or create a replenishment transfer for the short component into the issuing bin, confirm available_qty now covers the run, then re-release the production order.",
+    confidence: 0.90,
+    tags: ["Production", "Bill of Materials", "Component Stock", "Shortage", "Replenishment"]
+  },
+  {
+    id: "kb_109",
+    title: "Resolving ERR_STOCK_NEG When a Bin Transfer Quantity Exceeds Available Stock",
+    erp_module: "INVENTORY",
+    error_code: "ERR_STOCK_NEG",
+    problem: "A warehouse bin transfer is rejected because the requested transfer quantity is greater than the available quantity in the source bin, which would drive the balance negative.",
+    root_cause: "The transfer was keyed for more units than the source bin actually holds; available_qty in the source bin is lower than the requested move quantity.",
+    solution: "Reduce the transfer quantity to at most the available balance in the source bin, or replenish the source bin (inbound receipt / replenishment transfer) so available_qty covers the move, then re-submit the bin transfer. Always confirm available_qty before transferring.",
+    confidence: 0.95,
+    tags: ["Inventory", "Bin Transfer", "Stock", "Negative Quantity", "Available Quantity", "Replenishment"]
+  },
+  {
+    id: "kb_108",
+    title: "Fixing ERR_PO_MISMATCH Goods Receipt Quantity Over Purchase Order Quantity",
+    erp_module: "PROCUREMENT",
+    error_code: "ERR_PO_MISMATCH",
+    problem: "A goods receipt is rejected because the received quantity exceeds the ordered quantity on the purchase order beyond the allowed over-delivery tolerance.",
+    root_cause: "The received quantity keyed at the dock is greater than the PO line quantity and the over-delivery tolerance on the PO line is set to zero.",
+    solution: "Either raise the over-delivery tolerance on the PO line to cover the excess and re-post the receipt, or split the receipt so the posted quantity matches the PO line quantity and return or hold the surplus.",
+    confidence: 0.9,
+    tags: ["Procurement", "Purchase Order", "Goods Receipt", "Three-Way Match", "Quantity", "Tolerance"]
   }
 ];

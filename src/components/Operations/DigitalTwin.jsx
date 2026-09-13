@@ -9,6 +9,7 @@ import {
   fetchDigitalTwin, fetchErpInventory, fetchErpMasterData,
   fetchErpTransactions, executeBinTransfer
 } from '../../services/apiClient';
+import DemoScenarioPanel from './DemoScenarioPanel';
 
 const HEALTH_STYLE = {
   RED: { background: '#FFF1F2', color: '#9F1239', border: '2px solid #FDA4AF' },
@@ -108,11 +109,14 @@ export default function DigitalTwin({ onSelectTicket }) {
         </div>
         <h2 className="text-2xl font-extrabold text-heading">ERP Operational State &amp; Incident Triggers</h2>
         <p className="text-body-color text-sm mt-1">
-          Inventory is <strong>real, mutable database state</strong>. Every transfer is validated against live stock and either
+          Inventory is <strong>real, mutable database state</strong>. Every operation is validated against live stock and either
           commits to the DB or is rejected and ingested as a persisted IncidentAI incident. Orders, telemetry and procurement
-          below are seeded demo records served from the backend.
+          tables below are seeded demo records served from the backend.
         </p>
       </div>
+
+      {/* Presenter demo console — one click per realistic ERP failure + deterministic reset */}
+      <DemoScenarioPanel onSelectTicket={onSelectTicket} onAfterChange={loadErp} />
 
       {/* Topology + Trigger */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -149,10 +153,12 @@ export default function DigitalTwin({ onSelectTicket }) {
             <div className="flex items-center gap-2 mb-2">
               <AlertTriangle className="w-4 h-4 text-amber-500" />
               <h3 className="text-sm font-extrabold text-heading">Warehouse Bin Transfer</h3>
+              <span className="text-[10px] font-mono text-muted-color px-1.5 py-0.5 rounded bg-subtle border border-[var(--border)]">MANUAL / ADVANCED</span>
             </div>
             <p className="text-xs text-muted-color mb-4">
-              Submit a stock transfer. If the quantity exceeds live available stock the ERP rejects it and IncidentAI ingests
-              a persisted incident. A valid quantity mutates the database.
+              Fine-grained control over the inventory transfer used by the "Negative Stock" demo scenario. If the quantity
+              exceeds live available stock the ERP rejects it and IncidentAI ingests a persisted incident. A valid quantity
+              mutates the database.
             </p>
 
             <form onSubmit={handleTransfer} className="space-y-3 p-4 rounded-xl border border-border bg-subtle">

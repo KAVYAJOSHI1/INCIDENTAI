@@ -13,7 +13,7 @@ import MissionControl from './components/Operations/MissionControl';
 import IntegrationHub from './components/Integrations/IntegrationHub';
 
 import * as api from './services/apiClient';
-import { ShieldAlert, Loader2, Inbox, RefreshCw, X } from 'lucide-react';
+import { ShieldAlert, Loader2, Inbox, RefreshCw, X, Bell } from 'lucide-react';
 import EmptyState from './components/Common/EmptyState';
 import LoginScreen from './components/Auth/LoginScreen';
 import { useAuth } from './context/AuthContext';
@@ -51,12 +51,76 @@ export default function App() {
   const [developers, setDevelopers] = useState([]);
   const [knowledgeBase, setKnowledgeBase] = useState([]);
   const [selectedTicketId, setSelectedTicketId] = useState(null);
+  const [currentSubpage, setCurrentSubpage] = useState('overview');
+  const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false);
   const [filterModule, setFilterModule] = useState('ALL');
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
+  const [incidentToast, setIncidentToast] = useState(null); // { id, ticket_number, erp_module }
+  const knownTicketIdsRef = React.useRef(null);
 
   const showError = (msg) => { setErrorMessage(msg); setTimeout(() => setErrorMessage(null), 5000); };
+
+  // Parse path for /incident/:ticketId/:subpage or hash #/incident/:ticketId/:subpage
+  const parseRouteFromUrl = React.useCallback(() => {
+    const path = window.location.pathname;
+    const match = path.match(/^\/incident\/([^\/]+)(?:\/([^\/]+))?/);
+    if (match) {
+      return { ticketId: match[1], subpage: match[2] || 'overview' };
+    }
+    const hash = window.location.hash;
+    const hashMatch = hash.match(/^#\/incident\/([^\/]+)(?:\/([^\/]+))?/);
+    if (hashMatch) {
+      return { ticketId: hashMatch[1], subpage: hashMatch[2] || 'overview' };
+    }
+    return null;
+  }, []);
+
+  const navigateToSubpage = (ticketId, subpage = 'overview') => {
+    if (!ticketId) return;
+    const newPath = `/incident/${ticketId}/${subpage}`;
+    if (window.location.pathname !== newPath) {
+      window.history.pushState({ ticketId, subpage }, '', newPath);
+    }
+    setSelectedTicketId(ticketId);
+    setCurrentSubpage(subpage);
+    setIsWorkspaceOpen(true);
+    setCurrentView('TRIAGE');
+  };
+
+  const closeWorkspaceAndReturnToQueue = () => {
+    setIsWorkspaceOpen(false);
+    if (window.location.pathname.startsWith('/incident/')) {
+      window.history.pushState({}, '', '/triage');
+    }
+  };
+
+  // Sync route on popstate (browser back/forward) & initial render
+  useEffect(() => {
+    const route = parseRouteFromUrl();
+    if (route) {
+      if (route.ticketId) setSelectedTicketId(route.ticketId);
+      if (route.subpage) setCurrentSubpage(route.subpage);
+      setIsWorkspaceOpen(true);
+      setCurrentView('TRIAGE');
+    }
+
+    const handlePopState = () => {
+      const r = parseRouteFromUrl();
+      if (r) {
+        if (r.ticketId) setSelectedTicketId(r.ticketId);
+        if (r.subpage) setCurrentSubpage(r.subpage);
+        setIsWorkspaceOpen(true);
+        setCurrentView('TRIAGE');
+      } else {
+        setIsWorkspaceOpen(false);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [parseRouteFromUrl]);
 
   // Derive the selected incident strictly from the id — never silently fall back to
   // another incident's record (that would leak cross-incident data into every panel).
@@ -73,33 +137,60 @@ export default function App() {
         api.fetchKnowledgeBase().catch(() => [])
       ]);
       if (signal?.cancelled) return;
+
+      // Live incident notification: on a background poll, surface any incident that
+      // wasn't in the queue a moment ago (e.g. just triggered from the Digital Twin).
+      const currentIds = new Set(ticketsData.map((t) => t.id));
+      if (knownTicketIdsRef.current && !isInitial) {
+        const fresh = ticketsData.filter((t) => !knownTicketIdsRef.current.has(t.id));
+        if (fresh.length > 0) {
+          const t = fresh[0];
+          setIncidentToast({ id: t.id, ticket_number: t.ticket_number || t.id, erp_module: t.erp_module });
+        }
+      }
+      knownTicketIdsRef.current = currentIds;
+
       setTickets(ticketsData);
       setDevelopers(developersData);
       setKnowledgeBase(kbData);
-      setSelectedTicketId((prev) => prev || (ticketsData[0]?.id ?? null));
+
+      // Preserve route ticketId if user loaded /incident/:id/:subpage directly
+      const route = parseRouteFromUrl();
+      const initialId = route?.ticketId || ticketsData[0]?.id || null;
+      setSelectedTicketId((prev) => prev || initialId);
+      if (route?.subpage) setCurrentSubpage(route.subpage);
+      if (route?.ticketId) setIsWorkspaceOpen(true);
       setLoadError(null);
     } catch (err) {
       if (!signal?.cancelled) setLoadError(err.message);
     } finally {
       if (isInitial && !signal?.cancelled) setIsLoading(false);
     }
-  }, [user?.role]);
+  }, [user?.role, parseRouteFromUrl]);
 
   useEffect(() => {
     if (!user) return undefined;
     const signal = { cancelled: false };
     loadInitialData({ signal, isInitial: true });
 
-    // Poll every 10 seconds for real-time multi-user synchronization
+    // Poll for real-time sync — faster while the presenter is on the queue or the ERP
+    // console so a freshly-triggered incident shows up almost immediately.
+    const pollMs = (currentView === 'TRIAGE' || currentView === 'DIGITALTWIN') ? 5000 : 10000;
     const interval = setInterval(() => {
       loadInitialData({ signal, isInitial: false });
-    }, 10000);
+    }, pollMs);
 
     return () => {
       signal.cancelled = true;
       clearInterval(interval);
     };
-  }, [user?.id, loadInitialData]);
+  }, [user?.id, loadInitialData, currentView]);
+
+  useEffect(() => {
+    if (!incidentToast) return undefined;
+    const t = setTimeout(() => setIncidentToast(null), 9000);
+    return () => clearTimeout(t);
+  }, [incidentToast]);
 
   const allowedViews = user ? (VIEWS_BY_ROLE[user.role] || []) : [];
 
@@ -216,7 +307,15 @@ export default function App() {
     <div className="min-h-screen flex app-bg">
       <Sidebar
         currentView={currentView}
-        setCurrentView={(view) => { setCurrentView(view); setIsMobileNavOpen(false); }}
+        setCurrentView={(view) => {
+          if (view === 'TRIAGE') {
+            closeWorkspaceAndReturnToQueue();
+            setCurrentView('TRIAGE');
+          } else {
+            setCurrentView(view);
+          }
+          setIsMobileNavOpen(false);
+        }}
         allowedViews={allowedViews}
         activeIncidentsCount={tickets.filter((t) => t.status !== 'RESOLVED').length}
         isMobileOpen={isMobileNavOpen}
@@ -250,57 +349,73 @@ export default function App() {
           </div>
         )}
 
-        {/* ── TRIAGE: edge-to-edge split panel, no outer padding ── */}
-        {isTriage && (
-          <div
-            className="flex flex-1 overflow-hidden"
-            style={{ height: 'calc(100vh - var(--header-height))' }}
+        {/* Live incident notification — a new incident just landed in the queue */}
+        {incidentToast && (
+          <button
+            onClick={() => {
+              navigateToSubpage(incidentToast.id, 'overview');
+              setIncidentToast(null);
+            }}
+            className="fixed bottom-5 right-5 z-50 max-w-sm text-left rounded-xl border shadow-lg px-4 py-3 flex items-start gap-3 fade-in"
+            style={{ background: 'var(--bg-surface)', borderColor: 'rgba(239,68,68,0.35)' }}
           >
-            {/* LEFT — ticket queue */}
-            <div
-              className="flex flex-col shrink-0 overflow-hidden"
-              style={{
-                width: '300px',
-                background: 'var(--bg-surface)',
-                borderRight: '1px solid var(--border)',
-              }}
+            <span className="w-8 h-8 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center shrink-0">
+              <Bell className="w-4 h-4 text-rose-500" />
+            </span>
+            <span className="min-w-0">
+              <span className="text-xs font-bold text-heading block">New incident from {incidentToast.erp_module}</span>
+              <span className="text-[11px] text-muted-color font-mono">{incidentToast.ticket_number} · click to open workspace</span>
+            </span>
+            <span
+              onClick={(e) => { e.stopPropagation(); setIncidentToast(null); }}
+              className="text-muted-color hover:text-heading shrink-0"
             >
-              {/* Queue header */}
-              <div
-                className="flex items-center justify-between px-4 py-3 shrink-0"
-                style={{ borderBottom: '1px solid var(--border)' }}
-              >
-                <div className="flex items-center gap-2">
-                  <ShieldAlert className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
-                  <span className="text-xs font-semibold text-heading">Incidents</span>
-                  <span
-                    className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
-                    style={{
-                      background: filteredTicketsList.length > 0 ? 'var(--red-bg)' : 'var(--bg-muted)',
-                      color:      filteredTicketsList.length > 0 ? 'var(--red-text)' : 'var(--text-muted)',
-                      border:     filteredTicketsList.length > 0 ? '1px solid var(--red-border)' : '1px solid var(--border)',
-                    }}
-                  >
-                    {filteredTicketsList.length}
-                  </span>
-                </div>
-                <select
-                  value={filterModule}
-                  onChange={(e) => setFilterModule(e.target.value)}
-                  className="input-field"
-                  style={{ height: '28px', fontSize: '11px', padding: '0 6px', width: 'auto' }}
-                >
-                  <option value="ALL">All</option>
-                  <option value="INVOICING">Invoicing</option>
-                  <option value="PAYROLL">Payroll</option>
-                  <option value="INVENTORY">Inventory</option>
-                  <option value="GENERAL_LEDGER">General Ledger</option>
-                </select>
-              </div>
+              <X className="w-3.5 h-3.5" />
+            </span>
+          </button>
+        )}
 
-              {/* Scrollable ticket list */}
-              <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
-                {filteredTicketsList.length === 0 && (
+        {/* ── TRIAGE VIEW: Queue List vs Dedicated Workspace ── */}
+        {isTriage && (
+          <div className="flex-1 min-w-0 overflow-y-auto p-6" style={{ background: 'var(--bg-page)' }}>
+            {!isWorkspaceOpen ? (
+              /* ── INCIDENT QUEUE FULL-PAGE LIST ── */
+              <div className="max-w-6xl mx-auto space-y-6">
+                <div className="surface p-6 rounded-2xl border border-[var(--border)] shadow-md flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-accent-subtle-bg border border-accent-subtle-bd flex items-center justify-center">
+                      <ShieldAlert className="w-5 h-5 text-accent-color" />
+                    </div>
+                    <div>
+                      <h1 className="text-xl font-extrabold text-heading flex items-center gap-2">
+                        Incident Queue
+                        <span className="text-xs font-mono font-extrabold px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                          {filteredTicketsList.length} Active
+                        </span>
+                      </h1>
+                      <p className="text-xs text-muted-color mt-0.5">
+                        Select an operational incident below to open its dedicated Incident Workspace.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-mono text-muted-color">Filter Module:</span>
+                    <select
+                      value={filterModule}
+                      onChange={(e) => setFilterModule(e.target.value)}
+                      className="input-field text-xs py-1.5 px-3 font-semibold text-heading bg-surface border border-[var(--border)] rounded-xl"
+                    >
+                      <option value="ALL">All Modules</option>
+                      <option value="INVOICING">Invoicing</option>
+                      <option value="PAYROLL">Payroll</option>
+                      <option value="INVENTORY">Inventory</option>
+                      <option value="GENERAL_LEDGER">General Ledger</option>
+                    </select>
+                  </div>
+                </div>
+
+                {filteredTicketsList.length === 0 ? (
                   <EmptyState
                     icon={Inbox}
                     title={tickets.length === 0 ? 'No Incidents Yet' : 'No Matches'}
@@ -309,118 +424,75 @@ export default function App() {
                         ? 'Trigger an ERP transaction from the Digital Twin console to create one.'
                         : `No tickets for module "${filterModule}".`
                     }
-                    compact
                   />
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredTicketsList.map((t) => {
+                      const isP0 = t.severity === 'P0_CRITICAL';
+                      const isP1 = t.severity === 'P1_HIGH';
+                      const sevBadge = isP0 ? 'badge-p0' : isP1 ? 'badge-p1' : t.severity === 'P2_MEDIUM' ? 'badge-p2' : 'badge-p3';
+
+                      return (
+                        <button
+                          key={t.id}
+                          onClick={() => navigateToSubpage(t.id, 'overview')}
+                          className="surface p-5 rounded-2xl border border-[var(--border)] shadow-sm hover:border-[var(--accent)] hover:shadow-md transition-all text-left group flex flex-col justify-between space-y-4 cursor-pointer"
+                        >
+                          <div className="space-y-2.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-mono font-extrabold px-2.5 py-1 rounded-lg bg-accent-subtle-bg text-accent-subtle-text border border-accent-subtle-bd group-hover:bg-accent-color group-hover:text-white transition-colors">
+                                {t.ticket_number || t.id}
+                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
+                                  t.status === 'RESOLVED' || t.status === 'VERIFIED'
+                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                    : t.status === 'VERIFICATION_FAILED'
+                                    ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                                    : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                }`}>
+                                  {STATUS_LABELS[t.remediation_status || t.status] || t.status}
+                                </span>
+                                <span className={`${sevBadge} text-[10px] font-mono px-2 py-0.5 rounded`}>
+                                  {t.severity?.split('_')[0]}
+                                </span>
+                              </div>
+                            </div>
+
+                            <h3 className="text-sm font-bold text-heading leading-snug group-hover:text-accent-color transition-colors line-clamp-2">
+                              {t.title}
+                            </h3>
+                          </div>
+
+                          <div className="pt-3 border-t border-[var(--border)] flex items-center justify-between text-xs font-mono text-muted-color">
+                            <span className="truncate">
+                              Dev: <strong className="text-heading">{t.assigned_dev_name || 'UNASSIGNED'}</strong>
+                            </span>
+                            <span className="badge-module text-[10px]">
+                              {t.erp_module}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
-
-                {filteredTicketsList.map((t) => {
-                  const isSelected = selectedTicket?.id === t.id;
-                  const isP0 = t.severity === 'P0_CRITICAL';
-                  const isP1 = t.severity === 'P1_HIGH';
-                  const sevDot = isP0 ? 'var(--red)' : isP1 ? 'var(--amber)' : 'var(--accent)';
-
-                  return (
-                    <button
-                      key={t.id}
-                      onClick={() => setSelectedTicketId(t.id)}
-                      style={{
-                        display: 'block',
-                        width: '100%',
-                        textAlign: 'left',
-                        padding: '10px 12px',
-                        borderRadius: '8px',
-                        border: isSelected ? '1px solid var(--accent-subtle-bd)' : '1px solid transparent',
-                        background: isSelected ? 'var(--accent-subtle-bg)' : 'transparent',
-                        cursor: 'pointer',
-                        transition: 'background 0.1s, border-color 0.1s',
-                      }}
-                      onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = 'var(--bg-muted)'; }}
-                      onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
-                    >
-                      {/* Row 1: ticket # + severity pill */}
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <span
-                            className="w-1.5 h-1.5 rounded-full shrink-0"
-                            style={{ background: sevDot }}
-                          />
-                          <code
-                            className="text-[11px] font-mono font-bold truncate"
-                            style={{ color: 'var(--accent-subtle-text)' }}
-                          >
-                            {t.ticket_number || t.id}
-                          </code>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          {t.status && (
-                            <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                              t.status === 'RESOLVED' || t.status === 'VERIFIED' || t.status === 'KNOWLEDGE_CAPTURED'
-                                ? 'bg-emerald-500/10 text-emerald-400'
-                                : t.status === 'VERIFICATION_FAILED'
-                                ? 'bg-rose-500/10 text-rose-400'
-                                : t.status === 'ROLLED_BACK'
-                                ? 'bg-amber-500/10 text-amber-400'
-                                : 'bg-blue-500/10 text-blue-400'
-                            }`}>
-                              {STATUS_LABELS[t.remediation_status || t.status] || t.status}
-                            </span>
-                          )}
-                          <span
-                            className={isP0 ? 'badge-p0' : isP1 ? 'badge-p1' : t.severity === 'P2_MEDIUM' ? 'badge-p2' : 'badge-p3'}
-                            style={{ fontSize: '10px', padding: '1px 6px' }}
-                          >
-                            {t.severity?.split('_')[0]}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Row 2: title */}
-                      <p
-                        className="text-xs font-medium leading-snug line-clamp-2"
-                        style={{
-                          color: isSelected ? 'var(--text-heading)' : 'var(--text-body)',
-                          marginBottom: '6px',
-                        }}
-                      >
-                        {t.title}
-                      </p>
-
-                      {/* Row 3: dev name + AI confidence + SLA + module */}
-                      <div className="flex items-center justify-between gap-1 text-[10px] font-mono">
-                        <span className="truncate" style={{ color: 'var(--text-muted)' }}>
-                          Dev: <strong className="text-heading">{t.assigned_dev_name || 'UNASSIGNED'}</strong>
-                        </span>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {t.ai_confidence != null && (
-                            <span className="text-amber-400 font-bold">
-                              {Math.round(t.ai_confidence * 100)}%
-                            </span>
-                          )}
-                          <span className="badge-module" style={{ fontSize: '9px', padding: '1px 5px' }}>
-                            {t.erp_module?.replace('_', ' ')}
-                          </span>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
               </div>
-            </div>
-
-            {/* RIGHT — ticket detail (fills rest, independently scrollable) */}
-            <div
-              className="flex-1 min-w-0 overflow-y-auto p-6"
-              style={{ background: 'var(--bg-page)' }}
-            >
+            ) : (
+              /* ── DEDICATED INCIDENT WORKSPACE (FULL WIDTH, NO QUEUE COLUMN) ── */
               <JiraTicketView
                 ticket={selectedTicket}
+                userRole={user?.role}
+                currentUser={user}
+                currentView={currentView}
+                developers={developers}
+                currentSubpage={currentSubpage}
+                onNavigateSubpage={(subpage) => navigateToSubpage(selectedTicket?.id || selectedTicketId, subpage)}
+                onBackToQueue={closeWorkspaceAndReturnToQueue}
                 onMergeDuplicate={handleMergeDuplicate}
                 onAssignDeveloper={handleAssignDeveloper}
                 onNavigateToErp={() => setCurrentView('DIGITALTWIN')}
                 onTicketUpdated={async (updatedTicket) => {
-                  // Optimistically merge the fresh incident the action returned, then
-                  // re-fetch the authoritative list so every panel re-renders from the
-                  // backend's current state (action -> backend -> refresh -> UI).
                   if (updatedTicket && typeof updatedTicket === 'object' && updatedTicket.id) {
                     setTickets((prev) => prev.map((t) => (t.id === updatedTicket.id ? updatedTicket : t)));
                     setSelectedTicketId(updatedTicket.id);
@@ -429,7 +501,7 @@ export default function App() {
                   if (refreshed) setTickets(refreshed);
                 }}
               />
-            </div>
+            )}
           </div>
         )}
 
@@ -441,6 +513,9 @@ export default function App() {
             {currentView === 'DEVELOPER' && (
               <DeveloperWorkbench
                 ticket={selectedTicket}
+                currentUser={user}
+                developers={developers}
+                onAssignDeveloper={handleAssignDeveloper}
                 onResolveTicket={handleResolveTicket}
               />
             )}
@@ -462,6 +537,14 @@ export default function App() {
               </div>
             )}
 
+            {/* View: Dedicated Knowledge Hub */}
+            {currentView === 'KNOWLEDGE' && (
+              <KnowledgeHub
+                knowledgeBase={knowledgeBase}
+                onAddArticle={handleAddKnowledgeArticle}
+              />
+            )}
+
             {/* View 5: React Flow AI Execution Pipeline Visualizer */}
             {currentView === 'PIPELINE' && (
               <AIPipelineVisualizer ticket={selectedTicket} />
@@ -474,8 +557,7 @@ export default function App() {
             {currentView === 'DIGITALTWIN' && (
               <DigitalTwin
                 onSelectTicket={(ticketId) => {
-                  setSelectedTicketId(ticketId);
-                  setCurrentView('TRIAGE');
+                  if (ticketId) navigateToSubpage(ticketId, 'overview');
                 }}
               />
             )}

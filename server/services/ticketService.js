@@ -11,7 +11,7 @@ import { searchKnowledgeBase, searchKnowledgeBaseWithAI, searchKnowledgeBaseWith
 import { recommendDeveloperForTicket } from "./loadBalancerService.js";
 import { performEvidenceGroundedDiagnosis } from "./diagnosisService.js";
 import { recordAuditEvent } from "./auditService.js";
-import { listTickets, listKnowledgeBase, listDevelopers, addTicket, updateDeveloper, getTicketById, getDeveloperById, updateTicket } from "../db/store.js";
+import { listTickets, listKnowledgeBase, listDevelopers, addTicket, updateDeveloper, getTicketById, getDeveloperById, updateTicket, getTicketByCorrelationId } from "../db/store.js";
 import { CLOSED_STATUSES } from "../constants.js";
 
 function generateTicketNumber() {
@@ -29,12 +29,21 @@ export async function applyTicketUpdate(id, patch) {
   const nextPatch = { ...patch };
 
   if (patch.assigned_dev_id && patch.assigned_dev_id !== ticket.assigned_dev_id) {
+    let targetDevId = patch.assigned_dev_id;
+    if (targetDevId === 'user_demo_developer' || targetDevId.toLowerCase().includes('devi')) {
+      targetDevId = 'dev_05';
+    }
+
     const previousDev = await getDeveloperById(ticket.assigned_dev_id);
-    const nextDev = await getDeveloperById(patch.assigned_dev_id);
+    let nextDev = await getDeveloperById(targetDevId);
+
     if (previousDev) await updateDeveloper(previousDev.id, { active_tickets: Math.max(0, previousDev.active_tickets - 1) });
     if (nextDev) {
       await updateDeveloper(nextDev.id, { active_tickets: nextDev.active_tickets + 1 });
+      nextPatch.assigned_dev_id = nextDev.id;
       nextPatch.assigned_dev_name = patch.assigned_dev_name || nextDev.name;
+    } else {
+      nextPatch.assigned_dev_id = targetDevId;
     }
   }
 
@@ -52,6 +61,25 @@ export async function applyTicketUpdate(id, patch) {
 
 export async function runIncidentIngestPipeline(inputPayload) {
   const t0 = Date.now();
+
+  // Idempotency guard: an ERP transaction that fails twice with the same correlation id
+  // must map to ONE incident, not two. If we've already ingested this correlation id,
+  // return the existing incident and record that the duplicate was suppressed.
+  const incomingCorrelationId = inputPayload.erp_context?.correlation_id || null;
+  if (incomingCorrelationId) {
+    const existing = await getTicketByCorrelationId(incomingCorrelationId);
+    if (existing) {
+      await recordAuditEvent({
+        incident_id: existing.id,
+        actor: inputPayload.erp_context?.erp || inputPayload.reporter || "Smart Manufacturing ERP",
+        action: "DUPLICATE_SUPPRESSED",
+        previous_state: existing.status,
+        new_state: existing.status,
+        details: `Repeat ERP failure for correlation ${incomingCorrelationId} — no new incident created; mapped to existing ${existing.ticket_number}.`
+      }).catch(() => {});
+      return existing;
+    }
+  }
 
   // Prefer the reporter's own description; fall back to the real pixel-level Tesseract.js
   // OCR text when they only uploaded a screenshot and typed nothing. Without this, a
@@ -140,6 +168,22 @@ export async function runIncidentIngestPipeline(inputPayload) {
     incident: initialTicketDraft,
     ragKbMatches: kbMatches
   });
+
+  // A transaction the ERP itself REJECTED is a system-side failure — it always enters the
+  // developer remediation workflow (approve → verify → apply / rollback). Self-service is
+  // only for user-reported confusion, never for a hard ERP validation rejection. This keeps
+  // the demo deterministic regardless of how the LLM scores severity/confidence.
+  const isErpRejection =
+    inputPayload.erp_context?.source_transaction_status === "REJECTED" ||
+    inputPayload.erp_context?.source === "erp-backend-auto";
+  if (isErpRejection && diagnosisResult.ai_diagnosis) {
+    if (diagnosisResult.ai_diagnosis.resolution_type === "SELF_SERVICE") {
+      diagnosisResult.ai_diagnosis.resolution_type = "DEVELOPER";
+      diagnosisResult.ai_diagnosis.reason =
+        `${diagnosisResult.ai_diagnosis.reason || ""} The ERP transaction was hard-rejected by a validation rule, so this enters the developer remediation workflow rather than end-user self-service.`.trim();
+    }
+    diagnosisResult.ai_diagnosis.requires_human_review = true;
+  }
 
   const finalRootCause = diagnosisResult.ai_diagnosis.root_cause || rootCause.root_cause;
   const finalResolution = diagnosisResult.ai_diagnosis.recommended_resolution || rootCause.suggested_patch;

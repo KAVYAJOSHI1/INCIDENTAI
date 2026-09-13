@@ -136,6 +136,7 @@ export default function DeveloperLoadBalancer({ currentTicket, developers, onAss
                 alt={recommended.name}
                 className="w-11 h-11 rounded-lg"
                 style={{ border: '2px solid var(--accent)', background: 'var(--bg-surface)', padding: '2px' }}
+                onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
               />
               <div>
                 <div className="flex items-center gap-2 mb-0.5">
@@ -205,6 +206,7 @@ export default function DeveloperLoadBalancer({ currentTicket, developers, onAss
                       alt={dev.name}
                       className="w-10 h-10 rounded-lg"
                       style={{ background: 'var(--bg-muted)', padding: '2px' }}
+                      onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
                     />
                     <div>
                       <div className="flex items-center gap-2">

@@ -27,68 +27,7 @@ export default function IntegrationHub() {
     }
   };
 
-  const connectors = integrationsData?.connectors || [
-    {
-      id: 'erp',
-      name: 'Smart Manufacturing ERP',
-      type: 'ERP Platform',
-      status: 'CONNECTED',
-      protocol: 'REST API / Webhooks',
-      health: 'Healthy',
-      last_sync: '2 min ago',
-      incidents_received: 142,
-      events_processed: 8920,
-      is_demo: false,
-      integration_badge: 'LIVE INTEGRATION',
-      endpoint: 'http://localhost:3002/api/v1/events'
-    },
-    {
-      id: 'git',
-      name: 'Enterprise Git Repository',
-      type: 'Source Control System',
-      status: 'CONNECTED',
-      protocol: 'GitHub REST API v3',
-      health: 'Healthy',
-      repository: 'github.com/smartfactory/erp-core',
-      branch: 'main',
-      last_sync: '3 min ago',
-      patch_capability: 'READY',
-      verification_capability: 'ENABLED',
-      is_demo: true,
-      integration_badge: 'SIMULATED / DEMO CONNECTOR',
-      endpoint: 'https://api.github.com/repos/smartfactory/erp-core'
-    },
-    {
-      id: 'monitoring',
-      name: 'Enterprise Observability Suite',
-      type: 'Telemetry & Logs',
-      status: 'CONNECTED',
-      protocol: 'Prometheus / Grafana',
-      health: 'Healthy',
-      logs_processed: '1.2M logs/sec',
-      service_health: '99.98%',
-      error_signals_detected: 14,
-      last_sync: '1 min ago',
-      is_demo: true,
-      integration_badge: 'SIMULATED / DEMO CONNECTOR',
-      endpoint: 'http://localhost:9090/api/v1/alerts'
-    },
-    {
-      id: 'kb',
-      name: 'RAG Knowledge Base Engine',
-      type: 'Vector Knowledge Base',
-      status: 'CONNECTED',
-      protocol: 'PGVector RAG Index',
-      health: 'Healthy',
-      articles_indexed: 89,
-      verified_resolutions: 64,
-      match_quality_score: '94.8%',
-      last_indexed: '5 mins ago',
-      is_demo: false,
-      integration_badge: 'LOCAL RAG INDEX',
-      endpoint: 'http://localhost:4000/api/knowledge'
-    }
-  ];
+  const connectors = integrationsData?.connectors || [];
 
   // ERP → Integration/API/Webhooks → IncidentAI → AI Diagnosis → RAG/Evidence →
   // Remediation → Verification → Rollback (on fail) → Audit

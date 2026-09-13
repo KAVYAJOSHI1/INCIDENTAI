@@ -7,7 +7,8 @@ const DEPENDENCY_SIGNATURES = {
   ERR_PAYROLL_DEADLOCK: { service: "PayrollBatchService", file: "payroll/batchProcessor.js", function: "calculateGrossSalaryBatch()", table: "emp_tax_deductions_2026", trigger: "Concurrent batch threads racing on a shared row lock" },
   ERR_STOCK_NEG: { service: "InventoryService", file: "inventory/binTransfer.js", function: "validateStockQuantity()", table: "inv_stock_cache", trigger: "Stale cache read before transfer validation" },
   ERR_GL_UNBALANCED: { service: "GeneralLedgerService", file: "ledger/journalPoster.js", function: "postJournalBatch()", table: "gl_journal_lines", trigger: "Currency rounding mismatch across FX conversion" },
-  ERR_PO_MISMATCH: { service: "ProcurementService", file: "procurement/poReconciler.js", function: "reconcileGoodsReceipt()", table: "purchase_orders", trigger: "Partial delivery not reconciled against PO quantity" }
+  ERR_PO_MISMATCH: { service: "ProcurementService", file: "procurement/poReconciler.js", function: "reconcileGoodsReceipt()", table: "purchase_orders", trigger: "Received quantity exceeds PO quantity beyond the over-delivery tolerance" },
+  ERR_MATERIAL_SHORTAGE: { service: "ProductionService", file: "production/runReleaser.js", function: "reserveComponentsForRun()", table: "erp_inventory", trigger: "BOM component available_qty in the issuing bin is below the run requirement" }
 };
 
 const DEFAULT_SIGNATURE = { service: "CoreErpService", file: "core/requestHandler.js", function: "handleTransaction()", table: "erp_transaction_log", trigger: "Unclassified backend exception" };

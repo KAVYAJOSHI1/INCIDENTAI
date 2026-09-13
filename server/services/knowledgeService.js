@@ -94,6 +94,15 @@ export async function searchKnowledgeBaseWithVector(queryText, erpModule, { minS
   const vector = await embedQuery(queryText);
   if (!vector) return null;
 
+  // Embedding coverage guard: if most articles have no embedding yet (e.g. the embedding
+  // provider was rate-limited during seeding), a vector search over the embedded subset
+  // silently hides the relevant article. Fall back to full TF-IDF instead of returning a
+  // misleading partial result.
+  const { rows: cov } = await pgQuery(
+    `SELECT count(*) FILTER (WHERE embedding IS NOT NULL)::int AS with_emb, count(*)::int AS total FROM knowledge_base`
+  );
+  if (!cov[0] || cov[0].total === 0 || cov[0].with_emb < Math.max(1, cov[0].total - 1)) return null;
+
   const vectorLiteral = `[${vector.join(",")}]`;
   const { rows } = await pgQuery(
     `SELECT id, title, erp_module, error_code, solution, confidence, tags,

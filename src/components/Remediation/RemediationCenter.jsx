@@ -7,6 +7,7 @@ import {
 export default function RemediationCenter({
   ticket,
   remediation,
+  isExecutive,
   onApprove,
   onReject,
   onViewPatch,
@@ -198,36 +199,44 @@ export default function RemediationCenter({
         </div>
 
         <div className="flex items-center gap-2">
-          {status === "PROPOSED" && (
-            <>
-              <button
-                onClick={handleRejectClick}
-                disabled={isRejecting}
-                className="btn-secondary text-xs text-rose-400 hover:border-rose-500/50"
-              >
-                <XCircle className="w-3.5 h-3.5" /> Reject Proposal
-              </button>
-
-              <button
-                onClick={handleApproveClick}
-                disabled={isApproving}
-                className="btn-primary text-xs"
-              >
-                <CheckCircle2 className="w-3.5 h-3.5" /> Approve Patch Remediation
-              </button>
-            </>
-          )}
-
-          {status === "APPROVED" && (
-            <button onClick={onStartVerification} className="btn-primary text-xs bg-blue-600 hover:bg-blue-500">
-              <Terminal className="w-3.5 h-3.5" /> Run Automated Patch Verification
-            </button>
-          )}
-
-          {(status === "VERIFIED" || status === "APPLIED" || status === "KNOWLEDGE_CAPTURED" || status === "RESOLVED") && (
-            <span className="text-xs font-mono font-bold text-emerald-400 flex items-center gap-1.5 px-3 py-1.5 rounded bg-emerald-500/10 border border-emerald-500/20">
-              <CheckCircle2 className="w-4 h-4" /> Remediation Approved & Verified
+          {isExecutive ? (
+            <span className="inline-flex items-center gap-1.5 text-xs font-mono font-bold px-3 py-1.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
+              <Lock className="w-3.5 h-3.5 text-blue-400" /> Executive Read-Only View: Remediation approval & execution reserved for Developer role
             </span>
+          ) : (
+            <>
+              {status === "PROPOSED" && (
+                <>
+                  <button
+                    onClick={handleRejectClick}
+                    disabled={isRejecting}
+                    className="btn-secondary text-xs text-rose-400 hover:border-rose-500/50"
+                  >
+                    <XCircle className="w-3.5 h-3.5" /> Reject Proposal
+                  </button>
+
+                  <button
+                    onClick={handleApproveClick}
+                    disabled={isApproving}
+                    className="btn-primary text-xs"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Approve Patch Remediation
+                  </button>
+                </>
+              )}
+
+              {status === "APPROVED" && (
+                <button onClick={onStartVerification} className="btn-primary text-xs bg-blue-600 hover:bg-blue-500">
+                  <Terminal className="w-3.5 h-3.5" /> Run Automated Patch Verification
+                </button>
+              )}
+
+              {(status === "VERIFIED" || status === "APPLIED" || status === "KNOWLEDGE_CAPTURED" || status === "RESOLVED") && (
+                <span className="text-xs font-mono font-bold text-emerald-400 flex items-center gap-1.5 px-3 py-1.5 rounded bg-emerald-500/10 border border-emerald-500/20">
+                  <CheckCircle2 className="w-4 h-4" /> Remediation Approved & Verified
+                </span>
+              )}
+            </>
           )}
         </div>
       </div>

@@ -8,11 +8,12 @@ export const ROLE_LABELS = {
   EXECUTIVE: 'Executive'
 };
 
+// Nav is trimmed to the incident-lifecycle demo path. War Room / Mission Control
+// components and routes are kept (reachable by URL) but removed from the default nav
+// to keep the live presentation focused. Re-add the ids here to surface them again.
 export const VIEWS_BY_ROLE = {
-  // Developer: investigate, approve, remediate, verify, rollback
-  DEVELOPER: ['TRIAGE', 'DEVELOPER', 'PIPELINE', 'DIGITALTWIN', 'INTEGRATIONS'],
-  // Executive: monitor incidents, business impact, SLA, risk, overall system status
-  EXECUTIVE: ['ADMIN', 'WARROOM', 'MISSIONCONTROL', 'DIGITALTWIN', 'INTEGRATIONS']
+  DEVELOPER: ['TRIAGE', 'DEVELOPER', 'PIPELINE', 'KNOWLEDGE', 'DIGITALTWIN', 'INTEGRATIONS'],
+  EXECUTIVE: ['ADMIN', 'DIGITALTWIN', 'INTEGRATIONS']
 };
 
 export const DEFAULT_VIEW_BY_ROLE = {

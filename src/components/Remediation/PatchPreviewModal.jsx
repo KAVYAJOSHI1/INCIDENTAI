@@ -3,6 +3,7 @@ import { FileCode, X, CheckCircle2, XCircle, AlertTriangle, Sparkles, Terminal }
 
 export default function PatchPreviewModal({
   patchData,
+  isExecutive = false,
   onClose,
   onApprove,
   onReject
@@ -110,13 +111,26 @@ export default function PatchPreviewModal({
         </div>
 
         {/* Footer Actions */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[var(--border)] surface-muted">
-          <button onClick={onReject} className="btn-secondary text-xs text-rose-400">
-            <XCircle className="w-3.5 h-3.5" /> Reject
-          </button>
-          <button onClick={onApprove} className="btn-primary text-xs">
-            <CheckCircle2 className="w-3.5 h-3.5" /> Approve Patch
-          </button>
+        <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-[var(--border)] surface-muted">
+          {isExecutive ? (
+            <>
+              <span className="text-xs font-mono font-bold text-blue-400">
+                Executive Read-Only View: Code patch approvals are reserved for Developer role
+              </span>
+              <button onClick={onClose} className="btn-secondary text-xs">
+                Close
+              </button>
+            </>
+          ) : (
+            <div className="flex items-center gap-3 ml-auto">
+              <button onClick={onReject} className="btn-secondary text-xs text-rose-400">
+                <XCircle className="w-3.5 h-3.5" /> Reject
+              </button>
+              <button onClick={onApprove} className="btn-primary text-xs">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Approve Patch
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

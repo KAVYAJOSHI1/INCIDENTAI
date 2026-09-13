@@ -151,7 +151,7 @@ export default function ExecutiveDashboard({ tickets, developers }) {
               <div key={t.id} className="p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 space-y-1">
                 <span className="text-amber-500 font-extrabold block">AWAITING APPROVAL</span>
                 <span className="font-bold text-heading block">{t.ticket_number || t.id}</span>
-                <span className="text-[10px] text-muted-color">Dev: {t.assigned_dev_name || 'Marcus Vance'}</span>
+                <span className="text-[10px] text-muted-color">Dev: {t.assigned_dev_name || 'Unassigned'}</span>
               </div>
             ))}
 

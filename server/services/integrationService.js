@@ -1,21 +1,25 @@
 /**
  * Integration Service
  * Manages enterprise platform connectors: ERP, Git / Code Repository, Monitoring, Knowledge Base.
+ *
+ * Honest labelling (see PHASE 16): the ERP and Knowledge-Base connectors are real
+ * (embedded ERP DB state, local pgvector/TF-IDF index). Git and Observability are
+ * clearly marked as simulated demo connectors.
  */
+
+import { query } from "../db/postgres.js";
 
 const INTEGRATION_STATUS = {
   ERP: {
     id: "erp",
-    name: "Smart Manufacturing ERP",
+    name: "Smart Manufacturing ERP (Embedded)",
     type: "ERP Platform",
     status: "CONNECTED", // CONNECTED | DEGRADED | NOT_CONNECTED
-    protocol: "REST API / Webhooks",
-    integration_badge: "LIVE INTEGRATION",
+    protocol: "REST API / Webhooks + read-only MCP",
+    integration_badge: "LIVE EMBEDDED ERP · REAL DB STATE",
     health: "Healthy",
     last_sync: "Just now",
-    incidents_received: 142,
-    events_processed: 8920,
-    modules: ["Inventory", "Finance", "Orders", "Warehouse", "Payroll"],
+    modules: ["Inventory", "Production", "Procurement", "Invoicing", "General Ledger"],
     is_demo: false,
     endpoint: "/api/erp"
   },
@@ -52,19 +56,44 @@ const INTEGRATION_STATUS = {
     name: "RAG Knowledge Base Engine",
     type: "Vector Knowledge Base",
     status: "CONNECTED",
-    articles_indexed: 89,
-    verified_resolutions: 64,
-    match_quality_score: "94.8%",
-    last_indexed: "5 mins ago",
+    protocol: "pgvector cosine + TF-IDF fallback + LLM re-rank",
+    last_indexed: "Live",
+    match_quality_score: "grounded, re-ranked",
     is_demo: false,
-    integration_badge: "LOCAL RAG INDEX",
+    integration_badge: "REAL RAG RETRIEVAL · LOCAL pgvector / TF-IDF",
     endpoint: "http://localhost:4000/api/knowledge"
   }
 };
 
 export async function getIntegrations() {
+  // Real, live counts for the honest connectors.
+  let incidentsReceived = null;
+  let eventsProcessed = null;
+  let articlesIndexed = null;
+  let verifiedResolutions = null;
+  try {
+    const [{ rows: tc }, { rows: ac }, { rows: kc }, { rows: vc }] = await Promise.all([
+      query("SELECT count(*)::int AS c FROM tickets"),
+      query("SELECT count(*)::int AS c FROM audit_log"),
+      query("SELECT count(*)::int AS c FROM knowledge_base"),
+      query("SELECT count(*)::int AS c FROM knowledge_base WHERE tags::text ILIKE '%VERIFIED%'")
+    ]);
+    incidentsReceived = tc[0].c;
+    eventsProcessed = ac[0].c;
+    articlesIndexed = kc[0].c;
+    verifiedResolutions = vc[0].c;
+  } catch {
+    /* DB unavailable — omit counts rather than show fake ones */
+  }
+
+  const connectors = Object.values(INTEGRATION_STATUS).map((c) => {
+    if (c.id === "erp") return { ...c, incidents_received: incidentsReceived, events_processed: eventsProcessed };
+    if (c.id === "kb") return { ...c, articles_indexed: articlesIndexed, verified_resolutions: verifiedResolutions };
+    return c;
+  });
+
   return {
-    connectors: Object.values(INTEGRATION_STATUS),
+    connectors,
     architecture_overview: {
       ingestion_status: "ACTIVE",
       ai_intelligence: "ONLINE",

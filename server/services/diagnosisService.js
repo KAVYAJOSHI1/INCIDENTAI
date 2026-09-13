@@ -54,6 +54,8 @@ export async function collectMcpEvidence(incident, correlationId) {
           tool: t.name,
           status: 200,
           label: "LIVE ERP FACTS",
+          source: res.source || "gateway",
+          source_label: res.source === "embedded" ? "LIVE ERP (embedded)" : "LIVE ERP (gateway)",
           data: res.data,
           correlationId: res.correlationId
         });
@@ -224,7 +226,8 @@ function applySafetyGuardrails(incident, diagnosis, mcpEvidence, ragEvidence) {
   const result = { ...diagnosis };
 
   // Guardrail 1: P0/P1 High-Severity Incidents MUST NEVER be SELF_SERVICE
-  const sev = (incident.severity || "P2").toUpperCase();
+  // (severity arrives as "P0_CRITICAL" / "P1_HIGH" / "P2_MEDIUM" — match on the prefix).
+  const sev = (incident.severity || "P2").toUpperCase().split("_")[0];
   if ((sev === "P0" || sev === "P1") && result.resolution_type === "SELF_SERVICE") {
     result.resolution_type = "DEVELOPER";
     result.requires_human_review = true;
@@ -279,7 +282,8 @@ function generateFallbackDiagnosis(incident, mcpEvidence, ragEvidence) {
   }
 
   const confidence = topRag && topRag.similarity_score > 0.8 ? 0.82 : 0.65;
-  const isP0P1 = (incident.severity || "P2").toUpperCase() === "P0" || (incident.severity || "P2").toUpperCase() === "P1";
+  const sevPrefix = (incident.severity || "P2").toUpperCase().split("_")[0];
+  const isP0P1 = sevPrefix === "P0" || sevPrefix === "P1";
 
   let resolutionType = "DEVELOPER";
   if (topRag && topRag.similarity_score >= 0.85 && isHealthy && !isP0P1 && topRag.is_verified) {

@@ -1,31 +1,32 @@
 import React from 'react';
 import {
   ShieldAlert, Code2, BarChart3, GitFork,
-  Radio, Map, Gauge, X, Zap, Server
+  Radio, Map, Gauge, X, Zap, Server, BookOpen
 } from 'lucide-react';
 
 const NAV_SECTIONS = [
   {
-    label: 'Incident Management',
+    label: 'Incident Resolution',
     items: [
       { id: 'TRIAGE',       label: 'Incident Queue',       icon: ShieldAlert },
       { id: 'DEVELOPER',    label: 'Developer Workbench',  icon: Code2      },
       { id: 'PIPELINE',     label: 'Incident Lifecycle',   icon: GitFork    },
+      { id: 'KNOWLEDGE',    label: 'Knowledge Hub',        icon: BookOpen   },
     ]
   },
   {
-    label: 'Analytics & AI',
+    label: 'Executive Oversight',
     items: [
-      { id: 'ADMIN',    label: 'Executive Dashboard',    icon: BarChart3   },
+      { id: 'ADMIN',          label: 'Executive Dashboard', icon: BarChart3   },
+      { id: 'WARROOM',        label: 'War Room',            icon: Radio       },
+      { id: 'MISSIONCONTROL', label: 'Mission Control',     icon: Gauge       },
     ]
   },
   {
-    label: 'Operations & Platform',
+    label: 'Platform Architecture',
     items: [
-      { id: 'INTEGRATIONS',  label: 'Integration Hub',   icon: Server },
-      { id: 'WARROOM',       label: 'War Room',          icon: Radio  },
-      { id: 'DIGITALTWIN',   label: 'Digital Twin',      icon: Map    },
-      { id: 'MISSIONCONTROL',label: 'Mission Control',   icon: Gauge  },
+      { id: 'DIGITALTWIN',   label: 'Digital Twin',        icon: Map    },
+      { id: 'INTEGRATIONS',  label: 'Integration Hub',     icon: Server },
     ]
   }
 ];

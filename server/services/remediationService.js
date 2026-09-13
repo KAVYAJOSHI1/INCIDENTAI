@@ -31,7 +31,16 @@ function calculateRemediationRisk(ticket, kbMismatch) {
 function buildRemediationPlan(ticket) {
   const matchedKb = (ticket.rag_kb_matches || [])[0];
   const matchedModule = matchedKb?.article?.erp_module;
-  const isKbMismatch = Boolean(matchedModule && matchedModule !== ticket.erp_module);
+  const matchScore = matchedKb?.score ?? null;
+  const moduleMismatch = Boolean(matchedModule && matchedModule !== ticket.erp_module);
+  // Only flag "weak evidence" when there is genuinely almost nothing to go on — a
+  // same-module article at a moderate score is still trustworthy. (The retrieval floor
+  // is already ~0.25, so this bites only on borderline retrievals.)
+  const lowRelevance = matchedKb != null && matchScore != null && matchScore < 0.25;
+  const noHistoricalEvidence = (ticket.rag_kb_matches || []).length === 0;
+  // Safety: do not trust RAG when the top match is a different module, is essentially
+  // irrelevant, or when there is no historical precedent at all — require human review.
+  const isKbMismatch = moduleMismatch || lowRelevance || noHistoricalEvidence;
 
   const confidenceScore = ticket.ai_confidence ?? null;
   const riskLevel = calculateRemediationRisk(ticket, isKbMismatch);
@@ -61,8 +70,15 @@ function buildRemediationPlan(ticket) {
     human_approval_required:
       riskLevel === "HIGH" || riskLevel === "CRITICAL" || isKbMismatch || confidenceScore == null || confidenceScore < 0.8,
     kb_mismatch_detected: isKbMismatch,
-    kb_mismatch_details: isKbMismatch
-      ? `Incident belongs to ${ticket.erp_module}, but top KB match belongs to ${matchedModule}. Automatic patch execution blocked pending human review.`
+    kb_mismatch_reason: moduleMismatch ? "MODULE_MISMATCH" : lowRelevance ? "LOW_RELEVANCE" : noHistoricalEvidence ? "NO_HISTORICAL_EVIDENCE" : null,
+    kb_match_score: matchScore,
+    kb_match_module: matchedModule || null,
+    kb_mismatch_details: moduleMismatch
+      ? `This incident is in ${ticket.erp_module}, but the closest knowledge-base article belongs to ${matchedModule} (${matchScore != null ? Math.round(matchScore * 100) : "?"}% similarity). Low-confidence cross-module evidence is not treated as authoritative — automatic remediation is blocked pending human review.`
+      : lowRelevance
+      ? `The closest knowledge-base article is only ${Math.round(matchScore * 100)}% relevant to this incident. That is below the threshold IncidentAI trusts for automation — human review is required.`
+      : noHistoricalEvidence
+      ? `IncidentAI found no historical incident or knowledge-base article matching this ${ticket.erp_module} failure. With no precedent to ground the fix, automatic remediation is blocked and a developer must review.`
       : null,
     current_version: currentVersion,
     target_version: bumpPatchVersion(currentVersion)

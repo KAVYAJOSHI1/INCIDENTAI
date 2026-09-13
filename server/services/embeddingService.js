@@ -21,7 +21,13 @@ export function isEmbeddingConfigured() {
   return Boolean(process.env.VOYAGE_API_KEY);
 }
 
-async function callVoyage(inputs, inputType, retries = 2) {
+// Retries default to 0 (like the LLM clients in llmService) so a rate-limited / down
+// provider fails fast to the TF-IDF fallback instead of stalling ingestion + reset with
+// back-off sleeps. Override with VOYAGE_MAX_RETRIES when the provider has real headroom.
+const MAX_RETRIES = Number(process.env.VOYAGE_MAX_RETRIES ?? 0);
+const REQUEST_TIMEOUT_MS = Number(process.env.VOYAGE_TIMEOUT_MS ?? 4000);
+
+async function callVoyage(inputs, inputType, retries = MAX_RETRIES) {
   for (let attempt = 0; attempt <= retries; attempt++) {
     const response = await fetch(API_URL, {
       method: "POST",
@@ -29,7 +35,8 @@ async function callVoyage(inputs, inputType, retries = 2) {
         Authorization: `Bearer ${process.env.VOYAGE_API_KEY}`,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ input: inputs, model: MODEL, input_type: inputType, output_dimension: OUTPUT_DIMENSION })
+      body: JSON.stringify({ input: inputs, model: MODEL, input_type: inputType, output_dimension: OUTPUT_DIMENSION }),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
     });
 
     if (response.ok) {
@@ -38,7 +45,7 @@ async function callVoyage(inputs, inputType, retries = 2) {
     }
 
     if (response.status === 429 && attempt < retries) {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
       continue;
     }
 

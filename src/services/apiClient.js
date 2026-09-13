@@ -164,6 +164,11 @@ export const applyPatch = (ticketId, actor) => request(`/incidents/${ticketId}/a
 export const rollbackPatch = (ticketId, reason, actor) => request(`/incidents/${ticketId}/rollback`, { method: "POST", body: JSON.stringify({ reason, actor }) });
 export const fetchAuditLogs = (ticketId) => request(ticketId ? `/incidents/${ticketId}/audit-logs` : "/audit-logs").then((d) => d.audit_logs);
 
+// Demo Incident Factory — presenter-triggerable real ERP failures + deterministic reset
+export const fetchDemoScenarios = () => request("/demo/scenarios").then((d) => d.scenarios);
+export const triggerDemoScenario = (id) => request(`/demo/scenarios/${id}/trigger`, { method: "POST" });
+export const resetDemoEnvironment = () => request("/demo/reset", { method: "POST" }).then((d) => d.summary);
+
 // Embedded Smart Manufacturing ERP — real, DB-backed inventory processing
 export const fetchErpInventory = () => request("/erp/inventory");
 export const fetchErpMasterData = () => request("/erp/master-data");

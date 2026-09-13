@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   ShieldAlert, GitMerge, CheckCircle2, User, Clock,
   AlertTriangle, Layers, BookOpen, FileSearch, Terminal, Sparkles,
-  ChevronDown, ChevronUp, Copy, AlertCircle, ArrowRight, ArrowDown,
+  ChevronDown, ChevronUp, Copy, AlertCircle, ArrowRight, ArrowLeft, ArrowDown,
   Database, Cpu, Server, FileCode, Check, AlertOctagon, HelpCircle,
   ExternalLink, Code2, Tag, Activity, ShieldCheck, RotateCcw,
   UserCheck, Shield, RefreshCw
@@ -15,7 +15,30 @@ import VerificationPanel from '../Remediation/VerificationPanel';
 import RollbackModal from '../Remediation/RollbackModal';
 import RemediationTimeline from '../Remediation/RemediationTimeline';
 import IncidentLifecycleVisualizer from '../Pipeline/IncidentLifecycleVisualizer';
+import PipelineStrip from '../Pipeline/PipelineStrip';
 import * as api from '../../services/apiClient';
+
+/** Condenses one MCP evidence item into a short human-readable fact line. */
+function summarizeMcpEvidence(ev) {
+  if (!ev || ev.status !== 200) return ev?.error || 'unavailable';
+  const d = ev.data || {};
+  if (Array.isArray(d.inventory) && d.inventory.length) {
+    return d.inventory
+      .slice(0, 3)
+      .map((r) => `${r.sku} @ ${r.warehouse}/${r.bin}: ${r.available_qty} available`)
+      .join(' · ');
+  }
+  if (Array.isArray(d.transactions) && d.transactions.length) {
+    const t = d.transactions[0];
+    return `${t.type} ${t.id}: ${t.status}${t.reason ? ` — ${t.reason}` : ''}`;
+  }
+  if (Array.isArray(d.invoices) && d.invoices.length) {
+    const i = d.invoices[0];
+    return `${i.id}: ${i.status}${i.reason ? ` — ${i.reason}` : ''}`;
+  }
+  if (d.overall) return `ERP service health: ${d.overall}${d.note ? ` (${d.note})` : ''}`;
+  return JSON.stringify(d).slice(0, 160);
+}
 
 const SEV_BADGE = {
   P0_CRITICAL: 'badge-p0',
@@ -24,10 +47,51 @@ const SEV_BADGE = {
   P3_LOW:      'badge-p3',
 };
 
-export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDeveloper, onNavigateToErp, onTicketUpdated }) {
+export default function JiraTicketView({
+  ticket,
+  userRole,
+  currentUser,
+  developers = [],
+  currentSubpage = 'overview',
+  onNavigateSubpage,
+  onBackToQueue,
+  onMergeDuplicate,
+  onAssignDeveloper,
+  onNavigateToErp,
+  onTicketUpdated
+}) {
   const [activeTab, setActiveTab] = useState('OVERVIEW');
   const [isReproduceOpen, setIsReproduceOpen] = useState(true);
   const [copiedPatch, setCopiedPatch] = useState(false);
+
+  // Sync activeTab state with route currentSubpage
+  useEffect(() => {
+    if (currentSubpage) {
+      const s = currentSubpage.toLowerCase();
+      if (s === 'timeline' || s === 'lifecycle') setActiveTab('TIMELINE');
+      else if (s === 'impact' || s === 'risks') setActiveTab('IMPACT');
+      else if (s === 'diagnosis') setActiveTab('DIAGNOSIS');
+      else if (s === 'remediation') setActiveTab('REMEDIATION');
+      else if (s === 'verification') setActiveTab('VERIFICATION');
+      else setActiveTab('OVERVIEW');
+    }
+  }, [currentSubpage]);
+
+  const handleSubpageNavigation = (subpageKey) => {
+    const s = subpageKey.toLowerCase();
+    if (s === 'timeline' || s === 'lifecycle') setActiveTab('TIMELINE');
+    else if (s === 'impact' || s === 'risks') setActiveTab('IMPACT');
+    else if (s === 'diagnosis') setActiveTab('DIAGNOSIS');
+    else if (s === 'remediation') setActiveTab('REMEDIATION');
+    else if (s === 'verification') setActiveTab('VERIFICATION');
+    else setActiveTab('OVERVIEW');
+
+    if (onNavigateSubpage) {
+      onNavigateSubpage(s);
+    } else if (ticket?.id) {
+      window.history.pushState({}, '', `/incident/${ticket.id}/${s}`);
+    }
+  };
 
   // Remediation & Patch State
   const [remediation, setRemediation] = useState(null);
@@ -125,7 +189,7 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
       const res = await api.verifyPatch(id, { simulate_failure: simulateFail });
       if (res?.verification) setVerificationResult(res.verification);
       return res;
-    }, { onSuccessTab: 'VERIFICATION' });
+    }, { onSuccessTab: 'REMEDIATION' });
 
   const handleApplyPatch = () =>
     runAction('apply', (id) => api.applyPatch(id), { onSuccessTab: 'TIMELINE' });
@@ -148,8 +212,7 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
     );
   }
 
-  // ── Ticket field normalization — every value comes from THIS incident, with an
-  //    honest empty marker ("—" / "Unavailable") where the record has no data. ──
+  // ── Ticket field normalization ──
   const ticketId = ticket.ticket_number || ticket.id;
   const correlationId = ticket.correlation_id || '—';
 
@@ -160,7 +223,6 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
     : rawSeverity;
 
   const erpModule = ticket.erp_module || 'Unknown module';
-  // Authoritative workflow status is ticket.status; remediation_status is the sub-state mirror.
   const status = ticket.status || ticket.remediation_status || 'NEW';
   const slaMinutes = ticket.sla_remaining_minutes != null ? ticket.sla_remaining_minutes : null;
   const isSlaAtRisk = slaMinutes != null && slaMinutes < 30 && status !== 'RESOLVED';
@@ -169,13 +231,28 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
   const hasConfidence = confidenceScore != null;
   const confidencePercent = hasConfidence ? `${Math.round(confidenceScore * 100)}%` : 'Confidence unavailable';
 
-  // The incident source is the ERP system, not a person — IncidentAI ownership is
-  // Assigned Developer (operational owner) → Reviewer → Resolution Owner.
   const incidentSource = ticket.erp_context?.erp || 'Smart Manufacturing ERP';
   const isAssigned = Boolean(ticket.assigned_dev_name || ticket.assigned_dev_id);
   const assignedDev = ticket.assigned_dev_name || 'Unassigned';
-  const reviewerName = ticket.reviewer_name || '—';
-  const resolutionOwner = ticket.resolution_owner || (isAssigned ? assignedDev : '—');
+
+  const isAssignedToCurrentUser = Boolean(
+    currentUser && (
+      (ticket.assigned_dev_id && (ticket.assigned_dev_id === currentUser.id || ticket.assigned_dev_id === currentUser.devId)) ||
+      (ticket.assigned_dev_name && currentUser.name && (
+        ticket.assigned_dev_name.toLowerCase() === currentUser.name.toLowerCase() ||
+        ticket.assigned_dev_name.toLowerCase().includes(currentUser.name.split(' ')[0].toLowerCase()) ||
+        currentUser.name.toLowerCase().includes(ticket.assigned_dev_name.split(' ')[0].toLowerCase())
+      ))
+    )
+  );
+
+  const allDevsList = (developers && developers.length > 0) ? developers : [
+    { id: 'dev_01', name: 'Alex Mercer' },
+    { id: 'dev_02', name: 'Sarah Jenkins' },
+    { id: 'dev_03', name: 'Marcus Vance' },
+    { id: 'dev_04', name: 'Priya Sharma' },
+    { id: 'dev_05', name: 'Devi Developer' }
+  ];
 
   const errorCode = ticket.ocr_findings?.extracted_error_code || ticket.error_code || '—';
   const uiComponent = ticket.ocr_findings?.detected_component || ticket.ocr_findings?.detected_ui_component || ticket.ui_component || '—';
@@ -193,7 +270,7 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
     ? ticket.reproduction_steps
     : null;
 
-  // RAG evidence — from this incident's own retrieval
+  // RAG evidence
   const topKb = ticket.rag_kb_matches?.[0];
   const topKbTitle = topKb?.article?.title || ticket.rag_evidence?.[0]?.title || null;
   const topKbModule = topKb?.article?.erp_module || null;
@@ -202,8 +279,6 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
   const grFacts = Array.isArray(ticket.ai_diagnosis?.evidence) ? ticket.ai_diagnosis.evidence : [];
   const liveFacts = Array.isArray(ticket.mcp_evidence) ? ticket.mcp_evidence : [];
 
-  // Dependency tree for THIS incident (fetched from /root-cause-tree) — drives the
-  // technical stack diagnostic + execution-chain, no hardcoded inventory scenario.
   const treeNodes = Array.isArray(rcTree?.nodes) ? rcTree.nodes : [];
   const nodeLabel = (type) => treeNodes.find((n) => n.type === type)?.label || null;
   const suspectedService = nodeLabel('service') || (ticket.erp_module ? `${ticket.erp_module}Service` : '—');
@@ -223,41 +298,50 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      {/* ==========================================
-          1. VISUALLY DOMINANT INCIDENT STATUS HEADER
-          ========================================== */}
+      {/* Top Back Navigation Bar */}
+      <div className="flex items-center justify-between px-2">
+        <button
+          onClick={() => {
+            if (onBackToQueue) onBackToQueue();
+            else handleSubpageNavigation('overview');
+          }}
+          className="flex items-center gap-2 text-xs font-bold text-muted-color hover:text-heading transition-colors cursor-pointer"
+        >
+          <ArrowLeft className="w-4 h-4 text-accent-color" /> Back to Incident Queue
+        </button>
+
+        <span className="text-[11px] font-mono text-muted-color hidden sm:inline">
+          Workspace Route: <code className="text-accent-color font-mono font-bold">/incident/{ticketId}/{currentSubpage || 'overview'}</code>
+        </span>
+      </div>
+
+      {/* Header */}
       <div className="surface p-6 rounded-2xl border border-[var(--border)] shadow-md space-y-5">
-        {/* Top Metadata & Navigation Action Bar */}
+        {/* Top Bar */}
         <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-[var(--border)]">
           <div className="flex flex-wrap items-center gap-2.5">
-            {/* Status Badge */}
             <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-extrabold border ${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}>
               <span className={`w-2 h-2 rounded-full animate-pulse ${statusStyle.dot}`} />
               {status}
             </span>
 
-            {/* Ticket Number */}
             <span className="text-xs font-mono font-extrabold px-3 py-1 rounded-lg bg-accent-subtle-bg text-accent-subtle-text border border-accent-subtle-bd">
               {ticketId}
             </span>
 
-            {/* Correlation ID */}
             <span className="text-xs font-mono px-2.5 py-1 rounded-lg surface-muted border border-[var(--border)] text-muted-color hidden md:inline">
               Ref: {correlationId}
             </span>
 
-            {/* Severity Badge */}
             <span className={`${sevBadgeClass} text-xs font-mono px-2.5 py-1 rounded-lg`}>
               {severityFormatted}
             </span>
 
-            {/* Module Badge */}
             <span className="badge-module text-xs font-mono px-2.5 py-1 rounded-lg">
               {erpModule}
             </span>
           </div>
 
-          {/* Right Action Controls: Two-Way ERP Navigation + Tab Jumpers */}
           <div className="flex items-center gap-2">
             {onNavigateToErp && (
               <button
@@ -277,7 +361,7 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
           </div>
         </div>
 
-        {/* Title & Ownership Header Row */}
+        {/* Title */}
         <div>
           <h1 className="text-xl font-extrabold text-heading leading-snug">
             {ticket.title || `[${erpModule}] ${errorCode}: Operational Failure in ${uiComponent}`}
@@ -287,13 +371,12 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
           </p>
         </div>
 
-        {/* Header SLA Countdown Bar + AI Confidence Meter */}
+        {/* Metrics Row */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-[var(--border)]">
-          {/* SLA Timer & Progress Bar */}
           <div className="surface-muted p-3.5 rounded-xl border border-[var(--border)] space-y-1.5">
             <div className="flex items-center justify-between text-xs font-mono">
               <span className="text-muted-color flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-accent-color" /> SLA Target Countdown
+                <Clock className="w-3.5 h-3.5 text-accent-color" /> SLA Countdown
               </span>
               {slaMinutes == null ? (
                 <span className="font-bold text-muted-color">Not tracked</span>
@@ -313,21 +396,79 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
             </div>
           </div>
 
-          {/* Assigned Developer */}
-          <div className="surface-muted p-3.5 rounded-xl border border-[var(--border)] flex items-center justify-between">
+          {/* Assigned Developer & Ownership Context */}
+          <div className="surface-muted p-3.5 rounded-xl border border-[var(--border)] flex items-center justify-between gap-3">
             <div>
               <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-muted-color block">Assigned Developer</span>
-              <span className={`text-xs font-extrabold flex items-center gap-1.5 mt-0.5 ${isAssigned ? 'text-heading' : 'text-amber-500'}`}>
-                <UserCheck className="w-3.5 h-3.5 text-accent-color" /> {assignedDev}
-              </span>
+              {isAssignedToCurrentUser ? (
+                <span className="text-xs font-extrabold flex items-center gap-1.5 mt-0.5 text-emerald-400">
+                  <UserCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  {ticket.assigned_dev_name || currentUser?.name || 'Devi Developer'}
+                  <span className="text-[9px] font-mono font-extrabold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 ml-1">
+                    YOUR INCIDENT
+                  </span>
+                </span>
+              ) : isAssigned ? (
+                <span className="text-xs font-extrabold flex items-center gap-1.5 mt-0.5 text-heading">
+                  <UserCheck className="w-3.5 h-3.5 text-accent-color shrink-0" /> {assignedDev}
+                </span>
+              ) : (
+                <span className="text-xs font-extrabold flex items-center gap-1.5 mt-0.5 text-amber-500">
+                  <UserCheck className="w-3.5 h-3.5 text-amber-500 shrink-0" /> Unassigned
+                </span>
+              )}
             </div>
+
+            {onAssignDeveloper && (
+              <div className="flex items-center gap-2">
+                {!isAssignedToCurrentUser ? (
+                  <button
+                    onClick={() => {
+                      const devId = (currentUser?.id === 'user_demo_developer') ? 'dev_05' : (currentUser?.id || currentUser?.devId || 'dev_05');
+                      onAssignDeveloper(ticket.id, devId);
+                    }}
+                    className="btn-primary text-xs py-1.5 px-3 font-bold flex items-center gap-1.5 shadow-sm"
+                  >
+                    <UserCheck className="w-3.5 h-3.5" />
+                    {isAssigned ? 'Reassign to Me' : 'Claim Ticket & Assign to Me'}
+                  </button>
+                ) : userRole === 'executive' ? (
+                  <select
+                    value={ticket.assigned_dev_id || ''}
+                    onChange={(e) => onAssignDeveloper(ticket.id, e.target.value)}
+                    className="input-field text-xs py-1 px-2 font-bold text-accent-color bg-subtle border border-[var(--border)] rounded-lg cursor-pointer"
+                  >
+                    <option value="" disabled>Reassign Dev...</option>
+                    {allDevsList.map((dev) => (
+                      <option key={dev.id} value={dev.id}>{dev.name}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      if (e.target.value) onAssignDeveloper(ticket.id, e.target.value);
+                    }}
+                    className="input-field text-xs py-1 px-2 font-medium text-muted-color bg-subtle border border-[var(--border)] rounded-lg cursor-pointer hover:text-heading"
+                  >
+                    <option value="">Transfer Ownership...</option>
+                    {allDevsList
+                      .filter((d) => d.name !== currentUser?.name && d.id !== currentUser?.id && d.name !== 'Devi Developer')
+                      .map((dev) => (
+                        <option key={dev.id} value={dev.id}>
+                          Transfer to {dev.name}
+                        </option>
+                      ))}
+                  </select>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* AI Confidence Meter */}
           <div className="surface-muted p-3.5 rounded-xl border border-[var(--border)] space-y-1.5">
             <div className="flex items-center justify-between text-xs font-mono">
               <span className="text-muted-color flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" /> AI Diagnostic Confidence
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" /> AI Confidence
               </span>
               <span className="font-extrabold text-amber-500">{hasConfidence ? confidencePercent : 'N/A'}</span>
             </div>
@@ -340,7 +481,6 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
           </div>
         </div>
 
-        {/* Workflow action error banner */}
         {actionError && (
           <div className="px-4 py-2.5 rounded-xl border border-rose-500/40 bg-rose-500/10 text-xs font-medium text-rose-600 dark:text-rose-300 flex items-center justify-between gap-3">
             <span className="flex items-center gap-2"><AlertOctagon className="w-3.5 h-3.5 shrink-0" /> {actionError}</span>
@@ -348,23 +488,23 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
           </div>
         )}
 
-        {/* Navigation Tabs */}
-        <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-[var(--border)] overflow-x-auto">
+        {/* Sub-Navigation Tabs for Selected Incident */}
+        <div className="flex flex-wrap items-center gap-1.5 pt-3 border-t border-[var(--border)] overflow-x-auto">
           {[
-            { id: 'OVERVIEW', label: 'Overview & Summary', icon: Activity },
-            { id: 'IMPACT', label: 'Impact & Risk', icon: ShieldAlert },
-            { id: 'DIAGNOSIS', label: 'AI Diagnosis & Evidence', icon: Sparkles },
-            { id: 'REMEDIATION', label: 'Remediation Plan', icon: ShieldCheck },
-            { id: 'VERIFICATION', label: 'Verification Engine', icon: Terminal },
-            { id: 'TIMELINE', label: 'Lifecycle Timeline', icon: Clock }
+            { id: 'OVERVIEW', route: 'overview', label: 'Overview & Summary', icon: FileSearch },
+            { id: 'IMPACT', route: 'impact', label: 'Impact & Risks', icon: ShieldAlert },
+            { id: 'DIAGNOSIS', route: 'diagnosis', label: 'AI Diagnosis & Evidence', icon: Sparkles },
+            { id: 'REMEDIATION', route: 'remediation', label: 'Remediation Plan', icon: FileCode },
+            { id: 'VERIFICATION', route: 'verification', label: 'Verification Engine', icon: ShieldCheck },
+            { id: 'TIMELINE', route: 'lifecycle', label: 'Lifecycle Timeline', icon: Clock }
           ].map((tab) => {
             const TabIcon = tab.icon;
             const isActive = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
+                onClick={() => handleSubpageNavigation(tab.route)}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
                   isActive
                     ? 'bg-accent-color text-white shadow-sm'
                     : 'text-muted-color hover:text-heading hover:bg-subtle'
@@ -378,332 +518,367 @@ export default function JiraTicketView({ ticket, onMergeDuplicate, onAssignDevel
         </div>
       </div>
 
-      {/* ==========================================
-          2. INCIDENT RESOLUTION LIFECYCLE & ACTION ENGINE
-          ========================================== */}
-      <IncidentLifecycleVisualizer
-        ticket={ticket}
-        verificationResult={verificationResult}
-        actionInFlight={actionInFlight}
-        onApprove={handleApproveRemediation}
-        onRunVerification={() => handleRunVerification(false)}
-        onApplyPatch={handleApplyPatch}
-        onRollback={() => setIsRollbackModalOpen(true)}
-        onReturnToRemediation={handleReturnToRemediation}
-        onOpenRemediationTab={() => setActiveTab('REMEDIATION')}
-      />
+      {/* AI Investigation Pipeline — visible on every tab, fixed to this incident */}
+      <PipelineStrip ticket={ticket} />
 
-      {/* ==========================================
-          3. TRANSPARENT OWNERSHIP & RESPONSIBILITY GRID
-          ========================================== */}
-      <div className="surface p-5 rounded-2xl border border-[var(--border)] space-y-3">
-        <h3 className="text-xs font-extrabold uppercase tracking-wider text-heading flex items-center gap-1.5">
-          <User className="w-3.5 h-3.5 text-accent-color" /> INCIDENT OWNERSHIP & RESPONSIBILITY MATRIX
-        </h3>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs font-mono">
-          <div className="p-3 rounded-xl bg-subtle border border-[var(--border)] space-y-1">
-            <span className="text-muted-color text-[10px] uppercase font-bold block">Incident Source</span>
-            <span className="font-bold text-heading block truncate">{incidentSource}</span>
-            <span className="text-[10px] text-muted-color">{ticket.erp_module || 'ERP'} · {correlationId}</span>
-          </div>
-
-          <div className="p-3 rounded-xl bg-subtle border border-[var(--border)] space-y-1">
-            <span className="text-muted-color text-[10px] uppercase font-bold block">Assigned Developer · Owner</span>
-            <span className={`font-bold block truncate ${isAssigned ? 'text-accent-color' : 'text-amber-500'}`}>{assignedDev}</span>
-            <span className="text-[10px] text-muted-color">Operational owner — investigates &amp; remediates</span>
-          </div>
-
-          <div className="p-3 rounded-xl bg-subtle border border-[var(--border)] space-y-1">
-            <span className="text-muted-color text-[10px] uppercase font-bold block">Code Reviewer</span>
-            <span className="font-bold text-heading block truncate">{reviewerName}</span>
-            <span className="text-[10px] text-muted-color">Reviews the patch</span>
-          </div>
-
-          <div className="p-3 rounded-xl bg-subtle border border-[var(--border)] space-y-1">
-            <span className="text-muted-color text-[10px] uppercase font-bold block">Resolution Owner</span>
-            <span className="font-bold text-emerald-600 dark:text-emerald-400 block truncate">{resolutionOwner}</span>
-            <span className="text-[10px] text-muted-color">Accountable for MTTR</span>
-          </div>
-        </div>
-      </div>
-
-      {/* ==========================================
-          TAB 1: OVERVIEW & SUMMARY
-          ========================================== */}
+      {/* PAGE 1: OVERVIEW & SUMMARY */}
       {activeTab === 'OVERVIEW' && (
         <div className="space-y-5">
-          {/* Executive & Technical Summary Panels */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {/* What Happened? Summary */}
-            <div className="surface p-5 rounded-2xl border border-[var(--border)] space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-[var(--border)]">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-heading flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-accent-color" /> WHAT HAPPENED? (SUMMARY)
-                </h3>
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
-                  PLAIN LANGUAGE
-                </span>
-              </div>
-              <p className="text-xs font-medium text-heading leading-relaxed">
-                {userReportText}
-              </p>
-              <div className="pt-2 border-t border-[var(--border)] text-xs text-muted-color space-y-1">
-                <div><strong>Module:</strong> {erpModule}</div>
-                <div><strong>Error Code:</strong> <code className="font-mono text-rose-500">{errorCode}</code></div>
-                <div><strong>UI Component:</strong> <code className="font-mono text-purple-400">{uiComponent}</code></div>
-              </div>
+          <div className="surface p-6 rounded-2xl border border-[var(--border)] space-y-4 shadow-sm">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--border)]">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-heading flex items-center gap-2">
+                <FileSearch className="w-4 h-4 text-accent-color" /> INCIDENT OVERVIEW & EXECUTIVE SUMMARY
+              </h3>
+              <span className="text-[10px] font-mono font-extrabold px-2.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                EXECUTIVE SUMMARY
+              </span>
             </div>
-
-            {/* Current Technical Context */}
-            <div className="surface p-5 rounded-2xl border border-[var(--border)] space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-[var(--border)]">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-heading flex items-center gap-1.5">
-                  <Code2 className="w-3.5 h-3.5 text-accent-color" /> TECHNICAL STACK DIAGNOSTIC
-                </h3>
-                <span className="text-[10px] font-mono text-muted-color">DEVELOPER VIEW</span>
+            <p className="text-sm font-medium text-heading leading-relaxed">
+              {userReportText}
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-3 border-t border-[var(--border)] text-xs font-mono">
+              <div className="p-3 rounded-xl surface-muted border border-[var(--border)] space-y-1">
+                <span className="text-muted-color text-[10px] uppercase font-bold block">Module</span>
+                <strong className="text-heading font-bold">{erpModule}</strong>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-                <div>
-                  <span className="text-muted-color block text-[10px]">Component:</span>
-                  <code className="text-purple-400 font-bold">{uiComponent}</code>
-                </div>
-                <div>
-                  <span className="text-muted-color block text-[10px]">Service:</span>
-                  <code className="text-heading font-bold">{suspectedService}</code>
-                </div>
-                <div>
-                  <span className="text-muted-color block text-[10px]">Suspected File:</span>
-                  <code className="text-accent-subtle-text font-bold">{suspectedFile}</code>
-                </div>
-                <div>
-                  <span className="text-muted-color block text-[10px]">Function:</span>
-                  <code className="text-amber-400 font-bold">{suspectedFunc}</code>
-                </div>
+              <div className="p-3 rounded-xl surface-muted border border-[var(--border)] space-y-1">
+                <span className="text-muted-color text-[10px] uppercase font-bold block">Error Code</span>
+                <strong className="text-rose-400 font-bold">{errorCode}</strong>
               </div>
-              <div className="pt-2 border-t border-[var(--border)] text-xs font-mono">
-                <span className="text-muted-color">Suspected Root Cause: </span>
-                <strong className="text-heading font-sans block mt-1">{suspectedRootCauseText}</strong>
+              <div className="p-3 rounded-xl surface-muted border border-[var(--border)] space-y-1">
+                <span className="text-muted-color text-[10px] uppercase font-bold block">Detected Component</span>
+                <strong className="text-purple-400 font-bold">{uiComponent}</strong>
               </div>
             </div>
           </div>
 
-          {/* Reproduction Steps Card — from this incident's own generated steps */}
-          <div className="surface p-5 rounded-2xl border border-[var(--border)] space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-heading flex items-center gap-1.5">
-              <Terminal className="w-3.5 h-3.5 text-accent-color" /> REPRODUCTION STEPS
+          <div className="surface p-6 rounded-2xl border border-[var(--border)] space-y-4 shadow-sm">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-heading flex items-center gap-2">
+              <Terminal className="w-4 h-4 text-accent-color" /> STEP-BY-STEP REPRODUCTION
             </h3>
             {reproSteps ? (
-              <ol className="list-decimal list-inside space-y-2 text-xs text-body-color font-mono pl-1">
+              <ol className="space-y-2.5 text-xs text-body-color font-mono">
                 {reproSteps.map((step, i) => (
-                  <li key={i} className="p-2 rounded bg-subtle border border-[var(--border)]">{step}</li>
+                  <li key={i} className="p-3 rounded-xl surface-muted border border-[var(--border)] flex items-start gap-3">
+                    <span className="w-5 h-5 rounded-full bg-accent-color/10 text-accent-color font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">
+                      {i + 1}
+                    </span>
+                    <span className="leading-relaxed">{step}</span>
+                  </li>
                 ))}
               </ol>
             ) : (
-              <p className="text-xs text-muted-color font-mono">No reproduction steps recorded for this incident.</p>
+              <p className="text-xs text-muted-color font-mono p-4 rounded-xl surface-muted border border-[var(--border)]">
+                No reproduction steps recorded for this incident.
+              </p>
             )}
           </div>
+
+          <div className="surface p-6 rounded-2xl border border-[var(--border)] space-y-4 shadow-sm">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--border)]">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-heading flex items-center gap-2">
+                <Code2 className="w-4 h-4 text-accent-color" /> TECHNICAL DIAGNOSTIC METADATA
+              </h3>
+              <span className="text-[10px] font-mono text-muted-color">SYSTEM LOGS</span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs font-mono">
+              <div className="p-3 rounded-xl surface-muted border border-[var(--border)] space-y-1">
+                <span className="text-muted-color block text-[10px]">Suspected Service:</span>
+                <code className="text-heading font-bold">{suspectedService}</code>
+              </div>
+              <div className="p-3 rounded-xl surface-muted border border-[var(--border)] space-y-1">
+                <span className="text-muted-color block text-[10px]">Suspected File:</span>
+                <code className="text-accent-subtle-text font-bold">{suspectedFile}</code>
+              </div>
+              <div className="p-3 rounded-xl surface-muted border border-[var(--border)] space-y-1">
+                <span className="text-muted-color block text-[10px]">Function:</span>
+                <code className="text-amber-400 font-bold">{suspectedFunc}</code>
+              </div>
+              <div className="p-3 rounded-xl surface-muted border border-[var(--border)] space-y-1">
+                <span className="text-muted-color block text-[10px]">Database Table:</span>
+                <code className="text-emerald-400 font-bold">{suspectedTable}</code>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* ==========================================
-          TAB 2: IMPACT & BUSINESS RISK
-          ========================================== */}
+      {/* PAGE 2: IMPACT & RISK */}
       {activeTab === 'IMPACT' && (
-        <div className="surface p-6 rounded-2xl border border-[var(--border)] space-y-5">
-          <div className="flex items-center justify-between pb-3 border-b border-[var(--border)]">
-            <h3 className="text-base font-bold text-heading flex items-center gap-2">
-              <ShieldAlert className="w-4 h-4 text-amber-500" /> WHAT IS THE IMPACT? (BUSINESS & OPERATIONAL)
-            </h3>
-            <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">
-              Impact Score: {businessImpact != null ? `${businessImpact} / 10` : 'Not scored'}
-            </span>
+        <div className="space-y-5">
+          <div className="surface p-6 rounded-2xl border border-[var(--border)] space-y-4 shadow-sm">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--border)]">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-heading flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-amber-500" /> BUSINESS IMPACT EVALUATION
+              </h3>
+              <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                Impact Rating: {businessImpact != null ? `${businessImpact} / 10` : 'Unrated'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 font-mono text-xs">
+              <div className="p-4 rounded-xl surface-muted border border-[var(--border)] space-y-1.5">
+                <span className="text-muted-color text-[10px] uppercase font-bold block">Affected Facility / Warehouse</span>
+                <strong className="text-heading text-base block">{affectedWarehouse}</strong>
+                <span className="text-muted-color text-[10px]">Physical Operations Location</span>
+              </div>
+
+              <div className="p-4 rounded-xl surface-muted border border-[var(--border)] space-y-1.5">
+                <span className="text-muted-color text-[10px] uppercase font-bold block">Affected Business Process</span>
+                <strong className="text-heading text-base block">{affectedProcess}</strong>
+                <span className="text-muted-color text-[10px]">Workflow Sequence</span>
+              </div>
+
+              <div className="p-4 rounded-xl surface-muted border border-[var(--border)] space-y-1.5">
+                <span className="text-muted-color text-[10px] uppercase font-bold block">API Correlation Reference</span>
+                <strong className="text-accent-color text-base block">{correlationId}</strong>
+                <span className="text-muted-color text-[10px]">ERP Transaction Tracking ID</span>
+              </div>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 font-mono text-xs">
-            <div className="p-4 rounded-xl bg-subtle border border-[var(--border)] space-y-1">
-              <span className="text-muted-color text-[10px] uppercase font-bold block">Affected Facility</span>
-              <strong className="text-heading text-sm block">{affectedWarehouse}</strong>
-              <span className="text-muted-color text-[10px]">Module: {erpModule}</span>
+          <div className="surface p-6 rounded-2xl border border-[var(--border)] space-y-4 shadow-sm">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--border)]">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-heading flex items-center gap-2">
+                <Clock className="w-4 h-4 text-accent-color" /> SLA TARGET COUNTDOWN & GUARANTEE
+              </h3>
+              {isSlaAtRisk ? (
+                <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 text-rose-500" /> SLA AT RISK ({slaMinutes}m remaining)
+                </span>
+              ) : (
+                <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  {slaMinutes != null ? `${slaMinutes} MIN REMAINING` : 'SLA NORMAL'}
+                </span>
+              )}
             </div>
 
-            <div className="p-4 rounded-xl bg-subtle border border-[var(--border)] space-y-1">
-              <span className="text-muted-color text-[10px] uppercase font-bold block">Affected Business Process</span>
-              <strong className="text-heading text-sm block">{affectedProcess}</strong>
-              <span className="text-muted-color text-[10px]">Severity: {severityFormatted}</span>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs font-mono">
+                <span className="text-muted-color">Target Resolution SLA Window</span>
+                <span className="font-bold text-heading">{slaMinutes != null ? `${slaMinutes} / 240 Minutes` : 'Standard SLA'}</span>
+              </div>
+              <div className="w-full bg-[var(--bg-page)] h-3 rounded-full overflow-hidden p-0.5 border border-[var(--border)]">
+                <div
+                  className={`h-full rounded-full transition-all ${isSlaAtRisk ? 'bg-rose-500' : 'bg-accent-color'}`}
+                  style={{ width: slaMinutes == null ? '0%' : `${Math.max(6, Math.min(100, (slaMinutes / 240) * 100))}%` }}
+                />
+              </div>
             </div>
 
-            <div className="p-4 rounded-xl bg-subtle border border-[var(--border)] space-y-1">
-              <span className="text-muted-color text-[10px] uppercase font-bold block">Transaction Reference</span>
-              <strong className="text-accent-color text-sm block">{correlationId}</strong>
-              <span className="text-muted-color text-[10px]">API Correlation Tracking ID</span>
+            <div className="p-4 rounded-xl surface-muted border border-[var(--border)] text-xs text-muted-color space-y-1 font-mono">
+              <div><strong>Human Review Required:</strong> {ticket.requires_human_review ? 'Yes (Safety Guardrail active)' : 'No'}</div>
+              <div><strong>Assigned Resolution Owner:</strong> <strong className="text-heading">{ticket.assigned_dev_name || 'Unassigned'}</strong></div>
             </div>
           </div>
         </div>
       )}
 
-      {/* ==========================================
-          TAB 3: AI DIAGNOSIS & EVIDENCE
-          ========================================== */}
+      {/* PAGE 3: AI DIAGNOSIS & EVIDENCE */}
       {activeTab === 'DIAGNOSIS' && (
         <div className="space-y-5">
-          <div className="surface p-6 rounded-2xl border border-[var(--border)] space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[var(--border)]">
-              <h3 className="text-base font-bold text-heading flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-500" /> WHAT DID AI FIND & WHY?
+          <div className="surface p-6 rounded-2xl border border-[var(--border)] space-y-4 shadow-sm">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--border)] flex-wrap gap-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-heading flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-500" /> AI DIAGNOSIS — HOW IncidentAI REACHED THIS
               </h3>
-              <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                {hasConfidence
-                  ? `Confidence: ${confidencePercent} (${confidenceScore >= 0.85 ? 'HIGH' : confidenceScore >= 0.6 ? 'MEDIUM' : 'LOW'})`
-                  : 'Confidence unavailable'}
+              <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                Confidence: {hasConfidence ? confidencePercent : 'Unavailable'}
               </span>
             </div>
 
-            {/* KB mismatch guardrail banner */}
-            {isKbMismatch && (
-              <div className="p-3 rounded-lg border border-amber-500/40 bg-amber-500/10 text-xs font-mono text-amber-600 dark:text-amber-300 flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                <span>
-                  <strong>Potential Knowledge Base Mismatch:</strong> the top historical match is from module{' '}
-                  <code className="font-bold">{topKbModule}</code> but this incident is <code className="font-bold">{erpModule}</code>.
-                  Low-relevance evidence is not treated as authoritative — human approval required before deployment.
-                </span>
+            {/* 1. CONFIRMED FACTS (MCP + incident metadata) */}
+            <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/5 space-y-2.5">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-500 border border-emerald-500/30">1 · CONFIRMED FACTS</span>
+                <span className="text-xs font-bold text-heading">Current ERP Facts (MCP) — read live, not guessed</span>
               </div>
-            )}
-
-            {/* Technical Execution Path Chain — from this incident's dependency tree */}
-            <div className="p-4 rounded-xl surface-muted border border-[var(--border)] space-y-2">
-              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-muted-color block">
-                Technical Path Hierarchy & Execution Chain
-              </span>
-              {treeNodes.length ? (
-                <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
-                  {treeNodes.map((n, i) => (
-                    <React.Fragment key={n.id}>
-                      {i > 0 && <span className="text-muted-color">&rarr;</span>}
-                      <span className={`px-2 py-1 rounded font-bold border border-[var(--border)] ${
-                        n.type === 'erp_module' ? 'bg-accent-subtle-bg text-accent-subtle-text'
-                        : n.type === 'file' ? 'surface text-purple-400'
-                        : n.type === 'function' ? 'surface text-amber-400'
-                        : n.type === 'database_table' ? 'surface text-rose-400'
-                        : 'surface text-heading'
-                      }`}>{n.label}</span>
-                    </React.Fragment>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-muted-color font-mono">Dependency tree not available for this incident.</p>
-              )}
-              {suspectedTrigger && <p className="text-[10px] font-mono text-muted-color pt-1">Suspected trigger: {suspectedTrigger}</p>}
+              <ul className="text-xs font-mono text-body-color space-y-1">
+                <li>• Error code <code className="text-rose-500 font-bold">{errorCode}</code> in module <code className="text-heading font-bold">{erpModule}</code> ({uiComponent})</li>
+                {liveFacts.filter((e) => e.status === 200).map((e, i) => (
+                  <li key={i} className="flex items-start gap-1.5">
+                    <span className="text-emerald-500">•</span>
+                    <span>
+                      <span className="text-[10px] px-1 rounded bg-emerald-500/10 text-emerald-500 mr-1">{e.source_label || 'LIVE ERP'}</span>
+                      {summarizeMcpEvidence(e)}
+                    </span>
+                  </li>
+                ))}
+                {liveFacts.filter((e) => e.status === 200).length === 0 && (
+                  <li className="text-muted-color">• Live ERP verification was unavailable for this incident.</li>
+                )}
+              </ul>
             </div>
 
-            {/* Grounding Categories & Badges Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
-              {/* FACT */}
-              <div className="p-3.5 rounded-xl surface-muted border border-[var(--border)] space-y-1.5">
+            {/* 2. HISTORICAL EVIDENCE (RAG) */}
+            <div className="p-4 rounded-xl border border-purple-500/30 bg-purple-500/5 space-y-2.5">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">FACT</span>
-                  <span className="text-xs font-bold text-heading">Grounded ERP Facts</span>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-purple-500/15 text-purple-400 border border-purple-500/30">2 · HISTORICAL EVIDENCE</span>
+                  <span className="text-xs font-bold text-heading">Past Incident Knowledge (RAG)</span>
                 </div>
-                <ul className="text-xs font-mono text-muted-color space-y-1 pl-1">
-                  <li>• Error Code: <code className="text-rose-500 font-bold">{errorCode}</code></li>
-                  <li>• Module: <code className="text-heading font-bold">{erpModule}</code></li>
-                  {grFacts.slice(0, 3).map((fct, i) => (
-                    <li key={i}>• {typeof fct === 'string' ? fct : fct.fact || fct.detail || JSON.stringify(fct)}</li>
-                  ))}
-                  {liveFacts.slice(0, 2).map((lf, i) => (
-                    <li key={`l${i}`}>• {lf.fact || lf.summary || lf.tool || JSON.stringify(lf)}</li>
-                  ))}
-                  {grFacts.length === 0 && liveFacts.length === 0 && (
-                    <li className="text-muted-color/70">No additional grounded facts recorded.</li>
-                  )}
-                </ul>
-              </div>
-
-              {/* AI INFERENCE */}
-              <div className="p-3.5 rounded-xl surface-muted border border-[var(--border)] space-y-1.5">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">AI INFERENCE</span>
-                  <span className="text-xs font-bold text-heading">Probabilistic Root Cause</span>
-                </div>
-                <p className="text-xs text-body-color leading-relaxed font-sans">{suspectedRootCauseText}</p>
-                <span className="text-[10px] font-mono text-muted-color block">Note: AI inference is probabilistic and requires human review — it is not a confirmed fact.</span>
-              </div>
-
-              {/* HISTORICAL EVIDENCE */}
-              <div className="p-3.5 rounded-xl surface-muted border border-[var(--border)] space-y-1.5">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">HISTORICAL EVIDENCE</span>
-                  <span className="text-xs font-bold text-heading">Vector Knowledge Match</span>
-                </div>
-                {topKbTitle ? (
-                  <p className="text-xs text-muted-color font-mono">
-                    Matched <strong className="text-heading">{topKbTitle}</strong>
-                    {topKbModule && <> ({topKbModule})</>}
-                    {topKbScore != null && <> · <strong>{typeof topKbScore === 'number' && topKbScore <= 1 ? `${Math.round(topKbScore * 100)}%` : topKbScore} similarity</strong></>}
-                    {isKbMismatch && <span className="text-amber-500 font-bold"> — module mismatch</span>}
-                  </p>
-                ) : (
-                  <p className="text-xs text-muted-color font-mono">No historical knowledge-base match retrieved for this incident.</p>
+                {isKbMismatch && (
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-500 text-white flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" /> Potential Knowledge Base Mismatch
+                  </span>
                 )}
               </div>
-
-              {/* RECOMMENDATION */}
-              <div className="p-3.5 rounded-xl surface-muted border border-[var(--border)] space-y-1.5">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">RECOMMENDATION</span>
-                  <span className="text-xs font-bold text-heading">Proposed Fix</span>
-                </div>
-                <p className="text-xs text-muted-color font-mono line-clamp-3">{suggestedPatchText}</p>
-                <span className="text-[10px] font-mono text-amber-500 font-bold block pt-1">Requires human developer approval before deployment.</span>
-              </div>
+              {(ticket.rag_kb_matches || []).length > 0 ? (
+                <ul className="text-xs space-y-1.5">
+                  {(ticket.rag_kb_matches || []).slice(0, 3).map((m, i) => {
+                    const mMod = m.article?.erp_module;
+                    const mismatch = mMod && mMod !== ticket.erp_module;
+                    return (
+                      <li key={i} className="font-mono text-body-color flex items-start gap-1.5">
+                        <span className={mismatch ? 'text-amber-500' : 'text-purple-400'}>•</span>
+                        <span>
+                          {m.score != null && <span className="text-purple-400 font-bold mr-1">{Math.round(m.score * 100)}%</span>}
+                          <span className="text-heading">{m.article?.title}</span>
+                          <span className={`ml-1 ${mismatch ? 'text-amber-500 font-bold' : 'text-muted-color'}`}>[{mMod}{mismatch ? ' — different module' : ''}]</span>
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="text-xs font-mono text-amber-500">
+                  ⚠ No historical incident or knowledge-base article matches this {erpModule} failure. IncidentAI will not fabricate a precedent — a developer must review.
+                </p>
+              )}
             </div>
 
-            {/* AI Insights Embedded Sub-Panel */}
-            <div className="pt-3 border-t border-[var(--border)]">
+            {/* 3. AI INFERENCE */}
+            <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-500 border border-amber-500/30">3 · AI INFERENCE</span>
+                <span className="text-xs font-bold text-heading">AI Reasoning (LLM) — proposed, not confirmed</span>
+              </div>
+              <p className="text-sm font-semibold text-heading leading-relaxed">{suspectedRootCauseText}</p>
+              {ticket.ai_diagnosis?.reason && (
+                <p className="text-[11px] text-muted-color leading-relaxed">{ticket.ai_diagnosis.reason}</p>
+              )}
+              <div className="flex items-center gap-2 pt-1">
+                <div className="flex-1 bg-[var(--bg-page)] h-2 rounded-full overflow-hidden border border-[var(--border)]">
+                  <div className="h-full bg-amber-500" style={{ width: hasConfidence ? `${Math.round(confidenceScore * 100)}%` : '0%' }} />
+                </div>
+                <span className="text-[10px] font-mono font-bold text-amber-500">{hasConfidence ? confidencePercent : 'N/A'} confidence</span>
+              </div>
+              <p className="text-[10px] font-mono text-muted-color">Probabilistic hypothesis from the model — treated as a proposal, never as fact.</p>
+            </div>
+
+            {/* 4. RECOMMENDATION */}
+            <div className="p-4 rounded-xl border border-blue-500/30 bg-blue-500/5 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/30">4 · RECOMMENDATION</span>
+                <span className="text-xs font-bold text-heading">Proposed next action</span>
+              </div>
+              <p className="text-xs font-mono text-body-color leading-relaxed">{suggestedPatchText}</p>
+              <p className="text-[10px] font-mono text-amber-500 font-bold">Guardrail: requires human developer approval before anything is applied.</p>
+            </div>
+
+            <div className="pt-2">
               <AIInsightsPanel ticket={ticket} />
             </div>
           </div>
         </div>
       )}
 
-      {/* ==========================================
-          TAB 4: REMEDIATION PLAN
-          ========================================== */}
+      {/* PAGE 4: REMEDIATION PLAN */}
       {activeTab === 'REMEDIATION' && (
-        <RemediationCenter
-          ticket={ticket}
-          remediation={remediation}
-          onApprove={handleApproveRemediation}
-          onReject={handleRejectRemediation}
-          onViewPatch={() => setIsPatchModalOpen(true)}
-          onStartVerification={() => handleRunVerification(false)}
-        />
+        <div className="space-y-5">
+          <RemediationCenter
+            ticket={ticket}
+            remediation={remediation}
+            isExecutive={userRole === 'EXECUTIVE'}
+            onApprove={handleApproveRemediation}
+            onReject={handleRejectRemediation}
+            onViewPatch={() => setIsPatchModalOpen(true)}
+            onStartVerification={() => handleRunVerification(false)}
+          />
+        </div>
       )}
 
-      {/* ==========================================
-          TAB 5: VERIFICATION ENGINE
-          ========================================== */}
+      {/* PAGE 5: VERIFICATION ENGINE */}
       {activeTab === 'VERIFICATION' && (
-        <VerificationPanel
-          verificationResult={verificationResult}
-          onRunVerification={() => handleRunVerification(false)}
-          onApplyPatch={handleApplyPatch}
-          onSimulateFailure={() => handleRunVerification(true)}
-        />
+        <div className="space-y-5">
+          <VerificationPanel
+            verificationResult={verificationResult}
+            onRunVerification={() => handleRunVerification(false)}
+            onSimulateFailure={() => handleRunVerification(true)}
+            onApplyPatch={handleApplyPatch}
+          />
+
+          {status === 'ROLLED_BACK' ? (
+            <div className="surface p-6 rounded-2xl border border-amber-500/30 bg-amber-500/5 space-y-4 shadow-sm">
+              <div className="flex items-center justify-between pb-3 border-b border-amber-500/20">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-amber-500 flex items-center gap-2">
+                  <RotateCcw className="w-4 h-4" /> ROLLBACK COMPLETE
+                </h3>
+                <span className="text-[10px] font-mono font-bold px-2.5 py-1 rounded bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30">
+                  {remediation?.current_version || ticket.patch_version || 'v1.0.0'} RESTORED
+                </span>
+              </div>
+              <p className="text-xs text-muted-color font-mono leading-relaxed">
+                Verification failed, so the patch was rolled back and the previous version was restored. The incident is
+                held out of the verification loop. Send it back to remediation so the developer can revise the fix and
+                re-approve.
+              </p>
+              <div className="flex items-center justify-end">
+                <button
+                  onClick={handleReturnToRemediation}
+                  disabled={Boolean(actionInFlight)}
+                  className="btn-primary text-xs font-bold py-2.5 px-5"
+                >
+                  {actionInFlight === 'return'
+                    ? <><RefreshCw className="w-4 h-4 animate-spin" /> Returning…</>
+                    : <><RefreshCw className="w-4 h-4" /> Return to Remediation Loop</>}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="surface p-6 rounded-2xl border border-rose-500/30 bg-rose-500/5 space-y-4 shadow-sm">
+              <div className="flex items-center justify-between pb-3 border-b border-rose-500/20">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-rose-400 flex items-center gap-2">
+                  <RotateCcw className="w-4 h-4 text-rose-500" /> EMERGENCY ROLLBACK SAFEGUARD
+                </h3>
+                <span className="text-[10px] font-mono font-bold px-2.5 py-1 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                  ZERO DOWNTIME
+                </span>
+              </div>
+
+              <p className="text-xs text-muted-color font-mono leading-relaxed">
+                {status === 'VERIFICATION_FAILED'
+                  ? 'Verification failed. Roll back now to restore the previous version, then send the incident back to remediation.'
+                  : 'If patch verification fails or unexpected anomalies occur post-deployment, trigger instant rollback to restore previous system state.'}
+              </p>
+
+              <div className="flex items-center justify-end">
+                <button
+                  onClick={() => setIsRollbackModalOpen(true)}
+                  className="btn-danger text-xs font-bold py-2.5 px-5"
+                >
+                  <RotateCcw className="w-4 h-4" /> Trigger Emergency Rollback
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
-      {/* ==========================================
-          TAB 6: LIFECYCLE TIMELINE
-          ========================================== */}
+      {/* PAGE 6: LIFECYCLE TIMELINE */}
       {activeTab === 'TIMELINE' && (
-        <RemediationTimeline auditLogs={auditLogs} />
+        <div className="space-y-5">
+          <div className="surface p-6 rounded-2xl border border-[var(--border)] shadow-sm">
+            <RemediationTimeline ticket={ticket} auditLogs={auditLogs} />
+          </div>
+        </div>
       )}
 
       {/* Patch Preview Modal */}
       {isPatchModalOpen && (
         <PatchPreviewModal
           patchData={patchData}
+          isExecutive={userRole === 'EXECUTIVE'}
           onClose={() => setIsPatchModalOpen(false)}
           onApprove={() => {
             setIsPatchModalOpen(false);

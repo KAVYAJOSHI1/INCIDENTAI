@@ -56,8 +56,15 @@ const ERROR_SIGNATURES = [
     module: "PROCUREMENT",
     errorCode: "ERR_PO_MISMATCH",
     component: "PurchaseOrderGrid",
-    keywords: ["procurement", "purchase order", "vendor", "po number", "receiving", "goods receipt"],
+    keywords: ["procurement", "purchase order", "vendor", "po number", "receiving", "goods receipt", "over-delivery", "received quantity"],
     bbox: { top: "38%", left: "22%", width: "56%", height: "26%" }
+  },
+  {
+    module: "PRODUCTION",
+    errorCode: "ERR_MATERIAL_SHORTAGE",
+    component: "ProductionRunReleaseForm",
+    keywords: ["production", "production run", "work order", "material", "component", "shortage", "bill of materials", "bom", "assembly line", "release"],
+    bbox: { top: "36%", left: "20%", width: "60%", height: "28%" }
   }
 ];
 

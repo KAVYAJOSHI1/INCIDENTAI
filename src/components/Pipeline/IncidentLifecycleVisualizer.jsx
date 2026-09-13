@@ -35,6 +35,7 @@ export default function IncidentLifecycleVisualizer({
   ticket,
   verificationResult,
   actionInFlight = null,
+  isExecutive = false,
   onApprove,
   onRunVerification,
   onApplyPatch,
@@ -212,7 +213,7 @@ export default function IncidentLifecycleVisualizer({
                     <div className="text-muted-color">
                       {['APPROVED', 'VERIFIED_READY', 'RESOLVED'].includes(normState.stateKey)
                         ? <>Approved by: <strong className="text-heading">{assignedDev}</strong></>
-                        : <>Reviewer: <strong className={isAssigned ? 'text-heading' : 'text-amber-500'}>{assignedDev}</strong></>}
+                        : <>Assigned Dev: <strong className={isAssigned ? 'text-heading' : 'text-amber-500'}>{assignedDev}</strong></>}
                     </div>
                   )}
                   {step.id === 'VERIFICATION' && (
@@ -363,7 +364,11 @@ export default function IncidentLifecycleVisualizer({
         </p>
 
         <div className="pt-2 flex items-center justify-end gap-3 border-t border-[var(--border)]">
-          {normState.nextActionCTA && ctaHandler ? (
+          {isExecutive ? (
+            <span className="text-xs font-mono font-bold text-blue-400 flex items-center gap-1.5 px-3 py-1.5 rounded bg-blue-500/10 border border-blue-500/20">
+              Executive Read-Only View: Operational actions are managed by Developer role
+            </span>
+          ) : normState.nextActionCTA && ctaHandler ? (
             <button
               onClick={ctaHandler}
               disabled={Boolean(actionInFlight)}
