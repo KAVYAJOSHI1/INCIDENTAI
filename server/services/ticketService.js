@@ -6,7 +6,8 @@ import crypto from "node:crypto";
 import { analyzeMultimodalInput, analyzeMultimodalInputFromImage } from "./ocrService.js";
 import { scoreSeverity, scoreSeverityWithAI } from "./severityService.js";
 import { predictRootCause, predictRootCauseWithAI } from "./rootCauseService.js";
-import { findDuplicateTickets, findDuplicateTicketsWithAI, findDuplicateTicketsWithVector } from "./duplicateService.js";
+import { findDuplicateTickets, findDuplicateTicketsWithAI, findDuplicateTicketsWithVector, applyModuleAwareGuard } from "./duplicateService.js";
+import { resolveErpModule, resolveErrorCode } from "../utils/erpAuthority.js";
 import { searchKnowledgeBase, searchKnowledgeBaseWithAI, searchKnowledgeBaseWithVector, captureVerifiedKnowledge } from "./knowledgeService.js";
 import { recommendDeveloperForTicket } from "./loadBalancerService.js";
 import { performEvidenceGroundedDiagnosis } from "./diagnosisService.js";
@@ -110,57 +111,87 @@ export async function runIncidentIngestPipeline(inputPayload) {
   ocrFindings.erp_context = inputPayload.erp_context || null;
   const ocrDurationMs = Date.now() - t0;
 
+  // FIX 1: the ERP's own structured module is authoritative over the OCR/LLM free-text
+  // guess (which can be wrong — e.g. a Production failure whose error message mentions
+  // "inventory adjustment failed" because Production calls Inventory internally). The
+  // AI's guess is preserved on ocrFindings for explainability, never used to override it.
+  const moduleResolution = resolveErpModule(inputPayload.erp_context?.module, ocrFindings.erp_module);
+  const resolvedModule = moduleResolution.erp_module;
+  ocrFindings.ai_inferred_module = moduleResolution.ai_inferred_module;
+  ocrFindings.authoritative_module = moduleResolution.authoritative_module;
+  ocrFindings.module_source = moduleResolution.module_source;
+
+  // FIX 3: preserve the ERP's literal error text separately from the normalized code the
+  // classifier synthesized from it — the ERP services here don't return a structured
+  // error_code field today, so `extracted_error_code` is always AI-derived, and must not
+  // be presented as though the ERP itself supplied it.
+  const errorCodeResolution = resolveErrorCode(inputPayload.erp_context, ocrFindings.extracted_error_code);
+  ocrFindings.erp_error_message = errorCodeResolution.erp_error_message;
+  ocrFindings.normalized_error_code = errorCodeResolution.normalized_error_code;
+  ocrFindings.error_code_source = errorCodeResolution.error_code_source;
+
   const severityResult =
-    (await scoreSeverityWithAI(sourceText, ocrFindings.erp_module)) ?? scoreSeverity(sourceText, ocrFindings.erp_module);
+    (await scoreSeverityWithAI(sourceText, resolvedModule)) ?? scoreSeverity(sourceText, resolvedModule);
   const severityDurationMs = Date.now() - t0 - ocrDurationMs;
 
-  const title = `[${ocrFindings.erp_module}] ${ocrFindings.extracted_error_code}: ${(sourceText || "Unexpected ERP Exception").slice(0, 60)}`;
+  const title = `[${resolvedModule}] ${ocrFindings.extracted_error_code}: ${(sourceText || "Unexpected ERP Exception").slice(0, 60)}`;
   const structuredDescription =
-    `AI Diagnostics parsed issue in module ${ocrFindings.erp_module}. Encountered error code ${ocrFindings.extracted_error_code} ` +
+    `AI Diagnostics parsed issue in module ${resolvedModule}. Encountered error code ${ocrFindings.extracted_error_code} ` +
     `on UI component <${ocrFindings.detected_ui_component}/>. ${severityResult.reasons[0] || ""}`.trim();
 
   const reproductionSteps = [
-    `Open ERP Workspace -> ${ocrFindings.erp_module} Module`,
+    `Open ERP Workspace -> ${resolvedModule} Module`,
     `Execute primary transaction action (${ocrFindings.detected_ui_component})`,
     `Submit form payload with input data "${sourceText.slice(0, 40)}"`,
     `Observe exception pop-up ${ocrFindings.extracted_error_code}`
   ];
 
-  const expectedBehavior = `ERP processes ${ocrFindings.erp_module} payload without validation failures and records the transaction.`;
+  const expectedBehavior = `ERP processes ${resolvedModule} payload without validation failures and records the transaction.`;
   const actualBehavior = `System triggers ${ocrFindings.extracted_error_code} exception pop-up and aborts the transaction thread.`;
 
   const rootCause =
-    (await predictRootCauseWithAI(ocrFindings.extracted_error_code, ocrFindings.erp_module, ocrFindings.detected_ui_component, sourceText)) ??
-    predictRootCause(ocrFindings.extracted_error_code, ocrFindings.erp_module, ocrFindings.detected_ui_component);
+    (await predictRootCauseWithAI(ocrFindings.extracted_error_code, resolvedModule, ocrFindings.detected_ui_component, sourceText)) ??
+    predictRootCause(ocrFindings.extracted_error_code, resolvedModule, ocrFindings.detected_ui_component);
   const [existingTickets, knowledgeBaseArticles, developers] = await Promise.all([listTickets(), listKnowledgeBase(), listDevelopers()]);
+
+  // FIX 2: duplicate detection is module-aware — the new incident's resolved module and
+  // UI component are passed through so a cross-module match (different business process,
+  // shared terminology only) is penalized rather than treated as strong evidence. See
+  // applyContextSignals / applyModuleAwareGuard in duplicateService.js.
+  const duplicateOptions = { referenceModule: resolvedModule, referenceComponent: ocrFindings.detected_ui_component };
 
   // pgvector cosine-distance retrieval when Voyage embeddings are configured, falling
   // back to the in-memory TF-IDF candidate set otherwise.
   const candidateDuplicateResult =
-    (await findDuplicateTicketsWithVector(sourceText || title)) ?? findDuplicateTickets(sourceText || title, existingTickets);
-  const duplicateResult = (await findDuplicateTicketsWithAI(sourceText || title, candidateDuplicateResult)) ?? candidateDuplicateResult;
+    (await findDuplicateTicketsWithVector(sourceText || title, duplicateOptions)) ?? findDuplicateTickets(sourceText || title, existingTickets, duplicateOptions);
+  const rawDuplicateResult = (await findDuplicateTicketsWithAI(sourceText || title, candidateDuplicateResult, resolvedModule)) ?? candidateDuplicateResult;
+  // Deterministic safety net applied once regardless of which path (TF-IDF / vector / AI
+  // re-rank) produced the result above — a cross-module false positive can't slip through
+  // even if the LLM judge scored purely off text and ignored module entirely.
+  const duplicateResult = applyModuleAwareGuard(rawDuplicateResult, resolvedModule);
 
   // Broader, unfiltered shortlist feeds the AI re-ranker so it can catch matches lexical/vector retrieval alone would score too low to surface
   const kbShortlist =
-    (await searchKnowledgeBaseWithVector(sourceText || title, ocrFindings.erp_module, { minScore: 0.05 })) ??
-    searchKnowledgeBase(sourceText || title, ocrFindings.erp_module, knowledgeBaseArticles, { minScore: 0.05 });
+    (await searchKnowledgeBaseWithVector(sourceText || title, resolvedModule, { minScore: 0.05 })) ??
+    searchKnowledgeBase(sourceText || title, resolvedModule, knowledgeBaseArticles, { minScore: 0.05 });
   const kbFallback = kbShortlist.filter((m) => m.score >= 0.25);
-  const kbMatches = (await searchKnowledgeBaseWithAI(sourceText || title, ocrFindings.erp_module, kbShortlist)) ?? kbFallback;
-  const routing = recommendDeveloperForTicket({ erp_module: ocrFindings.erp_module }, developers);
+  const kbMatches = (await searchKnowledgeBaseWithAI(sourceText || title, resolvedModule, kbShortlist)) ?? kbFallback;
+  const routing = recommendDeveloperForTicket({ erp_module: resolvedModule }, developers);
 
   // Execute Phase 6 RAG + MCP + LLM Evidence-Grounded Diagnosis
   const initialTicketDraft = {
     id: `INC-${crypto.randomUUID()}`,
     title,
-    erp_module: ocrFindings.erp_module,
+    erp_module: resolvedModule,
     severity: severityResult.severity,
     vague_user_input: inputPayload.text || sourceText,
     ocr_findings: ocrFindings,
-    erp_context: inputPayload.erp_context || { erp: "Smart Manufacturing ERP", module: ocrFindings.erp_module, route: null, record_id: null },
+    erp_context: inputPayload.erp_context || { erp: "Smart Manufacturing ERP", module: resolvedModule, route: null, record_id: null },
     duplicate_check: {
       is_duplicate: duplicateResult.is_duplicate,
       similarity_score: duplicateResult.top_match ? duplicateResult.top_match.similarity_score : 0,
-      reasoning: duplicateResult.reasoning || null
+      reasoning: duplicateResult.reasoning || null,
+      cross_module_override: duplicateResult.cross_module_override || false
     }
   };
 
@@ -197,7 +228,7 @@ export async function runIncidentIngestPipeline(inputPayload) {
     erp_context: initialTicketDraft.erp_context,
     assigned_dev_id: routing.recommended.id,
     assigned_dev_name: routing.recommended.name,
-    erp_module: ocrFindings.erp_module,
+    erp_module: resolvedModule,
     severity: severityResult.severity,
     status: diagnosisResult.ai_diagnosis.resolution_type === "SELF_SERVICE" ? "SELF_SERVICE_RESOLVED" : "TRIAGED",
     vague_user_input: inputPayload.text || sourceText,
@@ -213,12 +244,14 @@ export async function runIncidentIngestPipeline(inputPayload) {
       top_match: duplicateResult.top_match
         ? {
             ticket: { id: duplicateResult.top_match.ticket.id, ticket_number: duplicateResult.top_match.ticket.ticket_number },
-            similarity_score: duplicateResult.top_match.similarity_score
+            similarity_score: duplicateResult.top_match.similarity_score,
+            signals: duplicateResult.top_match.signals || null
           }
         : null,
       related: duplicateResult.related.map((r) => ({ ticket_id: r.ticket.id, similarity_score: r.similarity_score })),
       reasoning: duplicateResult.reasoning || null,
-      ai_generated: duplicateResult.ai_generated
+      ai_generated: duplicateResult.ai_generated,
+      cross_module_override: duplicateResult.cross_module_override || false
     },
     rag_kb_matches: kbMatches.map((m) => ({
       article: m.article,

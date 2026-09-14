@@ -120,11 +120,9 @@ IncidentAI acts as an **autonomous, enterprise-grade AI support engineer**. It h
 ---
 
 ### 🎯 Key Visual Features & Persona Segmentation
-To prevent UI clutter and ensure security, IncidentAI enforces **4 Dedicated Role Personas**:
-1. **🟢 End-User Self-Service Portal:** Step-by-step verified self-fix guides + submission status.
-2. **🟡 Triage & Dispatch Control Center:** Live ingestion feed + 3-layer duplicate banner + manual override.
-3. **🔵 Developer Remediation Workbench:** Visual OCR bounding box inspection + SQL Sandbox execution terminal.
-4. **🟣 Executive Operations Dashboard:** Real-time financial downtime loss ($/hr), MTTR graphs, and React Flow Digital Twin topology.
+To prevent UI clutter and ensure security, IncidentAI enforces **2 Dedicated Role Personas** (the ERP business user reports issues through the separate Smart Manufacturing ERP, not a native IncidentAI login):
+1. **🔵 Developer Console:** Live Triage Feed + 3-layer duplicate banner + Developer Remediation Workbench (visual OCR bounding box inspection + SQL Sandbox execution terminal) + AI Pipeline Visualizer + Knowledge Hub + Digital Twin.
+2. **🟣 Executive Dashboard:** Real-time financial downtime loss ($/hr), MTTR graphs, React Flow Digital Twin topology, and Integrations overview.
 
 ---
 
@@ -396,7 +394,7 @@ function validateSQLPatchSafety(sqlString) {
 > **Defense:** We run a **3-Layer Duplicate Detection Engine**. Layer 1 executes deterministic exact string matching on error code + ERP module + record ID. Layer 2 calculates Voyage AI vector similarity. Layer 3 invokes LLM semantic reranking. Only if all conditions pass is a duplicate confirmed.
 
 #### Q4: How does the platform handle dual RBAC between ERP business users and IncidentAI staff?
-> **Defense:** We maintain strict domain separation. ERP user roles (`finance_manager`, `inventory_manager`) are ingested strictly as context metadata. Access to IncidentAI staff tools (Developer Workbench, Triage Feed, Executive Dashboard) requires native IncidentAI JWT authentication with role enforcement (`END_USER`, `SUPPORT_TRIAGE`, `DEVELOPER`, `EXECUTIVE`).
+> **Defense:** We maintain strict domain separation. ERP user roles (`finance_manager`, `inventory_manager`) are ingested strictly as context metadata. Access to IncidentAI staff tools (Developer Workbench, Triage Feed, Executive Dashboard) requires native IncidentAI JWT authentication with role enforcement (`DEVELOPER`, `EXECUTIVE`).
 
 #### Q5: What happens if all external AI cloud APIs (Anthropic & Groq) go offline?
 > **Defense:** Our system implements a **Graceful Degradation Contract**. The ingestion API switches to our deterministic rule-based keyword extraction engine. Incident tickets are categorized, assigned via the load balancer, and surfaced to developers without crashing or dropping user requests.
@@ -411,7 +409,7 @@ function validateSQLPatchSafety(sqlString) {
 ## 🏆 Presentation Quick Checklist for Team
 * [x] **Slide 1:** Title, Team, Elevator Pitch, MTTR metrics.
 * [x] **Slide 2:** Problem Research (Gartner $300k/hr downtime, 68% context loss), Competitor Matrix.
-* [x] **Slide 3:** 4 USPs (Multimodal, MCP Live State, 4-Factor Balancer, Closed-Loop RAG), 4 Personas.
+* [x] **Slide 3:** 4 USPs (Multimodal, MCP Live State, 4-Factor Balancer, Closed-Loop RAG), 2 Personas.
 * [x] **Slide 4:** Complete System Architecture Topology & 8-Step Processing Flow.
 * [x] **Slide 5:** Full Technology Stack Table & Zero-Overhead Performance Specs.
 * [x] **Slide 6:** 3 Core Algorithms with Pseudocode, Math Formulas, & DDL Safety Scanner.

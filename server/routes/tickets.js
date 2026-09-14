@@ -43,9 +43,13 @@ export function registerTicketRoutes(router) {
     requireRole(DEVELOPER_ROLES, async ({ res, params, body, user }) => {
       const result = await verifyAndCaptureKnowledge(params.id, body || {}, user);
       if (!result) throw new ApiError(404, `Ticket ${params.id} not found`);
+      const deduplicated = Boolean(result.kbArticle?.deduplicated);
       sendJson(res, 200, {
         success: true,
-        message: "Resolution verified and indexed into RAG vector knowledge base",
+        message: deduplicated
+          ? `Resolution verified. An equivalent verified knowledge article already exists (${result.kbArticle.matched_similarity * 100}% similar) — no duplicate article was created.`
+          : "Resolution verified and indexed into RAG vector knowledge base",
+        deduplicated,
         ticket: result.ticket,
         knowledge_article: result.kbArticle
       });

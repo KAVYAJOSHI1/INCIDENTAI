@@ -13,7 +13,8 @@ import { completeJson } from "./llmService.js";
 import { createTtlCache } from "../utils/simpleCache.js";
 import { embedQuery } from "./embeddingService.js";
 import { query as pgQuery } from "../db/postgres.js";
-import { addKnowledgeArticle } from "../db/store.js";
+import { addKnowledgeArticle, listKnowledgeBase } from "../db/store.js";
+import { KB_WRITEBACK_DEDUP_THRESHOLD } from "../constants.js";
 
 
 // Search-as-you-type can fire several requests per second for near-identical queries;
@@ -161,8 +162,57 @@ export function searchKnowledgeBase(queryText, erpModule, kbArticles, { minScore
 }
 
 /**
+ * Pure TF-IDF similarity search for KB writeback dedup — no DB/network dependency, so
+ * it's directly unit-testable. Compares a *candidate* article's full content (title +
+ * problem + root cause + solution, the same fields addKnowledgeArticle embeds) against
+ * each existing article's, boosting slightly when module/error_code also match. This is
+ * deliberately a different, stricter question than normal RAG retrieval ("is this
+ * candidate essentially the same knowledge as one we already have?"), not "would this
+ * article be relevant to a query" — a normal retrieval match is not automatically a
+ * writeback duplicate.
+ */
+export function findMostSimilarArticle(candidateArticle, existingArticles, { threshold = KB_WRITEBACK_DEDUP_THRESHOLD } = {}) {
+  if (!existingArticles || existingArticles.length === 0) return null;
+
+  // Compare on title + solution only. `problem` (the ticket's vague_user_input) is
+  // instance-specific noise for this purpose — an ERP-automated incident's problem text
+  // always embeds a unique correlation/transaction id, which would make two otherwise
+  // identical resolutions score as dissimilar. `root_cause` and `problem` also aren't
+  // persisted on a stored KB article at all (see rowToArticle in db/store.js), so
+  // including them here would compare the candidate against fields that are always
+  // empty on the existing side — comparing on what's actually stored keeps this
+  // symmetric and focused on the reusable knowledge (title + solution), not the report.
+  const buildText = (a) => [a.title, a.solution].filter(Boolean).join(" ");
+  const candidateTokens = tokenize(buildText(candidateArticle));
+  const entries = existingArticles.map((article) => ({ article, tokens: tokenize(buildText(article)) }));
+
+  const idf = computeIdf([candidateTokens, ...entries.map((e) => e.tokens)]);
+  const candidateVector = tfidfVector(candidateTokens, idf);
+
+  const scored = entries
+    .map(({ article, tokens }) => {
+      const vector = tfidfVector(tokens, idf);
+      let score = cosineSimilarity(candidateVector, vector);
+      if (candidateArticle.erp_module && article.erp_module === candidateArticle.erp_module) score = Math.min(0.99, score + 0.05);
+      if (candidateArticle.error_code && article.error_code && article.error_code === candidateArticle.error_code) score = Math.min(0.99, score + 0.05);
+      return { article, score: Math.round(score * 100) / 100 };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  const top = scored[0];
+  return top && top.score >= threshold ? top : null;
+}
+
+/**
  * Phase 7: Captures a developer-verified resolution and embeds it into the pgvector knowledge base.
  * Only human-verified resolutions are permitted into the trusted RAG index.
+ *
+ * FIX 4: before inserting, the candidate resolution is checked against existing KB
+ * articles for near-duplicate content (Voyage vector search when configured, TF-IDF
+ * fallback otherwise — the same retrieval infrastructure the rest of RAG uses, not a
+ * separate mechanism). A sufficiently similar existing article blocks the insert and is
+ * returned as-is, annotated `deduplicated: true`, instead of writing a second copy of
+ * the same knowledge.
  */
 export async function captureVerifiedKnowledge(ticket, verificationData = {}) {
   if (!ticket) throw new Error("Ticket is required for knowledge capture");
@@ -172,6 +222,27 @@ export async function captureVerifiedKnowledge(ticket, verificationData = {}) {
   const rootCause = verificationData.root_cause || ticket.ai_root_cause || "Developer verified root cause";
   const errorCode = ticket.ocr_findings?.extracted_error_code || "ERR_VERIFIED";
   const erpModule = ticket.erp_module || "GENERAL";
+  const problem = ticket.vague_user_input || ticket.title;
+
+  const candidate = { title, erp_module: erpModule, error_code: errorCode, solution, problem, root_cause: rootCause };
+  const dedupQueryText = [title, problem, rootCause, solution].filter(Boolean).join("\n");
+
+  const vectorMatch = await searchKnowledgeBaseWithVector(dedupQueryText, erpModule, { minScore: KB_WRITEBACK_DEDUP_THRESHOLD });
+  let duplicateMatch = vectorMatch && vectorMatch.length > 0 ? { article: vectorMatch[0].article, score: vectorMatch[0].score } : null;
+
+  if (!duplicateMatch) {
+    const existingArticles = await listKnowledgeBase();
+    duplicateMatch = findMostSimilarArticle(candidate, existingArticles, { threshold: KB_WRITEBACK_DEDUP_THRESHOLD });
+  }
+
+  if (duplicateMatch) {
+    return {
+      ...duplicateMatch.article,
+      deduplicated: true,
+      matched_similarity: duplicateMatch.score,
+      deduplication_reason: `An existing verified knowledge article ("${duplicateMatch.article.title}") is ${Math.round(duplicateMatch.score * 100)}% similar (>= ${Math.round(KB_WRITEBACK_DEDUP_THRESHOLD * 100)}% threshold) — no duplicate article was created.`
+    };
+  }
 
   const article = {
     id: `kb_${crypto.randomInt(100000, 999999)}`,
@@ -179,7 +250,7 @@ export async function captureVerifiedKnowledge(ticket, verificationData = {}) {
     erp_module: erpModule,
     error_code: errorCode,
     solution,
-    problem: ticket.vague_user_input || ticket.title,
+    problem,
     root_cause: rootCause,
     confidence: 1.0, // Human verified!
     is_verified: true,
@@ -191,6 +262,6 @@ export async function captureVerifiedKnowledge(ticket, verificationData = {}) {
   // Clear rerank cache so vector search reflects new article immediately
   rerankCache.clear?.();
 
-  return savedArticle;
+  return { ...savedArticle, deduplicated: false };
 }
 
